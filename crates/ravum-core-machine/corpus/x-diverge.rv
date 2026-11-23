@@ -5,4 +5,6 @@ fn check() -> i32 effects() {
     loop {
         x = x.wrapping_add(1);
     }
+    // Loop statements have type (). This return is unreachable.
+    return x;
 }

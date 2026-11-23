@@ -24,6 +24,7 @@ impl<'a> Parser<'a> {
             forbid_assign: 0,
             stmt_head: false,
             stmt_end: false,
+            pending_items: Vec::new(),
             paren_exprs: BTreeSet::new(),
             in_for_iter: false,
         }
@@ -619,6 +620,7 @@ impl<'a> Parser<'a> {
             match self.parse_item() {
                 Some(item) => {
                     items.push(item);
+                    items.append(&mut self.pending_items);
                     if self.pos == before && !self.fatal {
                         self.bump();
                     }

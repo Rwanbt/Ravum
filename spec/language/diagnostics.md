@@ -176,7 +176,19 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-HR-STATE-TYPE` | reload | type de l'état sans forme canonique : générique, non utilisateur, fonction (HR-1.6) |
 | `E-HR-STATE-RESOURCE` | reload | référence ou ressource (socket, handle, canal, `CHandle`) dans l'état (HR-1.6) |
 | `E-DSP-ENTRY` | reload | `State` ou `process_sample` absents du module racine, ou signature différente de `fn(state: &mut State, input: f32) -> f32` (DSP-1.2) ; émis par `--dsp-block` / `--emit dsp-block` |
-| `E-DSP-STATE-TYPE` | reload | état d'un bloc DSP différent de l'état hôte `struct State { z1: f32, z2: f32 }` (DSP-1.2) |
+| `E-DSP-STATE-TYPE` | reload | état d'un bloc DSP ni état hôte ABI 2 `{ z1: f32, z2: f32 }` (DSP-1.2), ni état ABI 3 fait de `f32`/`f64`/`i32`/`u32`/`bool`, tableaux fixes et structs de ces types (DSP-1.7) |
+
+### 3.6.3 Contrats et invariants
+
+Introduits par [`RFC-CONTRACTS-1`](../../docs/rfc/RFC-CONTRACTS-1.md) et
+[`RFC-INVARIANTS-1`](../../docs/rfc/RFC-INVARIANTS-1.md) (`ACCEPTED`).
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-CON-EFFECT` | effects | une clause `requires`/`ensures`/`invariant` a un effet (CON-2) |
+| `E-CON-NONCOPY` | types | une clause lit un paramètre ou un `result` non `Copy` (CON-3) |
+| `E-CON-UNSUPPORTED` | parse | forme de contrat hors V1 : `invariant` sur une struct générique (INV-6, parseur) ; clause sur une forme de fonction non prise en charge (vérifiée au typage) |
+| `E-CON-FIELD-WRITE` | types | écriture ou emprunt `&mut` d'un champ d'une struct à invariant hors de ses méthodes (INV-9) |
 
 ### 3.7 Avertissements
 

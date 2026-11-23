@@ -6,7 +6,10 @@
 use std::fs;
 use std::process::Command;
 
-const PROGRAM: &str = r#"fn produce(out: Sender<i64>) -> () effects(thread) {
+const PROGRAM: &str = r#"use std::io;
+use std::thread;
+use std::sync;
+fn produce(out: Sender<i64>) -> () effects(thread) {
     for i in 0..250 {
         let sent: bool = sync::send(&out, i as i64);
         drop(sent);

@@ -18,7 +18,7 @@ fn a_closed_program_prints_the_same_bytes_on_every_run() {
     // order a runtime could vary (hashing, scheduling) would show here.
     fs::write(
         root.join("src/main.rv"),
-        "fn main() {\n    let mut v: Vec<i64> = Vec::new();\n    let mut i: i64 = 0;\n    \
+        "use std::io;\nfn main() {\n    let mut v: Vec<i64> = Vec::new();\n    let mut i: i64 = 0;\n    \
          while i < 50 {\n        v.push((i * 7919) % 101);\n        i = i + 1;\n    }\n    \
          let mut s = String::new();\n    let mut k: usize = 0;\n    \
          while k < v.len() {\n        s.push_str(&v[k].to_string());\n        \

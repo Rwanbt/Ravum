@@ -1,0 +1,44 @@
+use std::io;
+
+struct Point { x: i32, y: i64 }
+struct Named { name: String, at: Point, w: (u8, f64) }
+
+fn sum(v: &Vec<Point>) -> i64 effects() {
+    let mut s = 0i64;
+    let mut i = 0usize;
+    while i < v.len() {
+        s = s + (v[i].x as i64) + v[i].y;
+        i = i + 1usize;
+    }
+    return s;
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<Point> = Vec::new();
+    v.push(Point { x: -3, y: 10 });
+    v.push(Point { x: 7, y: 100 });
+    v[0].x = v[0].x * 2;
+    v[1] = Point { x: 1, y: 2 };
+    let p = v[0];
+    io::println(&p.x.to_string());
+    io::println(&sum(&v).to_string());
+    io::println(&v.len().to_string());
+    let mut n: Vec<Named> = Vec::new();
+    n.push(Named { name: String::from("ra"), at: Point { x: 4, y: 5 }, w: (9u8, 0.5f64) });
+    n[0].name.push_str("vum");
+    n[0].at.y = n[0].at.y + 1;
+    n[0].w.1 = n[0].w.1 * 3.0f64;
+    io::println(&n[0].name);
+    io::println(&n[0].at.y.to_string());
+    io::println(&n[0].w.1.to_string());
+    io::println(&n[0].w.0.to_string());
+    match v.pop() {
+        Some(q) => io::println(&q.y.to_string()),
+        None => io::println("none"),
+    }
+    let d = v.pop();
+    match v.pop() {
+        Some(_) => io::println("some"),
+        None => io::println("empty"),
+    }
+}

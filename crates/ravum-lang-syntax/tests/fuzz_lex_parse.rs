@@ -173,7 +173,7 @@ const COMMENT_ATOMS: &[&str] = &[
 ];
 
 const SEED_PROGRAMS: &[&str] = &[
-    "fn main() { io::println(\"hello\"); }\n",
+    "use std::io;\nfn main() { io::println(\"hello\"); }\n",
     "struct Point { pub x: f64, y: f64 }\nimpl Point { fn norm(&self) -> f64 { self.x } }\n",
     "fn fib(n: u32) -> u64 { if n < 2 { return n as u64; } fib(n - 1) + fib(n - 2) }\nfn main() -> Result<(), Error> { Ok(()) }\n",
     "enum Shape { Circle(f64), Rect { w: f64, h: f64 }, Empty }\nfn f(s: Shape) -> f64 { match s { Shape::Circle(r) => r, Shape::Rect { w, h } => w, Shape::Empty => 0.0 } }\n",

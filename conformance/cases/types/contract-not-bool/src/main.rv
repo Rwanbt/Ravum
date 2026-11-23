@@ -1,0 +1,8 @@
+fn f(a: i64) -> i64 effects()
+    requires a + 1
+{
+    return a;
+}
+
+fn main() -> () effects() {
+}

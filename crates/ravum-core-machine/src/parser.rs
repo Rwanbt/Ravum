@@ -663,7 +663,9 @@ impl Parser {
             }
             return Ok(Pat::Variant(path, items));
         }
-        if path.len() == 1 && !starts_uppercase(&path[0]) {
+        // G-6.38 / G-6.41: a lone identifier binds, whatever its case,
+        // except the four prelude constructors.
+        if path.len() == 1 && !matches!(path[0].as_str(), "Some" | "None" | "Ok" | "Err") {
             return Ok(Pat::Bind(path.into_iter().next().unwrap()));
         }
         Ok(Pat::Variant(path, vec![]))

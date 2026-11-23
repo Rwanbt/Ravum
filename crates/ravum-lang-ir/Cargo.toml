@@ -1,0 +1,16 @@
+[package]
+name = "ravum-lang-ir"
+description = "Ravum language: versioned, serializable IR (gate T14) lowered from the checked program, with a reference interpreter"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ravum-lang-sema = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ravum-core-machine = { path = "../ravum-core-machine" }

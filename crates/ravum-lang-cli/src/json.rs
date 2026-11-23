@@ -39,6 +39,11 @@ pub struct JsonEnvelope {
     /// flag is not passed; `schema_version` does not change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timings: Option<Value>,
+    /// Additive (T19, RFC-CONTRACTS-1): the package's contract clauses with
+    /// stable ids, locations and the tests reaching them. Absent when the
+    /// program has none or did not check; `schema_version` does not change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contracts: Option<Vec<JsonContract>>,
     pub summary: Value,
     pub diagnostics: Vec<JsonDiagnostic>,
 }
@@ -101,6 +106,106 @@ fn utf16_offset(text: &str, byte: u32) -> u32 {
     text[..offset].encode_utf16().count() as u32
 }
 
+/// One contract clause (T19). `verification` is always `runtime-checked`:
+/// nothing here is a proof (ADR-040).
+#[derive(Debug, Serialize)]
+pub struct JsonContract {
+    pub id: String,
+    pub function: String,
+    pub kind: &'static str,
+    pub text: String,
+    pub span: JsonSpan,
+    pub exercised_by: Vec<String>,
+    pub verification: &'static str,
+}
+
+/// SARIF 2.1.0 log of a check (T19, ADR-027/040): one result per
+/// diagnostic (rule = stable code); the contract clauses with their stable
+/// ids, the tests reaching them and `runtime-checked` go in the run's
+/// property bag (they are facts, not findings).
+pub fn sarif(diagnostics: &[JsonDiagnostic], contracts: Option<&[JsonContract]>) -> String {
+    let mut rules: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    rules.sort();
+    rules.dedup();
+    let results: Vec<Value> = diagnostics
+        .iter()
+        .map(|d| {
+            let level = match d.severity.as_str() {
+                "error" => "error",
+                "warning" => "warning",
+                _ => "note",
+            };
+            let mut r = serde_json::json!({
+                "ruleId": d.code,
+                "level": level,
+                "message": { "text": d.message },
+            });
+            if let Some(file) = &d.file {
+                r["locations"] = serde_json::json!([{
+                    "physicalLocation": {
+                        "artifactLocation": { "uri": file },
+                        "region": {
+                            "startLine": d.line,
+                            "startColumn": d.column,
+                            "endLine": d.end_line,
+                            "endColumn": d.end_column,
+                        }
+                    }
+                }]);
+            }
+            r
+        })
+        .collect();
+    let mut run = serde_json::json!({
+        "tool": { "driver": {
+            "name": TOOL,
+            "version": env!("CARGO_PKG_VERSION"),
+            "rules": rules.iter().map(|r| serde_json::json!({ "id": r })).collect::<Vec<_>>(),
+        }},
+        "results": results,
+    });
+    if let Some(c) = contracts {
+        run["properties"] = serde_json::json!({ "ravum.contracts": c });
+    }
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [run],
+    })
+    .to_string()
+}
+
+/// The contracts of a checked program, for the JSON envelope.
+pub fn contracts(
+    checked: &ravum_lang_sema::CheckedProgram,
+    sources: &SourceMap,
+) -> Option<Vec<JsonContract>> {
+    let all = ravum_lang_sema::contracts::contract_facts(checked);
+    if all.is_empty() {
+        return None;
+    }
+    Some(
+        all.into_iter()
+            .map(|c| JsonContract {
+                span: span_object(
+                    sources,
+                    Span {
+                        file: c.file,
+                        start: c.start,
+                        end: c.end,
+                    },
+                ),
+                id: c.id,
+                function: c.function,
+                kind: c.kind,
+                text: c.text,
+                exercised_by: c.exercised_by,
+                verification: c.verification,
+            })
+            .collect(),
+    )
+}
+
 fn span_object(sources: &SourceMap, span: Span) -> JsonSpan {
     if span.is_dummy() {
         return JsonSpan {
@@ -160,6 +265,10 @@ pub fn phase_for_code(code: &str) -> &'static str {
         "E-UNSUPPORTED-EFFECT" | "E-FFI-TYPE" => "resolve",
         "E-FFI-UNKNOWN-LIB" => "modules",
         "E-UNSAFE-CONTEXT" => "types",
+        // RFC-CONTRACTS-1 / RFC-INVARIANTS-1: where each is emitted.
+        "E-CON-EFFECT" => "effects",
+        "E-CON-NONCOPY" | "E-CON-FIELD-WRITE" => "types",
+        "E-CON-UNSUPPORTED" => "parse",
         // DIAG-1.10: reported where a builtin path is resolved.
         "W-DEPRECATED" => "resolve",
         // Resource limits are enforced by the loader before any analysis: the
@@ -279,6 +388,7 @@ pub fn envelope(
         dependencies_digest: meta.dependencies_digest,
         lockfile_stale: meta.lockfile_stale,
         timings: None,
+        contracts: None,
         summary,
         diagnostics,
     }

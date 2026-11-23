@@ -1,3 +1,5 @@
+use std::io;
+
 extern "C" from "demo" {
     fn demo_triple(x: i32) -> i32;
 }

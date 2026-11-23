@@ -1,0 +1,176 @@
+# Décisions du responsable — 2026-11-19
+
+> Enregistrement d'une décision **énoncée par le responsable** en session
+> (2026-11-19). L'agent l'enregistre ; il ne l'étend pas. Les gates proposés en
+> §2 sont des **propositions** (`PROPOSED`) tant que le responsable ne les a
+> pas validés.
+
+## V1 — Définition de « production ready » (D2)
+
+**Énoncé du responsable** : « le production ready doit avoir tous les points
+d'architecture prévus implémentés et validés ».
+
+**Conséquence directe** : D2 ne peut pas être prononcé tant que les décisions
+d'architecture ci-dessous ne sont pas implémentées **et** validées par
+mesure/tests négatifs, au SHA, dans le langage `ravum-lang-*` (pas seulement
+dans la plateforme Rust).
+
+### Conflit avec des décisions antérieures — à trancher
+
+| Décision antérieure | Contenu | Conflit avec V1 |
+|---|---|---|
+| **A2** (2026-11-14) | Bloc DSP / hot swap Ravum reporté à la 1.1 | ADR-021/024 sont des points d'architecture prévus |
+| **A3** (2026-11-14) | Backend natif voie C hors 1.0 | ADR-018 (backend rapide) est un point prévu |
+
+**V1-Q1 — TRANCHÉE (2026-11-19)** : oui, **A2 et A3 sont annulées** ; bloc DSP/hot swap Ravum et backend direct (voie C) reviennent dans le périmètre 1.0.
+
+## 2. Gates V1 — **VALIDÉS par le responsable (2026-11-19)**, inscrits au registre
+
+| Gate | ADR | Critère de validation proposé | État mesuré au 2026-11-19 |
+|---|---|---|---|
+| T13 — Incrémental par requêtes | ADR-012, ADR-020 | Typage/ownership/effets recalculés **par fonction** ; modifier le corps d'une fonction sans changer sa signature ne revérifie qu'elle (compteur testé) ; oracle froid = chaud | `FAIL` : seul le parsing est mis en cache (`ravum-lang-lsp/src/analysis.rs`) |
+| T14 — IR stable | ADR-010 | IR versionnée, sérialisable, consommée par ≥ 2 backends | `FAIL` : `--emit-ir` = dump de débogage |
+| T15 — Backend de développement rapide | ADR-018 | Backend direct (Cranelift ou équivalent) ; oracle différentiel 0 divergence vs voie B ; gain mesuré | `NOT_STARTED` |
+| T16 — Hot swap Ravum | ADR-021, ADR-022, ADR-024 | Swap atomique d'une fonction `.rv` dans un processus vivant aux safepoints ; migration d'état déclarée ou refus ; 0 alloc callback RT ; p95 édition→activation mesuré | `FAIL` : `watch` = redémarrage |
+| T17 — Déterminisme | ADR-016, ADR-007 | Profil/effet déterministe vérifié ; replay par seed bit-à-bit | `NOT_STARTED` |
+| T18 — Contrats | ADR-004, ADR-028 | `requires`/`ensures`/invariants vérifiés (test/fuzz/preuve bornée) avec statut honnête | `NOT_STARTED` |
+| T19 — API agent | ADR-027, ADR-040 | Liens diagnostic→contrat→preuve→test en JSON versionné | `PARTIAL` : diagnostics JSON à codes stables |
+
+Les ADR restants (000–041) doivent être passés en revue texte intégral pour
+compléter cette table ; état actuel de cette revue : `NOT_REVIEWED`.
+
+## V1-L1 — Licence de Cranelift (2026-11-19)
+
+**Énoncé du responsable** : « oui autorise la licence ». `deny.toml`
+`[licenses].allow` reçoit `Apache-2.0 WITH LLVM-exception` (Cranelift, backend
+JIT de T15). **Non couvert par cette décision** : les 3 doublons de versions
+(`hashbrown`, `bitflags`, `windows-sys`) refusés par `[bans]
+multiple-versions = "deny"` ; `cargo deny check` reste rouge sur ce seul point
+tant que le responsable ne l'a pas tranché.
+
+## V1-L2 — Doublons de versions tirés par Cranelift (2026-11-19)
+
+**Énoncé du responsable** : « oui autorise les doublons ». `deny.toml`
+`[bans].skip` liste les **versions exactes** `hashbrown@0.14.5`,
+`hashbrown@0.15.5`, `bitflags@1.3.2`, `windows-sys@0.52.0` (tirées par
+Cranelift 0.116 / regalloc2 / region). `multiple-versions = "deny"` reste en
+vigueur pour tout autre doublon.
+
+
+## V1-M1 — `migrate` (HR-1.7) sur la voie JIT : migration côté éditeur
+
+Décision du responsable (2026-11-19), choisie parmi trois options (côté
+éditeur ; sur le thread audio ; garder le refus) : **côté éditeur**.
+
+- Le thread temps réel ne fait qu'une copie de ses mots d'état dans une zone
+  d'atomiques préallouée, puis échange des `Box` à l'adoption : ni
+  allocation, ni libération, ni exécution de `migrate` (AGENTS.md, INV-05).
+- Écart assumé vis-à-vis de HR-1.2 : les échantillons traités entre
+  l'instantané et l'adoption ne font pas partie de l'état migré (mesuré :
+  un bloc, 64 échantillons ≈ 1,3 ms à 48 kHz). Le journal de session (T17)
+  enregistre les deux instants, donc le replay reste exact.
+- Implémentation et preuves : [rapport T16 §9](../reports/T16-NATIVE-HOT-SWAP.md).
+
+## V1-D1, V1-S1, V1-C1 — crates partagés, DIAG-1.4, contrats (2026-11-19)
+
+Décisions du responsable, choisies parmi les options présentées :
+
+- **V1-S1** : l'autre ligne de travail est terminée ; les crates partagés
+  (`ravum-lang-sema`, `ravum-lang-syntax`) peuvent être modifiés sur cette
+  branche, `dev` étant fusionnée avant chaque étape.
+- **V1-D1 (DIAG-1.4)** : *conformer le checker* à la spec — une erreur d'une
+  phase précoce n'empêche les phases suivantes que sur le nœud fautif, pas
+  sur tout le paquet (constat F1 de T13). Les sorties de diagnostics
+  changent en conséquence.
+- **V1-C1 (T18)** : contrats `requires`/`ensures` **vérifiés à
+  l'exécution** (trap si violé), statut honnête `TESTED`, aucune preuve
+  statique ; une RFC d'abord, jamais auto-acceptée.
+
+## V1-C2, V1-T2, V1-P1 (2026-11-20)
+
+- **V1-C2** : [RFC-CONTRACTS-1](../rfc/RFC-CONTRACTS-1.md) est **ratifiée**
+  (`ACCEPTED`). Les preuves restent `TESTED`.
+- **V1-T2** : T13 doit être complet malgré un gain mesuré modeste :
+  identifiants de nœuds stables, fusion des faits, plusieurs fichiers, et
+  branchement sur le LSP et `watch`.
+- **V1-P1** : prochain chantier prioritaire, la couverture du JIT (`String`,
+  `Vec`, `Result`, génériques).
+
+## V1-C3, V1-C4, V1-A1 (2026-11-20)
+
+- **V1-C3 (T19)** : amender RFC-CONTRACTS-1 (CON-5/CON-6) : le message de
+  violation montre les valeurs des arguments scalaires et chaînes, ex.
+  `contract violated: requires b != 0 (a = 1, b = 0)` ; préfixe inchangé ;
+  identique sur rustc et le JIT.
+- **V1-C4 (T18)** : invariants de type sous la forme
+  `struct S { .. } invariant <expr>`, vérifiés à chaque construction
+  (littéral) et à la sortie de chaque méthode `&mut self` ; RFC d'abord,
+  puis rustc et JIT.
+- **V1-A1** : hôte audio = une abstraction, une implémentation fichier WAV
+  testable dans le conteneur, et une implémentation `cpal` derrière une
+  feature désactivée par défaut (à tester sur la machine du responsable).
+
+## V1-C5, V1-C6, V1-C7 (2026-11-20)
+
+- **V1-C5** : [RFC-INVARIANTS-1](../rfc/RFC-INVARIANTS-1.md) est
+  **ratifiée** (`ACCEPTED`). Preuves `TESTED`.
+- **V1-C6** : hors des méthodes d'une struct à invariant, écrire ou
+  emprunter `&mut` un de ses champs est refusé (`E-CON-FIELD-WRITE`,
+  INV-9) : toute modification passe par une méthode `&mut self`.
+- **V1-C7** : T19 est atteint avec un contre-exemple **observé** (valeurs
+  au moment de la violation), non minimisé : les `test fn` n'ont pas
+  d'entrées à réduire. Pas de tests par propriété en V1.
+
+## V1-G1, V1-W1, V1-A2 (2026-11-20)
+
+- **V1-G1** : T18 et T19 passent à **`PASS (V1)`** : périmètre V1
+  implémenté et testé ; vérification à l'exécution, preuves `TESTED`,
+  aucune preuve statique (`PROVED` non revendiqué), aucun audit externe.
+- **V1-W1** : l'échec isolé de `watch_jit` est **clos** comme « cause
+  probable reproduite (binaire réécrit pendant l'exécution), non prouvée » ;
+  le message du test distingue désormais délai et fin de l'enfant.
+- **V1-A2** : l'exécution de l'hôte `cpal` sur un vrai périphérique est
+  confiée à une session **locale** du responsable (consigne :
+  `docs/handoff/CPAL-LOCAL-SESSION.md`) ; reste `NOT_RUN` d'ici là.
+
+## V1-A2 — clôture (2026-11-20)
+
+- L'hôte `cpal` a été **exécuté** dans la session locale du responsable
+  (commit `be04b3c`) : flux f32 44,1 kHz stéréo, édition à chaud entendue
+  sans coupure, 0 allocation Rust dans `process` — `TESTED` pour cette
+  configuration (détails et limites : `docs/reports/V1-AUDIO-HOST.md`).
+
+## V1-G2 (2026-11-20)
+
+- **V1-G2** : T13 et T16 passent à **`PASS (V1)`** (preuves `TESTED`,
+  aucun audit externe). À la question du responsable « pourquoi aucune
+  garantie hard-RT ? il faut faire le test s'il est nécessaire » : le test a
+  été fait (T16 §10) ; il a révélé un vrai défaut (carburant RT non borné,
+  2,34 s par échantillon pour une édition qui boucle ; récursion bornée par
+  la seule profondeur ; pas de garde de pile), corrigé et mesuré. La part
+  restante — l'ordonnancement temps réel de l'OS — ne relève pas du code et
+  n'est pas revendiquée.
+
+## V1-L2 / V1-A3 (2026-11-20)
+
+- **V1-L2** : la licence **MPL-2.0** est autorisée dans `deny.toml`, pour
+  `audio_thread_priority` 0.38 (Mozilla) seulement, par la feature
+  `rt-priority` de `ravum-lang-audio`, désactivée par défaut.
+- **V1-A3** : la priorité temps réel du thread de rappel est implémentée
+  derrière cette feature : promotion **une seule fois**, au premier rappel,
+  avant le premier bloc (RTKit/SCHED_FIFO sous Linux, MMCSS sous Windows,
+  politique « time constraint » sous macOS), état lisible par
+  `CpalHost::rt_status()` (`Disabled`/`Pending`/`Promoted`/`Refused`). Un
+  refus de l'OS n'arrête pas le son et n'est jamais présenté comme une
+  promotion. Exécution sur périphérique confiée à une session locale
+  (`docs/handoff/RT-PRIORITY-LOCAL-SESSION.md`) : `NOT_RUN` d'ici là.
+
+## V1-A3 — clôture (2026-11-20)
+
+- La promotion temps réel a été **exécutée** dans la session locale du
+  responsable (commit `ffe891c`, Linux, noyau non `PREEMPT_RT`, RTKit) :
+  `rt_status() = Promoted`, thread `cpal_alsa_out` observé en `SCHED_RR`
+  priorité 10 (au repos et sous `stress-ng` 16 cœurs), `TS` avec `cpal`
+  seul ; aucun craquement entendu sous charge ; 0 allocation Rust dans
+  `process`. `TESTED` pour cette machine ; rappels hors échéance non
+  mesurés ; aucune garantie hard-RT, Windows/macOS `NOT_RUN`.

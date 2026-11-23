@@ -89,7 +89,7 @@ codegen::generate(&CheckedProgram, GenOptions) -> Result<String, CodegenError>
 | ABI-4.4 | L'ordre d'évaluation spécifié (EXPR-1) est **préservé** : le backend ne peut pas réordonner des appels à effet, ni fusionner des opérations flottantes (pas de FMA, pas de réassociation). | MUST |
 | ABI-4.5 | Le backend **MUST** émettre les contrôles de débordement, division par zéro, décalage et bornes d'index, ou compiler avec `-C overflow-checks=on` et des accès vérifiés. Aucune optimisation ne peut les supprimer. | MUST |
 | ABI-4.6 | Le panic est un **arrêt contrôlé**, sans destructeurs : en mode `run`, hook qui imprime `panic: <msg>` puis `exit(1)` ; en mode `test`, le runner capture l'*unwind* et marque le test en échec. Le hook est installé **aussi en release** (design §3.8). | MUST |
-| ABI-4.7 | Le code généré **MUST** compiler sans avertissement bloquant ; un avertissement `rustc` est un défaut à corriger, pas à masquer (`#[allow]` interdit). | MUST |
+| ABI-4.7 | Le code généré **MUST** compiler sans avertissement bloquant. Un seul `#![allow(...)]` est permis, en tête du fichier, avec une **liste fermée** de lints : `dead_code`, `unused_variables`, `unused_mut`, `unused_assignments`, `unused_imports`, `unused_parens`, `unused_braces`, `unused_labels`, `unused_must_use`, `unused_comparisons`, `non_snake_case`, `non_camel_case_types`, `non_upper_case_globals`, `unreachable_code`, `unreachable_patterns` (ils signalent le style ou le code mort **du source Ravum**, que le checker juge seul), et `arithmetic_overflow`, `unconditional_panic` (sans eux, un débordement ou un indice hors bornes constant ferait échouer la compilation au lieu de paniquer à l'exécution, comme le spécifie [`expressions.md`](expressions.md)). Seuls autres `allow` permis : `#[allow(unsafe_code)]` local des enveloppes FFI et DSP ([`unsafe.md`](unsafe.md)). Tout autre `allow` est un défaut (amendement du responsable, 2026-11-21, V2-M1). | MUST |
 | ABI-4.8 | Le temps de compilation n'est pas contractuel ; aucun chiffre n'est publié. | MUST |
 | ABI-4.9 | `--emit-rust` est un **outil d'audit**, pas une API : le contenu exact n'est pas stable et ne doit pas être parsé par des outils tiers. `--emit-ir` n'émet **pas** d'IR (la voie B n'en a pas) : c'est un **dump de faits de typage** de débogage, non stable et non contractuel (Q-ABI-4). | MUST |
 
@@ -126,7 +126,7 @@ Aucune de ces étapes n'est franchie ; elles sont listées pour que l'absence so
 
 | ID | Règle | Niveau |
 |---|---|---|
-| ABI-5.1 | Tant que les étapes 1–6 ne sont pas faites, aucun `abi_version` n'est exposé et aucun engagement n'est pris. | MUST |
+| ABI-5.1 | Le seul ABI versionné est l'ABI DSP (`DSP_ABI_VERSION`, `DSP3_ABI_VERSION`, signature vérifiée au chargement, refus fail-closed) ; aucun autre `abi_version` n'est exposé ni promis. (Réécrite par le responsable le 2026-11-21, V2-M1.) | MUST |
 | ABI-5.2 | Un futur ABI **MUST** être versionné et refusé (`fail-closed`) en cas d'incompatibilité, jamais « meilleur effort ». | MUST |
 | ABI-5.3 | Un ABI ne peut pas être introduit sans que le layout devienne **observable** et spécifié (contradiction actuelle avec TYP-12). | MUST |
 

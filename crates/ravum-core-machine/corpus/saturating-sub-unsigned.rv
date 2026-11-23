@@ -1,0 +1,6 @@
+// oracle: value u8 0
+fn check() -> u8 effects() {
+    let a: u8 = 1;
+    let b: u8 = 7;
+    return a.saturating_sub(b);
+}

@@ -1,0 +1,10 @@
+// EFF-5.4: the effects of prelude functions are fixed by stdlib.md; a user
+// module cannot replace `io` to give `println` other effects.
+mod io {
+    pub fn println(s: &str) -> () effects() {
+    }
+}
+
+fn main() -> () effects() {
+    io::println("x");
+}

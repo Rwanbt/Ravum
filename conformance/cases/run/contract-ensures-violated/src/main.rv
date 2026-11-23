@@ -1,0 +1,15 @@
+use std::io;
+
+fn grow(x: i64) -> i64 effects()
+    ensures result > x
+{
+    if x > 10 {
+        return x;
+    }
+    return x + 1;
+}
+
+fn main() -> () effects(io, alloc) {
+    io::println(&grow(1).to_string());
+    io::println(&grow(20).to_string());
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-vec-of-aggregates",
+  "mode": "run-pass",
+  "stdout_contains": "-6\n7\n2\nravum\n6\n1.5\n9\n2\nempty\n",
+  "notes": "T14: `Vec` of structs and tuples (element and field reads/writes, a heap field mutated in place, nested aggregate field, whole-element assignment, `pop`). Same program and output as the IR/JIT test `vec_of_structs_and_tuples_agrees_with_the_interpreter`, here by the rustc path."
+}

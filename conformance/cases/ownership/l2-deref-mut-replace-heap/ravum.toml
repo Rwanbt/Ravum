@@ -1,0 +1,4 @@
+[package]
+name = "ownership-l2-deref-mut-replace-heap"
+version = "0.1.0"
+edition = "core-1.0"

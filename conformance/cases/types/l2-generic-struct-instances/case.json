@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-generic-struct-instances",
+  "mode": "run-pass",
+  "stdout_contains": "7\n-3\n2.5\n9\nfalse\n",
+  "notes": "Generic structs instantiated at i64, f64 and a nested generic (`Tagged<Pair<bool>, u8>`). Same program and output as the IR/JIT test `generic_structs_agree_with_the_interpreter` (a=-3, b=7), here by the rustc path."
+}

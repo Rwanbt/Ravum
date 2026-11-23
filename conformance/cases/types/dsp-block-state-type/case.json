@@ -6,5 +6,6 @@
   ],
   "expect_codes": [
     "E-DSP-STATE-TYPE"
-  ]
+  ],
+  "notes": "DSP-1.2 / RFC-DSP-ABI-2 DSP3-1 (MUST): a DSP state holds only f32/f64/i32/u32/bool, fixed arrays and structs of those; a String field is refused. (Until RFC-DSP-ABI-2 was ratified this case used `{ gain: f64 }`, which ABI 3 now accepts.)"
 }

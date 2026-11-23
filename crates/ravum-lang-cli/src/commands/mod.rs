@@ -12,6 +12,7 @@ pub mod lsp;
 pub mod run;
 pub mod test;
 pub mod watch;
+pub mod watch_jit;
 
 use crate::args::Command;
 
@@ -27,9 +28,11 @@ pub fn dispatch(command: Command) -> i32 {
             rt_entry,
             reload,
             dsp_block,
+            sarif,
         } => check::run(
             &path,
             json,
+            sarif,
             profile,
             locked,
             timings,
@@ -61,21 +64,32 @@ pub fn dispatch(command: Command) -> i32 {
             args,
             target,
             json,
-        } => run::run(&path, &args, target, json),
+            det_seed,
+            journal,
+        } => run::run(&path, &args, target, json, det_seed, journal.as_ref()),
         Command::Watch {
             path,
             run,
             release,
             max_rebuilds,
             reload,
+            jit,
+            entry,
         } => {
-            if reload {
+            if jit {
+                watch_jit::run(&path, entry.as_deref(), max_rebuilds)
+            } else if reload {
                 watch::run_reload(&path, release)
             } else {
                 watch::run(&path, run, release, max_rebuilds)
             }
         }
-        Command::Test { path, filter, json } => test::run(&path, filter.as_deref(), json),
+        Command::Test {
+            path,
+            filter,
+            json,
+            det_seeds,
+        } => test::run(&path, filter.as_deref(), json, det_seeds),
         Command::Fmt { path, check } => fmt::run(&path, check),
         Command::Lint { path, deny } => lint::run(&path, &deny),
         Command::Doc { path, out } => doc::run(&path, out.as_deref()),

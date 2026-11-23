@@ -1,0 +1,9 @@
+fn f(s: String) -> i64 effects(alloc)
+    requires s.len() > 0
+{
+    drop(s);
+    return 1;
+}
+
+fn main() -> () effects() {
+}

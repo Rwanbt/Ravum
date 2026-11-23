@@ -1,0 +1,8 @@
+{
+  "id": "effects/l7b-http-async-effects-declared",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "ANET-6 / CONC-6.8 (MUST): http::read_request_async carries net, async and alloc; a function declaring only net and async is refused."
+}

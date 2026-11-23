@@ -1,0 +1,8 @@
+{
+  "id": "effects/l7b-timeout-is-nondet",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "ANET-5 / DET-2 (MUST): task::timeout reads the clock and carries nondet; a function declaring only async and alloc is refused."
+}

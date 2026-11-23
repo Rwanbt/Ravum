@@ -1,0 +1,9 @@
+use std::http;
+
+async fn serve(stream: TcpStream) -> () effects(net, async) {
+    let mut s: TcpStream = stream;
+    drop(http::read_request_async(&mut s).await);
+}
+
+fn main() {
+}

@@ -1,0 +1,9 @@
+{
+  "id": "packages/l3-std-not-declarable",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-RES-CONFLICT"
+  ],
+  "notes": "STD-1.2 (MUST): `std` is provided by the compiler and cannot be declared or replaced by a user dependency, even one that exists on disk."
+}

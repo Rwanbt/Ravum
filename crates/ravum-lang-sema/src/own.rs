@@ -127,6 +127,9 @@ pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> O
     // for every resolved type node, so the backend never re-derives it.
     publish_copy_type(&checked.facts, &mut own);
     for (item, f) in fns {
+        if checked.facts.reuse_bodies.contains_key(&item.id) {
+            continue; // T13 step 2: reused body
+        }
         let mut checker = OwnChecker::new(&checked.facts, diags, &mut own);
         checker.check_fn(item, f);
     }

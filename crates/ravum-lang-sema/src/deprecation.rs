@@ -80,7 +80,7 @@ mod tests {
     fn a_deprecated_path_is_accepted_with_one_warning_per_use() {
         TEST_DEPRECATED.with(|cell| cell.set(Some(FAKE)));
         let found = diagnostics(
-            "use std::math;\nfn main() {\n    let a = math::abs(-1.0);\n    \
+            "use std::io;\nuse std::math;\nfn main() {\n    let a = math::abs(-1.0);\n    \
              let b = math::abs(-2.0);\n    io::println(&(a + b).to_string());\n}\n",
         );
         TEST_DEPRECATED.with(|cell| cell.set(None));
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn a_path_outside_the_register_is_not_reported() {
         TEST_DEPRECATED.with(|cell| cell.set(Some(FAKE)));
-        let found = diagnostics("fn main() {\n    io::println(\"ok\");\n}\n");
+        let found = diagnostics("use std::io;\nfn main() {\n    io::println(\"ok\");\n}\n");
         TEST_DEPRECATED.with(|cell| cell.set(None));
         assert!(found.is_empty(), "{found:?}");
     }

@@ -1,0 +1,18 @@
+struct State {
+    y: f32,
+}
+
+fn init() -> State effects() {
+    State { y: 0.0 }
+}
+
+fn migrate(old: String) -> State effects() {
+    State { y: 0.0 }
+}
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    input
+}
+
+fn main() -> () effects() {
+}

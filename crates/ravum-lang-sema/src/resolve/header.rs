@@ -438,6 +438,11 @@ pub(crate) fn resolve_struct(
             generics: generics.iter().map(|(n, _)| n.clone()).collect(),
             fields,
             is_copy: false,
+            invariants: s
+                .invariants
+                .iter()
+                .map(|i| (i.method.clone(), i.text.clone()))
+                .collect(),
         },
     );
 }
@@ -962,9 +967,17 @@ pub(crate) fn resolve_type_path(
                     Sym::BuiltinModule(p) => Cursor::Builtin(p),
                     _ => return Type::Error,
                 }
-            } else if let Some(p) = builtins::builtin_root_module(first) {
+            } else if first == "std" {
                 index = 1;
-                Cursor::Builtin(p)
+                Cursor::Builtin("std")
+            } else if builtins::builtin_root_module(first).is_some() {
+                // STD-1.1: no module is in the prelude.
+                diags.error(
+                    "E-RES-UNKNOWN",
+                    segments[0].name.span,
+                    format!("module `{first}` is not in scope (add `use std::{first};`)"),
+                );
+                return Type::Error;
             } else if world.lookup(module, Ns::Type, first).is_some() || is_builtin_type_name(first)
             {
                 diags.error(

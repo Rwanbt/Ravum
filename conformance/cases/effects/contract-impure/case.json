@@ -1,0 +1,8 @@
+{
+  "id": "effects/contract-impure",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CON-EFFECT"
+  ],
+  "notes": "RFC-CONTRACTS-1 CON-2: a clause is pure, callees included."
+}

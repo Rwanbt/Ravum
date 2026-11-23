@@ -1,3 +1,6 @@
+use std::io;
+use std::net;
+
 fn main() -> Result<(), Error> effects(io, net, alloc) {
     let listener: TcpListener = net::listen("127.0.0.1:0")?;
     let mut addr: String = String::from("127.0.0.1:");

@@ -1,3 +1,5 @@
+use std::io;
+
 fn mul_add(a: f64, b: f64, c: f64) -> f64 {
     return a * b + c;
 }

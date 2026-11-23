@@ -1,3 +1,5 @@
+use std::io;
+
 fn pick(a: [[String; 2]; 2]) -> String {
     return a[0][1];
 }

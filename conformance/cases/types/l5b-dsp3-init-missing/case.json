@@ -1,0 +1,11 @@
+{
+  "id": "types/l5b-dsp3-init-missing",
+  "mode": "compile-fail",
+  "args": [
+    "--dsp-block"
+  ],
+  "expect_codes": [
+    "E-DSP-ENTRY"
+  ],
+  "notes": "RFC-DSP-ABI-2 DSP3-1 (MUST): an ABI 3 block writes its own initial state; without `fn init() -> State` it is refused."
+}

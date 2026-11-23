@@ -67,7 +67,7 @@ fn a_package_of_a_thousand_source_files_is_accepted() {
         main.push_str(&format!("mod m{index};\n"));
     }
     main.push_str(&format!(
-        "\nfn main() {{\n    let value = crate::m{}::f{}(1);\n    io::println(&value.to_string());\n}}\n",
+        "use std::io;\n\nfn main() {{\n    let value = crate::m{}::f{}(1);\n    io::println(&value.to_string());\n}}\n",
         MODULES - 1,
         MODULES - 1
     ));

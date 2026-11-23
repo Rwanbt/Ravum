@@ -185,6 +185,9 @@ struct Parser<'a> {
     /// The statement being parsed already ended at a block-like `}`: no
     /// operator, call, index, cast, range or assignment continues it.
     stmt_end: bool,
+    /// RFC-INVARIANTS-1: the synthetic `impl` of the struct just parsed,
+    /// placed right after it by `parse_module_items`.
+    pending_items: Vec<Item>,
     /// Expressions that were written between parentheses. Used to distinguish
     /// `(a < b) < c` (allowed) from `a < b < c` (E-PARSE-UNEXPECTED) and
     /// `(t.0).0` (allowed) from `t.0.1` (E-PARSE-UNEXPECTED).

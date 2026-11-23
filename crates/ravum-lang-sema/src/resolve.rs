@@ -113,11 +113,15 @@ pub(crate) struct ImportEntry {
     pub span: Span,
     pub display: String,
     pub used: Cell<bool>,
+    /// Number of uses so far: lets the checker attribute uses to the
+    /// function being checked (T13 step 2, unused-import warnings).
+    pub uses: Cell<u32>,
 }
 
 impl ImportEntry {
     pub fn mark_used(&self) {
         self.used.set(true);
+        self.uses.set(self.uses.get().saturating_add(1));
     }
 }
 

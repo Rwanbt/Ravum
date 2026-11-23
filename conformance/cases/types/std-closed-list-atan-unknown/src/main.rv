@@ -1,3 +1,5 @@
+use std::math;
+
 fn main() {
     let _x = math::atan(1.0);
 }

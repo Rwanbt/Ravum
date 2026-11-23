@@ -1,0 +1,30 @@
+[package]
+name = "ravum-lang-jit"
+description = "Ravum language: native development backend (gate T15) compiling IR v1 to machine code with Cranelift, in process"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ravum-lang-ir = { path = "../ravum-lang-ir" }
+cranelift-codegen = "0.116"
+cranelift-frontend = "0.116"
+# selinux-fix: JIT pages come from their own anonymous mmap (unmapped on
+# free) instead of the global allocator, so mprotect never touches heap pages
+# malloc may also manage (suspected cause of the macOS arm64 SIGBUS).
+cranelift-jit = { version = "0.116", features = ["selinux-fix"] }
+cranelift-module = "0.116"
+cranelift-native = "0.116"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+ravum-lang-sema = { workspace = true }
+ravum-core-machine = { path = "../ravum-core-machine" }
+
+[target.'cfg(unix)'.dev-dependencies]
+# rt_budget.rs: per-thread CPU time (tells preemption from work).
+libc = "0.2"

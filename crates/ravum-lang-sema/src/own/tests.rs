@@ -352,7 +352,8 @@ fn f() -> &str {
 #[test]
 fn temporary_reference_in_call_is_allowed() {
     accepted(
-        r#"
+        r#"use std::io;
+
 fn f(s: String) {
     io::println(s.as_str());
 }
@@ -654,7 +655,8 @@ fn f() {
 #[test]
 fn use_after_drop_is_rejected() {
     rejected(
-        r#"
+        r#"use std::io;
+
 fn f() {
     let s = String::from("a");
     drop(s);

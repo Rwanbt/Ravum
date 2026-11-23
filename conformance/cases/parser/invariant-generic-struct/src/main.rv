@@ -1,0 +1,7 @@
+struct G<T> {
+    v: T,
+}
+    invariant true
+
+fn main() -> () effects() {
+}

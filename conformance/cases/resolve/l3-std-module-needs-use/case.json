@@ -1,0 +1,8 @@
+{
+  "id": "resolve/l3-std-module-needs-use",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "STD-1.1 (MUST): no module is in the prelude; io::println without `use std::io;` is refused (std::io::println stays accepted)."
+}

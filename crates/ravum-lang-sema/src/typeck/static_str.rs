@@ -6,6 +6,16 @@ pub(super) fn compute_static_str_fns(program: &ast::Program, facts: &mut Facts) 
     let mut candidates: Vec<(&FnItem, NodeId)> = Vec::new();
     collect_static_str_candidates(&program.root, facts, &mut candidates);
     facts.static_str_fns.clear();
+    // T13 step 2: a reused body brings its previous status (its body was
+    // not typed again, so it cannot be evaluated here).
+    let reused: Vec<NodeId> = facts
+        .reuse_bodies
+        .iter()
+        .filter(|(_, r)| r.static_str)
+        .map(|(id, _)| *id)
+        .collect();
+    facts.static_str_fns.extend(reused);
+    candidates.retain(|(_, id)| !facts.reuse_bodies.contains_key(id));
     let mut changed = true;
     let mut rounds = 0usize;
     while changed && rounds <= candidates.len() {

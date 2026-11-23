@@ -143,7 +143,10 @@ fn an_unknown_builtin_method_is_refused() {
 
 #[test]
 fn a_builtin_call_missing_its_argument_is_refused() {
-    let mut program = checked("fn main() { io::println(\"a\"); }\n", Profile::Core);
+    let mut program = checked(
+        "use std::io;\nfn main() { io::println(\"a\"); }\n",
+        Profile::Core,
+    );
     if let ExprKind::Call { args, .. } = &mut first_main_expr(&mut program).kind {
         args.clear();
     }
@@ -151,7 +154,7 @@ fn a_builtin_call_missing_its_argument_is_refused() {
     assert!(message.contains("missing its text argument"), "{message}");
 
     let mut program = checked(
-        "fn main() { let n = string::parse_i64(\"4\"); }\n",
+        "use std::string;\nfn main() { let n = string::parse_i64(\"4\"); }\n",
         Profile::Core,
     );
     for item in &mut program.program.root.items {
@@ -174,7 +177,7 @@ fn a_builtin_call_missing_its_argument_is_refused() {
 #[test]
 fn a_two_argument_builtin_missing_an_argument_is_refused() {
     let mut program = checked(
-        "fn main() effects(fs) { let r = fs::write_string(\"a\", \"b\"); }\n",
+        "use std::fs;\nfn main() effects(fs) { let r = fs::write_string(\"a\", \"b\"); }\n",
         Profile::Core,
     );
     for item in &mut program.program.root.items {
@@ -481,7 +484,7 @@ fn generated(source: &str, options: &GenOptions) -> String {
 #[test]
 fn text_parsing_is_lowered_for_borrowed_and_literal_text() {
     let code = generated(
-        "fn main() { let s = String::from(\"4\"); \
+        "use std::string;\nfn main() { let s = String::from(\"4\"); \
          let n = string::parse_i64(s.as_str()); let o = string::parse_i64(\"5\"); \
          let f = string::parse_f64(\"1.5\"); }\n",
         &GenOptions::default(),

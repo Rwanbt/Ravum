@@ -221,6 +221,77 @@ pub fn analyze_entry_with_timings(
     (frontend, timings)
 }
 
+/// T13: what `watch` keeps between two analyses of the same package (parse
+/// cache, stable file ids, previous incremental state).
+#[derive(Default)]
+pub struct IncrementalSession {
+    cache: ravum_lang_sema::loader::ParseCache,
+    file_ids: std::collections::BTreeMap<PathBuf, ravum_lang_syntax::FileId>,
+    state: Option<ravum_lang_incr::package::PackageState>,
+}
+
+/// [`analyze`] for `watch` (profile `core`, not locked): the primary crate
+/// is checked with [`ravum_lang_incr::package::check_package`], reusing the
+/// unchanged bodies of the previous analysis; its facts are complete
+/// (oracle `package_cold_warm`), so the build that follows is unchanged.
+/// The secondary crate (`lib.rv` next to `main.rv`) is checked in full.
+pub fn analyze_incremental(
+    path: &Path,
+    session: &mut IncrementalSession,
+) -> (Frontend, Option<ravum_lang_incr::package::PackageStats>) {
+    let mut pkg = ravum_lang_sema::loader::load_package_with_parse_cache(
+        path,
+        &LoadOptions {
+            locked: false,
+            overrides: std::collections::BTreeMap::new(),
+            file_ids: Some(session.file_ids.clone()),
+        },
+        &mut session.cache,
+    );
+    for (p, id) in &pkg.file_ids {
+        session.file_ids.insert(p.clone(), *id);
+    }
+    let mut diags = std::mem::take(&mut pkg.diags);
+    let options = CheckOptions {
+        profile: Profile::Core,
+        edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+    };
+    let (mut checked, mut lib_checked, mut stats) = (None, None, None);
+    if !diags.has_errors() {
+        if let Some(program) = &pkg.program {
+            let (result, state, st) = ravum_lang_incr::package::check_package(
+                session.state.as_ref(),
+                program,
+                &pkg.sources,
+                &options,
+            );
+            session.state = Some(state);
+            stats = Some(st);
+            diags.extend(result.diags);
+            checked = result.checked;
+        }
+        if let Some(program) = &pkg.lib_program {
+            let (result, _) = check_entry_with_timings(program, &pkg.sources, &options, None);
+            diags.extend(result.diags);
+            lib_checked = result.checked;
+        }
+    } else {
+        // A load error: the next analysis starts over (fail-closed).
+        session.state = None;
+    }
+    diags.sort();
+    (
+        Frontend {
+            target: path.to_path_buf(),
+            pkg,
+            checked,
+            lib_checked,
+            diags,
+        },
+        stats,
+    )
+}
+
 /// Free function named by `--rt-entry`, addressed by module path.
 fn find_function(program: &Program, name: &str) -> Option<NodeId> {
     fn walk(module: &Module, prefix: &str, wanted: &str) -> Option<NodeId> {
@@ -1406,7 +1477,7 @@ mod tests {
         let scratch = Scratch::new("identity");
         let dir = scratch.package(
             "identity-demo",
-            "fn main() {\n    io::println(\"hi\");\n}\n",
+            "use std::io;\nfn main() {\n    io::println(\"hi\");\n}\n",
         );
         let frontend = analyze(&dir, Profile::Core, false);
         assert!(frontend.success(), "the test package must check");
@@ -1448,7 +1519,7 @@ mod tests {
         let changed_frontend = {
             std::fs::write(
                 dir.join("src/main.rv"),
-                "fn main() {\n    io::println(\"bye\");\n}\n",
+                "use std::io;\nfn main() {\n    io::println(\"bye\");\n}\n",
             )
             .expect("rewrite source");
             analyze(&dir, Profile::Core, false)

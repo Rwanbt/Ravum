@@ -1,0 +1,12 @@
+// oracle: value i64 -5
+// G-6.38/G-6.41: a lone identifier in a pattern binds, even when a `const`
+// has that name; only `Some`/`None`/`Ok`/`Err` are constructor patterns.
+const K: i32 = 7;
+
+fn check() -> i64 effects() {
+    let x: i32 = -5;
+    return match x {
+        K => K as i64,
+        _ => 0,
+    };
+}

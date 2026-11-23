@@ -1,3 +1,5 @@
+use std::task;
+
 async fn f() -> i64 effects(async) {
     1
 }

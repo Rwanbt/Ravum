@@ -1,0 +1,25 @@
+// Forme « bloc DSP » de l'exemple (V2-L4) : le gain et le filtre IIR d'ordre 1
+// de `src/main.rv`, échantillon par échantillon, avec l'état du filtre possédé
+// par l'hôte. Chargé par le JIT (`ravum-lang-jit::hot`) et joué par l'hôte
+// audio (`ravum-lang-audio`) : `crates/ravum-lang-audio/tests/dsp_gain_iir.rs`.
+// Mêmes coefficients que `src/main.rv` : gain 2.0, IIR a = 0.8, b = 0.2.
+
+struct State {
+    y: f32,
+}
+
+fn init() -> State effects() {
+    return State { y: 0.0 };
+}
+
+fn gain() -> f32 effects() {
+    return 2.0;
+}
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    let a: f32 = 0.8;
+    let b: f32 = 0.2;
+    let boosted: f32 = input * gain();
+    state.y = a * state.y + b * boosted;
+    return state.y;
+}

@@ -1,0 +1,7 @@
+struct R {
+    lo: i64,
+}
+    invariant self.lo >= 0
+
+fn main() -> () effects() {
+}

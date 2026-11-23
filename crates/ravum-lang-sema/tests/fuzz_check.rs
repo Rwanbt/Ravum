@@ -90,7 +90,8 @@ fn aire(s: Shape) -> f64 {
 }
 fn main() { let mut p = Point::new(3.0, 4.0); let n = p.norme(); }
 "#,
-    r#"fn fib(n: u32) -> u64 {
+    r#"use std::io;
+fn fib(n: u32) -> u64 {
     if n < 2 { return n as u64; }
     fib(n - 1) + fib(n - 2)
 }
@@ -100,7 +101,9 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 "#,
-    r#"fn lire(p: &str) -> Result<String, Error> effects(fs, alloc) {
+    r#"use std::io;
+use std::fs;
+fn lire(p: &str) -> Result<String, Error> effects(fs, alloc) {
     let s = fs::read_to_string(p)?;
     return Result::Ok(s);
 }
@@ -137,7 +140,8 @@ fn main() {
     let z = a[i] as i64;
 }
 "#,
-    r#"// Unicode autorisé dans les littéraux et commentaires.
+    r#"use std::io;
+// Unicode autorisé dans les littéraux et commentaires.
 fn main() {
     let texte = "héllo 😀";
     io::println(texte.as_str());

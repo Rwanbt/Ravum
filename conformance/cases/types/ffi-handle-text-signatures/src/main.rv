@@ -1,3 +1,6 @@
+use std::ffi;
+use std::io;
+
 extern "C" {
     fn rv_conf_open(path: &str) -> CHandle;
     fn rv_conf_name(handle: CHandle) -> Option<String>;

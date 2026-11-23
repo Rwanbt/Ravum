@@ -1,4 +1,5 @@
 // oracle: value f64 -0
+use std::math;
 fn check() -> f64 effects() {
     return math::min(-0.0, 0.0);
 }

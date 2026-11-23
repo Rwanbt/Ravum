@@ -1,0 +1,4 @@
+[package]
+name = "resolve-l3-std-module-needs-use"
+version = "0.1.0"
+edition = "core-1.0"

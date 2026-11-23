@@ -1,0 +1,6 @@
+{
+  "id": "run/l7b-async-http-server",
+  "mode": "run-pass",
+  "stdout_contains": "b: HTTP/1.1 200 OK Content-Type: text/plain Content-Length: 13 Connection: close  POST /b hello\na: HTTP/1.1 200 OK Content-Type: text/plain Content-Length: 7 Connection: close  GET /a \ndone\n",
+  "notes": "RFC-ASYNC-NET-1 ANET-2 (MUST): http::read_request_async / respond_async never block the single-threaded executor; a half-sent request does not stop another connection from being served. Same parsing and response as the blocking forms."
+}

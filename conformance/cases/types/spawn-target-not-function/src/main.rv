@@ -1,3 +1,5 @@
+use std::thread;
+
 fn main() -> () effects(thread, alloc) {
     let x: i64 = 3;
     let h: JoinHandle<i64> = thread::spawn(x, 1);

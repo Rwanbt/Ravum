@@ -44,8 +44,8 @@ Elles font autorité ; elles ne ratifient ni `D2`, ni `D4`, ni `D9`, ni `T12`.
 | **S7** | Comparaison du Rust généré : identité après normalisation limitée aux motifs `__rv_root_<id>` et `rvm_ffi_<id>` ; toute autre différence = échec | **APPROUVÉ** — fiche `D-2026-11-14-4` tranchée |
 | **S8** | Cible LSP : **REFUSÉ tel que proposé** ; cible retenue p95 < 50 ms jusqu'à 1 000 lignes, p95 ≤ 150 ms à 5 110 lignes en release, contrôle de linéarité en CI | **REFUSÉ** — fiche `D-2026-11-14-5` tranchée, cible écrite dans `PRODUCTION-READINESS.md` §11 |
 | **A1** | `RFC-OWN-FACTS-1`, étape C comprise, aux conditions de l'agent E | **APPROUVÉE** — `RFC-OWN-FACTS` passe `ACCEPTED` ; fiche `RFC-OWN-FACTS-1` tranchée |
-| **A2** | Bloc DSP (phase 8, `RFC-RV-DSP-BLOCK-1`) reporté à la 1.1, hors périmètre 1.0 ; ne pas l'implémenter | **REPORTÉ** — `RFC-RV-DSP-BLOCK` passe `DEFERRED` ; T8/T9 restent `PARTIAL` avec la mention |
-| **A3** | Voie C hors 1.0 ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | **TRANCHÉ** — `RFC-BACKEND-NATIF-VOIE-C` passe `DEFERRED` ; fiche `D2-VOIE-C` tranchée |
+| **A2** | Bloc DSP (phase 8, `RFC-RV-DSP-BLOCK-1`) reporté à la 1.1, hors périmètre 1.0 ; ne pas l'implémenter | **REPORTÉ** — `RFC-RV-DSP-BLOCK` passe `DEFERRED` ; T8/T9 restent `PARTIAL` avec la mention — **ANNULÉE par V1 (2026-11-19)**, réintégrée au périmètre 1.0 |
+| **A3** | Voie C hors 1.0 ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | **TRANCHÉ** — `RFC-BACKEND-NATIF-VOIE-C` passe `DEFERRED` ; fiche `D2-VOIE-C` tranchée — **ANNULÉE par V1 (2026-11-19)**, réintégrée au périmètre 1.0 |
 | **A4** | `RFC-DEV-TOOLS-1` : `cargo-mutants` et Miri installables localement ; outils de développement, pas dépendances | **APPROUVÉE** — `RFC-DEV-TOOLS` passe `ACCEPTED` |
 | **A5** | D11 : premier `rule_id` dupliqué inchangé, second renuméroté et consigné dans `Q-GRAM-11` ; barres verticales non échappées corrigées | **APPLIQUÉ** — `G-5.14` et `G-6.48` attribués, `grammar.md` corrigé |
 

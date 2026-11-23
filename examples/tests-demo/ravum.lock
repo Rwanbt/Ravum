@@ -5,4 +5,4 @@ lockfile_version = 1
 [[package]]
 name = "tests-demo"
 version = "0.1.0"
-digest = "sha256:3ef19ea91ee70e1bb8387edaf315805df0f27671e8a80c81098b3f9e5fa7213c"
+digest = "sha256:d7d2e70c73f4789399fc6c4b5eb8c0a283e0d5d8e43b3eca8b7fe5001ec528f6"

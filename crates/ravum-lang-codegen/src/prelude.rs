@@ -144,6 +144,10 @@ pub fn rv_eprint(text: &str) {
 }
 
 pub fn rv_read_line() -> Result<String, Error> {
+    rv_rec::call("io::read_line", &[], rv_read_line_real, rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_read_line_real() -> Result<String, Error> {
     let mut line = String::new();
     match std::io::stdin().read_line(&mut line) {
         Ok(_) => {
@@ -164,6 +168,10 @@ pub fn rv_args() -> Vec<String> {
 }
 
 pub fn rv_env_var(name: &str) -> Result<String, Error> {
+    rv_rec::call("env::var", &[name], || rv_env_var_real(name), rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_env_var_real(name: &str) -> Result<String, Error> {
     match std::env::var(name) {
         Ok(value) => Ok(value),
         Err(error) => Err(Error::new(&format!(
@@ -174,6 +182,16 @@ pub fn rv_env_var(name: &str) -> Result<String, Error> {
 }
 
 pub fn rv_fs_read_to_string(path: &str) -> Result<String, Error> {
+    rv_rec::call(
+        "fs::read_to_string",
+        &[path],
+        || rv_fs_read_to_string_real(path),
+        rv_rec::enc_text,
+        rv_rec::dec_text,
+    )
+}
+
+fn rv_fs_read_to_string_real(path: &str) -> Result<String, Error> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(text),
         Err(error) => Err(Error::new(&format!(
@@ -184,6 +202,17 @@ pub fn rv_fs_read_to_string(path: &str) -> Result<String, Error> {
 }
 
 pub fn rv_fs_write_string(path: &str, contents: &str) -> Result<(), Error> {
+    // DET-12: replayed, the write is not performed; its arguments are checked.
+    rv_rec::call(
+        "fs::write_string",
+        &[path, contents],
+        || rv_fs_write_string_real(path, contents),
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
+}
+
+fn rv_fs_write_string_real(path: &str, contents: &str) -> Result<(), Error> {
     match std::fs::write(path, contents) {
         Ok(()) => Ok(()),
         Err(error) => Err(Error::new(&format!(
@@ -194,31 +223,516 @@ pub fn rv_fs_write_string(path: &str, contents: &str) -> Result<(), Error> {
 }
 
 pub fn rv_fs_exists(path: &str) -> bool {
-    std::path::Path::new(path).exists()
+    rv_rec::call(
+        "fs::exists",
+        &[path],
+        || std::path::Path::new(path).exists(),
+        rv_rec::enc_bool,
+        rv_rec::dec_bool,
+    )
+}
+
+// --- I/O record and replay (RFC-DETERMINISTIC-PROFILE-1 DET-9..DET-15) ---
+//
+// Active only when `RAVUM_DET_RECORD=<file>` or `RAVUM_DET_REPLAY=<file>` is
+// set (`ravum-lang run --profile det --record|--replay FILE`). Recording, each
+// external call runs and appends `rank \t name \t digest(args) \t result` to
+// the journal (`ravum-rvlog-1`). Replaying, no external call runs: the next
+// event must have the same rank, name and argument digest, and its result is
+// returned; anything else stops the program (`replay diverged at #n`), never
+// a guessed value nor a real call (fail-closed). Covered: `fs::*`,
+// `io::read_line`, `env::var`; `net` stays refused under `det`.
+mod rv_rec {
+    use super::Error;
+    use std::io::Write;
+    use std::sync::{Mutex, OnceLock};
+
+    pub const VERSION: &str = "ravum-rvlog-1";
+
+    struct Event {
+        name: String,
+        digest: String,
+        result: String,
+    }
+
+    enum Mode {
+        Off,
+        Record(Mutex<(std::fs::File, u64)>),
+        Replay(Vec<Event>, Mutex<usize>),
+    }
+
+    static MODE: OnceLock<Mode> = OnceLock::new();
+
+    /// FNV-1a 64 of the arguments, each followed by a 0 byte. Not a
+    /// cryptographic digest: it detects a divergence, it does not authenticate.
+    fn digest(args: &[&str]) -> String {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for arg in args {
+            for b in arg.bytes().chain(std::iter::once(0u8)) {
+                h ^= b as u64;
+                h = ((h as u128 * 0x0100_0000_01b3u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+            }
+        }
+        format!("{h:016x}")
+    }
+
+    fn escape(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        for c in text.chars() {
+            match c {
+                '\\' => out.push_str("\\\\"),
+                '\t' => out.push_str("\\t"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+
+    fn unescape(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut chars = text.chars();
+        while let Some(c) = chars.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+            match chars.next() {
+                Some('t') => out.push('\t'),
+                Some('n') => out.push('\n'),
+                Some('r') => out.push('\r'),
+                Some(other) => out.push(other),
+                None => {}
+            }
+        }
+        out
+    }
+
+    pub fn enc_text(value: &Result<String, Error>) -> String {
+        match value {
+            Ok(text) => format!("ok:{}", escape(text)),
+            Err(error) => format!("err:{}", escape(&error.message)),
+        }
+    }
+
+    pub fn dec_text(text: &str) -> Option<Result<String, Error>> {
+        if let Some(rest) = text.strip_prefix("ok:") {
+            Some(Ok(unescape(rest)))
+        } else {
+            text.strip_prefix("err:")
+                .map(|rest| Err(Error::new(&unescape(rest))))
+        }
+    }
+
+    pub fn enc_unit(value: &Result<(), Error>) -> String {
+        match value {
+            Ok(()) => "ok:".to_string(),
+            Err(error) => format!("err:{}", escape(&error.message)),
+        }
+    }
+
+    pub fn dec_unit(text: &str) -> Option<Result<(), Error>> {
+        if text == "ok:" {
+            Some(Ok(()))
+        } else {
+            text.strip_prefix("err:")
+                .map(|rest| Err(Error::new(&unescape(rest))))
+        }
+    }
+
+    fn enc_err(error: &Error) -> String {
+        format!("err:{}", escape(&error.message))
+    }
+
+    fn dec_err<T>(text: &str) -> Option<Result<T, Error>> {
+        text.strip_prefix("err:")
+            .map(|rest| Err(Error::new(&unescape(rest))))
+    }
+
+    /// A replayed connection or listener: no socket (DET-10).
+    pub fn enc_stream(value: &Result<super::TcpStream, Error>) -> String {
+        match value {
+            Ok(_) => "ok:".to_string(),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_stream(text: &str) -> Option<Result<super::TcpStream, Error>> {
+        if text == "ok:" {
+            Some(Ok(super::TcpStream { shared: None }))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    pub fn enc_listener(value: &Result<super::TcpListener, Error>) -> String {
+        match value {
+            Ok(_) => "ok:".to_string(),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_listener(text: &str) -> Option<Result<super::TcpListener, Error>> {
+        if text == "ok:" {
+            Some(Ok(super::TcpListener { inner: None }))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    pub fn enc_u16(value: &u16) -> String {
+        value.to_string()
+    }
+
+    pub fn dec_u16(text: &str) -> Option<u16> {
+        text.parse().ok()
+    }
+
+    pub fn enc_opt_text(value: &Result<Option<String>, Error>) -> String {
+        match value {
+            Ok(None) => "ok:none".to_string(),
+            Ok(Some(text)) => format!("ok:some:{}", escape(text)),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_opt_text(text: &str) -> Option<Result<Option<String>, Error>> {
+        if text == "ok:none" {
+            Some(Ok(None))
+        } else if let Some(rest) = text.strip_prefix("ok:some:") {
+            Some(Ok(Some(unescape(rest))))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    /// Escaped fields never hold a raw tab (`escape`), so a tab separates them.
+    pub fn enc_request(value: &Result<super::HttpRequest, Error>) -> String {
+        match value {
+            Ok(r) => {
+                let mut out = format!("ok:{}\t{}\t{}", escape(&r.method), escape(&r.path), escape(&r.body));
+                for (name, value) in &r.headers {
+                    out.push('\t');
+                    out.push_str(&escape(name));
+                    out.push('\t');
+                    out.push_str(&escape(value));
+                }
+                out
+            }
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_request(text: &str) -> Option<Result<super::HttpRequest, Error>> {
+        let Some(rest) = text.strip_prefix("ok:") else {
+            return dec_err(text);
+        };
+        let fields: Vec<String> = rest.split('\t').map(unescape).collect();
+        if fields.len() < 3 || (fields.len() - 3) % 2 != 0 {
+            return None;
+        }
+        let headers = fields[3..].chunks(2).map(|kv| (kv[0].clone(), kv[1].clone())).collect();
+        Some(Ok(super::HttpRequest {
+            method: fields[0].clone(),
+            path: fields[1].clone(),
+            body: fields[2].clone(),
+            headers,
+        }))
+    }
+
+    pub fn enc_response(value: &Result<super::HttpResponse, Error>) -> String {
+        match value {
+            Ok(r) => format!("ok:{}\t{}", r.status, escape(&r.body)),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_response(text: &str) -> Option<Result<super::HttpResponse, Error>> {
+        let Some(rest) = text.strip_prefix("ok:") else {
+            return dec_err(text);
+        };
+        let (status, body) = rest.split_once('\t')?;
+        Some(Ok(super::HttpResponse {
+            status: status.parse().ok()?,
+            body: unescape(body),
+        }))
+    }
+
+    pub fn enc_bool(value: &bool) -> String {
+        value.to_string()
+    }
+
+    pub fn dec_bool(text: &str) -> Option<bool> {
+        text.parse().ok()
+    }
+
+    fn fail(message: String) -> ! {
+        panic!("{}", message)
+    }
+
+    fn mode() -> &'static Mode {
+        MODE.get_or_init(|| {
+            if let Ok(path) = std::env::var("RAVUM_DET_RECORD") {
+                let mut file = match std::fs::File::create(&path) {
+                    Ok(file) => file,
+                    Err(error) => fail(format!("cannot create the journal `{path}`: {error}")),
+                };
+                let header = std::env::var("RAVUM_DET_HEADER").unwrap_or_default();
+                if writeln!(file, "{header}").is_err() {
+                    fail(format!("cannot write the journal `{path}`"));
+                }
+                return Mode::Record(Mutex::new((file, 0)));
+            }
+            if let Ok(path) = std::env::var("RAVUM_DET_REPLAY") {
+                let text = match std::fs::read_to_string(&path) {
+                    Ok(text) => text,
+                    Err(error) => fail(format!("cannot read the journal `{path}`: {error}")),
+                };
+                let mut events = Vec::new();
+                for (index, line) in text.lines().enumerate().skip(1) {
+                    let fields: Vec<&str> = line.splitn(4, '\t').collect();
+                    let ok = fields.len() == 4 && fields[0] == (index - 1).to_string();
+                    if !ok {
+                        fail(format!("malformed journal `{path}` at line {}", index + 1));
+                    }
+                    events.push(Event {
+                        name: fields[1].to_string(),
+                        digest: fields[2].to_string(),
+                        result: fields[3].to_string(),
+                    });
+                }
+                return Mode::Replay(events, Mutex::new(0));
+            }
+            Mode::Off
+        })
+    }
+
+    /// 0: off, 1: recording, 2: replaying.
+    pub fn mode_kind() -> u8 {
+        match mode() {
+            Mode::Off => 0,
+            Mode::Record(_) => 1,
+            Mode::Replay(..) => 2,
+        }
+    }
+
+    pub fn digest_of(args: &[&str]) -> String {
+        digest(args)
+    }
+
+    /// Append one completed event (recording only).
+    pub fn record(name: &str, digest_text: &str, result: &str) {
+        if let Mode::Record(state) = mode() {
+            let mut guard = match state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let rank = guard.1;
+            guard.1 += 1;
+            let line = format!("{rank}\t{name}\t{digest_text}\t{result}");
+            if writeln!(guard.0, "{line}").and_then(|_| guard.0.flush()).is_err() {
+                fail("cannot append to the journal".to_string());
+            }
+        }
+    }
+
+    /// Replaying: if the next event is `name(digest)`, consume it and return
+    /// its result; otherwise leave the journal untouched. The journal ended:
+    /// divergence.
+    pub fn take_if_next<T>(name: &str, digest_text: &str, dec: fn(&str) -> Option<T>) -> Option<T> {
+        let Mode::Replay(events, position) = mode() else {
+            return None;
+        };
+        let mut guard = match position.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let rank = *guard;
+        let event = match events.get(rank) {
+            Some(event) => event,
+            None => {
+                drop(guard);
+                fail(format!(
+                    "replay diverged at #{rank}: the journal has ended, got {name}({digest_text})"
+                ))
+            }
+        };
+        if event.name != name || event.digest != digest_text {
+            return None;
+        }
+        *guard += 1;
+        drop(guard);
+        match dec(&event.result) {
+            Some(value) => Some(value),
+            None => fail(format!("replay diverged at #{rank}: unreadable result")),
+        }
+    }
+
+    pub fn call<T>(
+        name: &str,
+        args: &[&str],
+        real: impl FnOnce() -> T,
+        enc: fn(&T) -> String,
+        dec: fn(&str) -> Option<T>,
+    ) -> T {
+        match mode() {
+            Mode::Off => real(),
+            Mode::Record(state) => {
+                let value = real();
+                let mut guard = match state.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let rank = guard.1;
+                guard.1 += 1;
+                let line = format!("{rank}\t{name}\t{}\t{}", digest(args), enc(&value));
+                if writeln!(guard.0, "{line}").and_then(|_| guard.0.flush()).is_err() {
+                    fail("cannot append to the journal".to_string());
+                }
+                value
+            }
+            Mode::Replay(events, position) => {
+                let mut guard = match position.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let rank = *guard;
+                *guard += 1;
+                drop(guard);
+                let got = digest(args);
+                match events.get(rank) {
+                    None => fail(format!(
+                        "replay diverged at #{rank}: the journal has ended, got {name}({got})"
+                    )),
+                    Some(event) if event.name != name || event.digest != got => fail(format!(
+                        "replay diverged at #{rank}: expected {}({}), got {name}({got})",
+                        event.name, event.digest
+                    )),
+                    Some(event) => match dec(&event.result) {
+                        Some(value) => value,
+                        None => fail(format!("replay diverged at #{rank}: unreadable result")),
+                    },
+                }
+            }
+        }
+    }
+}
+
+// The `*_async` network functions under `--record`/`--replay` (DET-9..DET-11).
+// Recording journals each result when its future completes, so the journal
+// holds the completion order. Replaying never builds the real future: it stays
+// pending until the next journal event is its own (same name and arguments),
+// which reproduces that order; a future that waits too long for its turn means
+// the run diverged, and the program stops (fail-closed, never a hang).
+struct RvRecFuture<T> {
+    name: &'static str,
+    digest: String,
+    inner: Option<Future<T>>,
+    enc: fn(&T) -> String,
+    dec: fn(&str) -> Option<T>,
+    waits: u64,
+}
+
+const RV_REPLAY_MAX_WAITS: u64 = 1_000_000;
+
+impl<T> std::future::Future for RvRecFuture<T> {
+    type Output = T;
+    fn poll(self: std::pin::Pin<&mut Self>, context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+        let this = self.get_mut();
+        match this.inner.as_mut() {
+            Some(inner) => match inner.as_mut().poll(context) {
+                std::task::Poll::Ready(value) => {
+                    rv_rec::record(this.name, &this.digest, &(this.enc)(&value));
+                    std::task::Poll::Ready(value)
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            },
+            None => match rv_rec::take_if_next(this.name, &this.digest, this.dec) {
+                Some(value) => std::task::Poll::Ready(value),
+                None => {
+                    this.waits += 1;
+                    if this.waits > RV_REPLAY_MAX_WAITS {
+                        panic!(
+                            "replay diverged: {}({}) never became the next journal event",
+                            this.name, this.digest
+                        );
+                    }
+                    rv_io_wait(context)
+                }
+            },
+        }
+    }
+}
+
+fn rv_rec_async<T: 'static>(
+    name: &'static str,
+    args: &[&str],
+    make: impl FnOnce() -> Future<T>,
+    enc: fn(&T) -> String,
+    dec: fn(&str) -> Option<T>,
+) -> Future<T> {
+    match rv_rec::mode_kind() {
+        0 => make(),
+        kind => Box::pin(RvRecFuture {
+            name,
+            digest: rv_rec::digest_of(args),
+            inner: if kind == 1 { Some(make()) } else { None },
+            enc,
+            dec,
+            waits: 0,
+        }),
+    }
 }
 
 // The socket is shared (`Arc`) so that an `async` operation can own a handle to
 // it without borrowing the Ravum value: the future is `'static`, the Ravum
 // value stays usable, and buffered bytes are never lost between the blocking
 // and the asynchronous functions (they read the same `BufReader`).
+//
+// Under `--replay` (DET-10) no socket is opened: a handle is `None` and every
+// operation on it is served by the journal, so the socket is never touched.
 pub struct TcpListener {
-    inner: std::sync::Arc<std::net::TcpListener>,
+    inner: Option<std::sync::Arc<std::net::TcpListener>>,
 }
 
+type RvSharedStream = std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>;
+
 pub struct TcpStream {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: Option<RvSharedStream>,
 }
 
 fn rv_stream(socket: std::net::TcpStream) -> TcpStream {
     TcpStream {
-        shared: std::sync::Arc::new(std::sync::Mutex::new(std::io::BufReader::new(socket))),
+        shared: Some(std::sync::Arc::new(std::sync::Mutex::new(std::io::BufReader::new(socket)))),
+    }
+}
+
+/// The real socket of a handle. A replayed handle has none; reaching this with
+/// one is a defect of the journaling (every public operation is journaled),
+/// never a silent real I/O (fail-closed).
+fn rv_shared(stream: &TcpStream) -> RvSharedStream {
+    match &stream.shared {
+        Some(shared) => shared.clone(),
+        None => panic!("replay: a replayed connection has no socket"),
+    }
+}
+
+fn rv_listener(listener: &TcpListener) -> &std::sync::Arc<std::net::TcpListener> {
+    match &listener.inner {
+        Some(inner) => inner,
+        None => panic!("replay: a replayed listener has no socket"),
     }
 }
 
 fn rv_reader(
     stream: &TcpStream,
 ) -> std::sync::MutexGuard<'_, std::io::BufReader<std::net::TcpStream>> {
-    stream.shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    let shared = match &stream.shared {
+        Some(shared) => shared,
+        None => panic!("replay: a replayed connection has no socket"),
+    };
+    shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn rv_net_error(what: &str, error: std::io::Error) -> Error {
@@ -226,29 +740,45 @@ fn rv_net_error(what: &str, error: std::io::Error) -> Error {
 }
 
 pub fn rv_net_listen(addr: &str) -> Result<TcpListener, Error> {
+    rv_rec::call("net::listen", &[addr], || rv_net_listen_real(addr), rv_rec::enc_listener, rv_rec::dec_listener)
+}
+
+fn rv_net_listen_real(addr: &str) -> Result<TcpListener, Error> {
     match std::net::TcpListener::bind(addr) {
         Ok(inner) => Ok(TcpListener {
-            inner: std::sync::Arc::new(inner),
+            inner: Some(std::sync::Arc::new(inner)),
         }),
         Err(error) => Err(rv_net_error(&format!("cannot listen on `{}`", addr), error)),
     }
 }
 
 pub fn rv_net_local_port(listener: &TcpListener) -> u16 {
-    match listener.inner.local_addr() {
+    rv_rec::call("net::local_port", &[], || rv_net_local_port_real(listener), rv_rec::enc_u16, rv_rec::dec_u16)
+}
+
+fn rv_net_local_port_real(listener: &TcpListener) -> u16 {
+    match rv_listener(listener).local_addr() {
         Ok(addr) => addr.port(),
         Err(_) => 0,
     }
 }
 
 pub fn rv_net_accept(listener: &TcpListener) -> Result<TcpStream, Error> {
-    match listener.inner.accept() {
+    rv_rec::call("net::accept", &[], || rv_net_accept_real(listener), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_accept_real(listener: &TcpListener) -> Result<TcpStream, Error> {
+    match rv_listener(listener).accept() {
         Ok((stream, _)) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error("cannot accept a connection", error)),
     }
 }
 
 pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
+    rv_rec::call("net::connect", &[addr], || rv_net_connect_real(addr), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_connect_real(addr: &str) -> Result<TcpStream, Error> {
     match std::net::TcpStream::connect(addr) {
         Ok(stream) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error(&format!("cannot connect to `{}`", addr), error)),
@@ -256,6 +786,10 @@ pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
 }
 
 pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> {
+    rv_rec::call("net::read_line", &[], || rv_net_read_line_real(stream), rv_rec::enc_opt_text, rv_rec::dec_opt_text)
+}
+
+fn rv_net_read_line_real(stream: &mut TcpStream) -> Result<Option<String>, Error> {
     use std::io::BufRead;
     let mut bytes = Vec::new();
     match rv_reader(stream).read_until(b'\n', &mut bytes) {
@@ -277,6 +811,17 @@ pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error>
 }
 
 pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
+    let count_text = count.to_string();
+    rv_rec::call(
+        "net::read_exact",
+        &[&count_text],
+        || rv_net_read_exact_real(stream, count),
+        rv_rec::enc_text,
+        rv_rec::dec_text,
+    )
+}
+
+fn rv_net_read_exact_real(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
     use std::io::Read;
     let mut bytes = vec![0u8; count];
     match rv_reader(stream).read_exact(&mut bytes) {
@@ -289,6 +834,10 @@ pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String,
 }
 
 pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
+    rv_rec::call("net::write_str", &[text], || rv_net_write_str_real(stream, text), rv_rec::enc_unit, rv_rec::dec_unit)
+}
+
+fn rv_net_write_str_real(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
     use std::io::Write;
     let mut reader = rv_reader(stream);
     let socket = reader.get_mut();
@@ -317,13 +866,20 @@ const RV_HTTP_MAX_HEADERS: usize = 100;
 const RV_HTTP_MAX_BODY: usize = 16 * 1024 * 1024;
 
 /// One CRLF- or LF-terminated line of at most `RV_HTTP_MAX_LINE` bytes.
-fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<Option<String>, Error> {
+fn rv_http_line<R: std::io::BufRead>(reader: &mut R) -> Result<Option<String>, Error> {
     use std::io::{BufRead, Read};
     let mut bytes = Vec::new();
     match reader.by_ref().take(RV_HTTP_MAX_LINE + 1).read_until(b'\n', &mut bytes) {
         Ok(0) => return Ok(None),
         Ok(_) => {}
         Err(error) => return Err(rv_net_error("cannot read from the connection", error)),
+    }
+    rv_http_line_text(bytes)
+}
+
+fn rv_http_line_text(mut bytes: Vec<u8>) -> Result<Option<String>, Error> {
+    if bytes.is_empty() {
+        return Ok(None);
     }
     if bytes.last() != Some(&b'\n') {
         return Err(Error::new("http: line too long or truncated"));
@@ -339,9 +895,7 @@ fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<
 }
 
 /// Header lines up to the blank line; names are kept as received.
-fn rv_http_headers(
-    reader: &mut std::io::BufReader<std::net::TcpStream>,
-) -> Result<Vec<(String, String)>, Error> {
+fn rv_http_headers<R: std::io::BufRead>(reader: &mut R) -> Result<Vec<(String, String)>, Error> {
     let mut headers = Vec::new();
     loop {
         let line = match rv_http_line(reader)? {
@@ -351,14 +905,17 @@ fn rv_http_headers(
         if line.is_empty() {
             return Ok(headers);
         }
-        if headers.len() == RV_HTTP_MAX_HEADERS {
-            return Err(Error::new("http: too many headers"));
-        }
-        match line.split_once(':') {
-            Some((name, value)) => headers.push((name.trim().to_string(), value.trim().to_string())),
-            None => return Err(Error::new("http: malformed header line")),
-        }
+        rv_http_push_header(&mut headers, &line)?;
     }
+}
+
+fn rv_http_push_header(headers: &mut Vec<(String, String)>, line: &str) -> Result<(), Error> {
+    if headers.len() == RV_HTTP_MAX_HEADERS {
+        return Err(Error::new("http: too many headers"));
+    }
+    let (name, value) = line.split_once(':').ok_or_else(|| Error::new("http: malformed header line"))?;
+    headers.push((name.trim().to_string(), value.trim().to_string()));
+    Ok(())
 }
 
 fn rv_http_find(headers: &[(String, String)], name: &str) -> Option<String> {
@@ -369,25 +926,15 @@ fn rv_http_find(headers: &[(String, String)], name: &str) -> Option<String> {
 }
 
 /// The body announced by `Content-Length` (0 when absent), or `until_eof`.
-fn rv_http_read_body(
-    reader: &mut std::io::BufReader<std::net::TcpStream>,
+fn rv_http_read_body<R: std::io::BufRead>(
+    reader: &mut R,
     headers: &[(String, String)],
     until_eof: bool,
 ) -> Result<String, Error> {
     use std::io::Read;
-    if rv_http_find(headers, "transfer-encoding").is_some() {
-        return Err(Error::new("http: Transfer-Encoding is not supported"));
-    }
     let mut bytes = Vec::new();
-    match rv_http_find(headers, "content-length") {
-        Some(text) => {
-            let length: usize = match text.parse() {
-                Ok(length) => length,
-                Err(_) => return Err(Error::new("http: invalid Content-Length")),
-            };
-            if length > RV_HTTP_MAX_BODY {
-                return Err(Error::new("http: body too large"));
-            }
+    match rv_http_body_length(headers)? {
+        Some(length) => {
             bytes.resize(length, 0);
             if let Err(error) = reader.read_exact(&mut bytes) {
                 return Err(rv_net_error("cannot read the body", error));
@@ -407,6 +954,22 @@ fn rv_http_read_body(
         }
         None => {}
     }
+    rv_http_body_text(bytes)
+}
+
+fn rv_http_body_length(headers: &[(String, String)]) -> Result<Option<usize>, Error> {
+    if rv_http_find(headers, "transfer-encoding").is_some() {
+        return Err(Error::new("http: Transfer-Encoding is not supported"));
+    }
+    let Some(text) = rv_http_find(headers, "content-length") else { return Ok(None); };
+    let length = text.parse::<usize>().map_err(|_| Error::new("http: invalid Content-Length"))?;
+    if length > RV_HTTP_MAX_BODY {
+        return Err(Error::new("http: body too large"));
+    }
+    Ok(Some(length))
+}
+
+fn rv_http_body_text(bytes: Vec<u8>) -> Result<String, Error> {
     match String::from_utf8(bytes) {
         Ok(body) => Ok(body),
         Err(_) => Err(Error::new("http: body is not valid UTF-8")),
@@ -414,11 +977,28 @@ fn rv_http_read_body(
 }
 
 pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
+    rv_rec::call("http::read_request", &[], || rv_http_read_request_real(stream), rv_rec::enc_request, rv_rec::dec_request)
+}
+
+fn rv_http_read_request_real(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
     let mut reader = rv_reader(stream);
-    let line = match rv_http_line(&mut *reader)? {
+    rv_http_parse_request(&mut *reader)
+}
+
+/// STD-19.2/19.3: one request from any buffered reader (the socket, or the
+/// bytes gathered by `read_request_async`): same parser, same limits.
+fn rv_http_parse_request<R: std::io::BufRead>(reader: &mut R) -> Result<HttpRequest, Error> {
+    let line = match rv_http_line(reader)? {
         Some(line) => line,
         None => return Err(Error::new("http: connection closed before a request")),
     };
+    let (method, path) = rv_http_request_line(&line)?;
+    let headers = rv_http_headers(&mut *reader)?;
+    let body = rv_http_read_body(&mut *reader, &headers, false)?;
+    Ok(HttpRequest { method, path, headers, body })
+}
+
+fn rv_http_request_line(line: &str) -> Result<(String, String), Error> {
     let mut parts = line.split(' ');
     let (method, path, version) = match (parts.next(), parts.next(), parts.next(), parts.next()) {
         (Some(m), Some(p), Some(v), None) if !m.is_empty() && p.starts_with('/') => (m, p, v),
@@ -427,10 +1007,7 @@ pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
     if version != "HTTP/1.1" && version != "HTTP/1.0" {
         return Err(Error::new("http: unsupported HTTP version"));
     }
-    let (method, path) = (method.to_string(), path.to_string());
-    let headers = rv_http_headers(&mut *reader)?;
-    let body = rv_http_read_body(&mut *reader, &headers, false)?;
-    Ok(HttpRequest { method, path, headers, body })
+    Ok((method.to_string(), path.to_string()))
 }
 
 pub fn rv_http_method(request: &HttpRequest) -> String {
@@ -469,18 +1046,32 @@ pub fn rv_http_respond(
     content_type: &str,
     body: &str,
 ) -> Result<(), Error> {
+    let status_text = status.to_string();
+    rv_rec::call(
+        "http::respond",
+        &[&status_text, content_type, body],
+        || {
+            let text = rv_http_response_text(status, content_type, body)?;
+            rv_net_write_str_real(stream, &text)
+        },
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
+}
+
+/// STD-19.5: the whole response, or `Err` for a bad status/content type.
+fn rv_http_response_text(status: u16, content_type: &str, body: &str) -> Result<String, Error> {
     if !(100..=999).contains(&status) || content_type.contains(['\r', '\n']) {
         return Err(Error::new("http: invalid status or content type"));
     }
-    let text = format!(
+    Ok(format!(
         "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         status,
         rv_http_reason(status),
         content_type,
         body.len(),
         body
-    );
-    rv_net_write_str(stream, &text)
+    ))
 }
 
 fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
@@ -503,7 +1094,7 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
     } else {
         format!("{}:80", authority)
     };
-    let mut stream = rv_net_connect(&address)?;
+    let mut stream = rv_net_connect_real(&address)?;
     let request = format!(
         "{} {} HTTP/1.1\r\nHost: {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         method,
@@ -513,7 +1104,7 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
         body.len(),
         body
     );
-    rv_net_write_str(&mut stream, &request)?;
+    rv_net_write_str_real(&mut stream, &request)?;
     let mut reader = rv_reader(&stream);
     let line = match rv_http_line(&mut *reader)? {
         Some(line) => line,
@@ -529,11 +1120,23 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
 }
 
 pub fn rv_http_get(url: &str) -> Result<HttpResponse, Error> {
-    rv_http_send(url, "GET", "text/plain", "")
+    rv_rec::call(
+        "http::get",
+        &[url],
+        || rv_http_send(url, "GET", "text/plain", ""),
+        rv_rec::enc_response,
+        rv_rec::dec_response,
+    )
 }
 
 pub fn rv_http_post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
-    rv_http_send(url, "POST", content_type, body)
+    rv_rec::call(
+        "http::post",
+        &[url, content_type, body],
+        || rv_http_send(url, "POST", content_type, body),
+        rv_rec::enc_response,
+        rv_rec::dec_response,
+    )
 }
 
 pub fn rv_http_status(response: &HttpResponse) -> u16 {
@@ -548,12 +1151,228 @@ pub fn rv_http_response_body(response: &HttpResponse) -> String {
 /// that was not joined joins it: no thread outlives its handle (CONC-3.5).
 pub struct JoinHandle<T> {
     inner: Option<std::thread::JoinHandle<T>>,
+    /// Thread id under the deterministic scheduler (`rv_det`), if active.
+    det_id: Option<u64>,
 }
 
 impl<T> Drop for JoinHandle<T> {
     fn drop(&mut self) {
         if let Some(handle) = self.inner.take() {
+            rv_det::wait_finished(self.det_id);
             let _ = handle.join();
+        }
+    }
+}
+
+// --- Deterministic scheduler (RFC-DETERMINISTIC-PROFILE-1 DET-3..DET-6) ---
+//
+// Active only when the process is started with `RAVUM_DET_SEED=<u64>`
+// (`ravum-lang run --profile det --seed N`). Then exactly one Ravum thread
+// runs at a time; at each synchronisation point (`spawn`, `send`, `recv`,
+// `join`, thread end) the next thread is drawn among the runnable ones by a
+// SplitMix64 generator seeded with N. Same seed, same binary, same input:
+// same interleaving, hence the same output. When no thread can run while
+// some wait, the program stops: `panic: deadlock (det, seed=N)`. Without the
+// variable nothing changes (the functions below return at once).
+mod rv_det {
+    use std::cell::Cell;
+    use std::collections::BTreeSet;
+    use std::sync::{Condvar, Mutex, MutexGuard, OnceLock};
+
+    struct State {
+        current: u64,
+        runnable: BTreeSet<u64>,
+        blocked: BTreeSet<u64>,
+        finished: BTreeSet<u64>,
+        next: u64,
+        rng: u64,
+        seed: u64,
+        clock_ms: u128,
+    }
+
+    pub struct DetSched {
+        state: Mutex<State>,
+        turn: Condvar,
+    }
+
+    static SCHED: OnceLock<Option<DetSched>> = OnceLock::new();
+
+    thread_local! {
+        static ME: Cell<u64> = const { Cell::new(0) };
+    }
+
+    pub fn sched() -> Option<&'static DetSched> {
+        SCHED
+            .get_or_init(|| {
+                let text = std::env::var("RAVUM_DET_SEED").ok()?;
+                let seed: u64 = match text.parse() {
+                    Ok(seed) => seed,
+                    Err(_) => panic!("RAVUM_DET_SEED is not a u64: {text:?}"),
+                };
+                Some(DetSched {
+                    state: Mutex::new(State {
+                        current: 0,
+                        runnable: BTreeSet::from([0]),
+                        blocked: BTreeSet::new(),
+                        finished: BTreeSet::new(),
+                        next: 1,
+                        rng: seed,
+                        seed,
+                        clock_ms: 0,
+                    }),
+                    turn: Condvar::new(),
+                })
+            })
+            .as_ref()
+    }
+
+    /// SplitMix64. Its arithmetic is modulo 2^64 by definition: it is done in
+    /// `u128`, where it cannot overflow, then truncated explicitly — the
+    /// overflow checks of the program are untouched.
+    fn mod64_add(a: u64, b: u64) -> u64 {
+        ((a as u128 + b as u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64
+    }
+
+    fn mod64_mul(a: u64, b: u64) -> u64 {
+        ((a as u128 * b as u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64
+    }
+
+    fn splitmix64(x: &mut u64) -> u64 {
+        *x = mod64_add(*x, 0x9E37_79B9_7F4A_7C15);
+        let mut z = *x;
+        z = mod64_mul(z ^ (z >> 30), 0xBF58_476D_1CE4_E5B9);
+        z = mod64_mul(z ^ (z >> 27), 0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn me() -> u64 {
+        ME.with(|m| m.get())
+    }
+
+    impl DetSched {
+        fn lock(&self) -> MutexGuard<'_, State> {
+            match self.state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            }
+        }
+
+        pub fn clock_ms(&self) -> u128 {
+            self.lock().clock_ms
+        }
+
+        pub fn advance_clock(&self) {
+            let mut state = self.lock();
+            state.clock_ms = state.clock_ms.saturating_add(1);
+        }
+
+        /// Choose the next thread; DET-6 when none can run but some wait.
+        fn pick<'a>(&'a self, mut st: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+            if st.runnable.is_empty() {
+                if st.blocked.is_empty() {
+                    return st;
+                }
+                let seed = st.seed;
+                drop(st);
+                panic!("deadlock (det, seed={seed})");
+            }
+            let n = st.runnable.len() as u64;
+            let k = (splitmix64(&mut st.rng) % n) as usize;
+            st.current = st.runnable.iter().copied().nth(k).unwrap_or(0);
+            self.turn.notify_all();
+            st
+        }
+
+        fn wait_turn<'a>(&'a self, mut st: MutexGuard<'a, State>, id: u64) {
+            while st.current != id {
+                st = match self.turn.wait(st) {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+            }
+        }
+
+        /// A synchronisation point: let the scheduler choose who runs next.
+        pub fn switch(&self) {
+            let id = me();
+            let st = self.pick(self.lock());
+            self.wait_turn(st, id);
+        }
+
+        /// Wait for an event (a `send`, a sender dropped, a thread ended).
+        pub fn block(&self) {
+            let id = me();
+            let mut st = self.lock();
+            st.runnable.remove(&id);
+            st.blocked.insert(id);
+            let st = self.pick(st);
+            self.wait_turn(st, id);
+        }
+
+        /// Something a waiting thread may need happened: all of them retry.
+        pub fn event(&self) {
+            let mut st = self.lock();
+            let woken: Vec<u64> = std::mem::take(&mut st.blocked).into_iter().collect();
+            st.runnable.extend(woken);
+        }
+
+        pub fn spawn_id(&self) -> u64 {
+            let mut st = self.lock();
+            let id = st.next;
+            st.next += 1;
+            st.runnable.insert(id);
+            id
+        }
+
+        /// First instruction of a spawned thread: wait to be chosen.
+        pub fn enter(&self, id: u64) {
+            ME.with(|m| m.set(id));
+            let st = self.lock();
+            self.wait_turn(st, id);
+        }
+
+        /// Last instruction of a spawned thread: leave and hand over.
+        pub fn exit(&self) {
+            let id = me();
+            let mut st = self.lock();
+            st.runnable.remove(&id);
+            st.finished.insert(id);
+            let woken: Vec<u64> = std::mem::take(&mut st.blocked).into_iter().collect();
+            st.runnable.extend(woken);
+            drop(self.pick(st));
+        }
+
+        fn is_finished(&self, id: u64) -> bool {
+            self.lock().finished.contains(&id)
+        }
+    }
+
+    /// `join` and `JoinHandle` drop: wait, under the scheduler, until the
+    /// thread has left it (its OS thread then only returns its value).
+    pub fn wait_finished(id: Option<u64>) {
+        if let (Some(s), Some(id)) = (sched(), id) {
+            s.switch();
+            while !s.is_finished(id) {
+                s.block();
+            }
+        }
+    }
+
+    pub fn switch() {
+        if let Some(s) = sched() {
+            s.switch();
+        }
+    }
+
+    pub fn event() {
+        if let Some(s) = sched() {
+            s.event();
+        }
+    }
+
+    pub fn block() {
+        if let Some(s) = sched() {
+            s.block();
         }
     }
 }
@@ -608,10 +1427,14 @@ pub fn rv_task_block_on<T>(main: Future<T>) -> T {
                 }
             }
         }
-        // Every task waits on a socket: sleep instead of spinning. A round with
-        // a completion, or with a task that only yielded, does not sleep.
+        // Yield to the clock when a socket or a timer is still pending.
+        // Deterministic runs advance scheduler time without a wall-clock wait.
         if !progressed && RV_IO_WAITING.with(|flag| flag.get()) {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            if let Some(scheduler) = rv_det::sched() {
+                scheduler.advance_clock();
+            } else {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
         }
         let idle = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(true, |q| q.is_empty()));
         if idle {
@@ -669,6 +1492,55 @@ fn rv_io_wait<T>(context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
     std::task::Poll::Pending
 }
 
+enum RvDeadlineStart {
+    Real(std::time::Instant),
+    Virtual(&'static rv_det::DetSched, u128),
+}
+
+impl RvDeadlineStart {
+    fn now() -> Self {
+        match rv_det::sched() {
+            Some(scheduler) => Self::Virtual(scheduler, scheduler.clock_ms()),
+            None => Self::Real(std::time::Instant::now()),
+        }
+    }
+
+    fn expired(&self, ms: u64) -> bool {
+        match self {
+            Self::Real(start) => start.elapsed() >= std::time::Duration::from_millis(ms),
+            Self::Virtual(scheduler, start) => scheduler.clock_ms() - *start >= u128::from(ms),
+        }
+    }
+}
+
+pub fn rv_task_timeout<T: 'static>(ms: u64, task: Future<T>) -> Future<Option<T>> {
+    use std::task::Poll;
+    let mut start = None;
+    let mut task = Some(task);
+    Box::pin(std::future::poll_fn(move |context| {
+        let start = start.get_or_insert_with(RvDeadlineStart::now);
+        if ms != 0 && start.expired(ms) {
+            task = None;
+            return Poll::Ready(None);
+        }
+        let value = match task.as_mut() {
+            Some(future) => future.as_mut().poll(context),
+            None => return Poll::Ready(None),
+        };
+        match value {
+            Poll::Ready(value) => {
+                task = None;
+                Poll::Ready((ms == 0 || !start.expired(ms)).then_some(value))
+            }
+            Poll::Pending if ms == 0 || start.expired(ms) => {
+                task = None;
+                Poll::Ready(None)
+            }
+            Poll::Pending => rv_io_wait(context),
+        }
+    }))
+}
+
 fn rv_would_block(error: &std::io::Error) -> bool {
     error.kind() == std::io::ErrorKind::WouldBlock
 }
@@ -717,8 +1589,12 @@ impl std::future::Future for RvAccept {
 
 /// `net::accept_async`: a connection, without blocking the other tasks.
 pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
+    rv_rec_async("net::accept_async", &[], || rv_net_accept_async_real(listener), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_accept_async_real(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
     Box::pin(RvAccept {
-        listener: listener.inner.clone(),
+        listener: rv_listener(listener).clone(),
     })
 }
 
@@ -726,13 +1602,146 @@ pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, E
 /// poll, blocking (no non-blocking `connect` in `std`); reads and writes on the
 /// stream never block the executor.
 pub fn rv_net_connect_async(addr: &str) -> Future<Result<TcpStream, Error>> {
-    let addr = addr.to_string();
-    Box::pin(async move { rv_net_connect(&addr) })
+    rv_rec_async("net::connect_async", &[addr], || rv_net_connect_async_real(addr), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+/// ANET-1 (amended, V2): the connection is established on a short-lived helper
+/// thread, so the executor never blocks while the system connects; the future
+/// polls the helper's result. If the future is dropped first (`timeout`), the
+/// helper finishes alone and its socket is closed. No primitive is shared with
+/// Ravum code: the helper owns only the address and a result slot.
+struct RvConnect {
+    slot: std::sync::Arc<std::sync::Mutex<Option<std::io::Result<std::net::TcpStream>>>>,
+    addr: String,
+}
+
+impl std::future::Future for RvConnect {
+    type Output = Result<TcpStream, Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = self.get_mut();
+        let done = match this.slot.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        };
+        match done {
+            Some(Ok(socket)) => std::task::Poll::Ready(Ok(rv_stream(socket))),
+            Some(Err(error)) => std::task::Poll::Ready(Err(rv_net_error(
+                &format!("cannot connect to `{}`", this.addr),
+                error,
+            ))),
+            None => rv_io_wait(context),
+        }
+    }
+}
+
+/// A blocking operation run on a runtime helper thread (V2-N2); the future
+/// polls its result slot and never blocks the executor.
+struct RvHelper<T> {
+    slot: std::sync::Arc<std::sync::Mutex<Option<T>>>,
+}
+
+impl<T> std::future::Future for RvHelper<T> {
+    type Output = T;
+    fn poll(self: std::pin::Pin<&mut Self>, context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+        let done = match self.slot.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        };
+        match done {
+            Some(value) => std::task::Poll::Ready(value),
+            None => rv_io_wait(context),
+        }
+    }
+}
+
+fn rv_on_helper(
+    work: impl FnOnce() -> Result<HttpResponse, Error> + Send + 'static,
+) -> Future<Result<HttpResponse, Error>> {
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let helper_slot = slot.clone();
+    let spawned = std::thread::Builder::new().name("ravum-http".to_string()).spawn(move || {
+        let result = work();
+        match helper_slot.lock() {
+            Ok(mut guard) => *guard = Some(result),
+            Err(poisoned) => *poisoned.into_inner() = Some(result),
+        }
+    });
+    match spawned {
+        Ok(_) => Box::pin(RvHelper { slot }),
+        Err(error) => {
+            let error = rv_net_error("cannot start the HTTP helper", error);
+            Box::pin(async move { Err(error) })
+        }
+    }
+}
+
+/// `http::get_async` / `post_async` (ANET-2): same request, limits and errors
+/// as `get`/`post`, without blocking the other tasks.
+pub fn rv_http_get_async(url: &str) -> Future<Result<HttpResponse, Error>> {
+    rv_rec_async("http::get_async", &[url], || {
+        let url = url.to_string();
+        rv_on_helper(move || rv_http_send(&url, "GET", "text/plain", ""))
+    }, rv_rec::enc_response, rv_rec::dec_response)
+}
+
+pub fn rv_http_post_async(url: &str, content_type: &str, body: &str) -> Future<Result<HttpResponse, Error>> {
+    rv_rec_async("http::post_async", &[url, content_type, body], || {
+        let (url, content_type, body) = (url.to_string(), content_type.to_string(), body.to_string());
+        rv_on_helper(move || rv_http_send(&url, "POST", &content_type, &body))
+    }, rv_rec::enc_response, rv_rec::dec_response)
+}
+
+fn rv_net_connect_async_real(addr: &str) -> Future<Result<TcpStream, Error>> {
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let helper_slot = slot.clone();
+    let target = addr.to_string();
+    let spawned = std::thread::Builder::new()
+        .name("ravum-connect".to_string())
+        .spawn(move || {
+            let result = std::net::TcpStream::connect(&target);
+            match helper_slot.lock() {
+                Ok(mut guard) => *guard = Some(result),
+                Err(poisoned) => *poisoned.into_inner() = Some(result),
+            }
+        });
+    match spawned {
+        Ok(_) => Box::pin(RvConnect { slot, addr: addr.to_string() }),
+        Err(error) => {
+            let error = rv_net_error("cannot start the connection helper", error);
+            Box::pin(async move { Err(error) })
+        }
+    }
+}
+
+fn rv_poll_stream<T>(
+    shared: &RvSharedStream,
+    context: &mut std::task::Context<'_>,
+    operation: &str,
+    poll: impl FnOnce(&mut std::io::BufReader<std::net::TcpStream>, &mut std::task::Context<'_>)
+        -> std::task::Poll<Result<T, Error>>,
+) -> std::task::Poll<Result<T, Error>> {
+    let mut reader = match shared.try_lock() {
+        Ok(reader) => reader,
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return rv_io_wait(context),
+    };
+    if let Err(error) = reader.get_ref().set_nonblocking(true) {
+        return std::task::Poll::Ready(Err(rv_net_error(operation, error)));
+    }
+    let result = poll(&mut reader, context);
+    if let Err(error) = reader.get_ref().set_nonblocking(false) {
+        return std::task::Poll::Ready(Err(rv_net_error("cannot restore blocking mode", error)));
+    }
+    result
 }
 
 struct RvReadLine {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: RvSharedStream,
     partial: Vec<u8>,
+    http: bool,
 }
 
 impl std::future::Future for RvReadLine {
@@ -742,60 +1751,141 @@ impl std::future::Future for RvReadLine {
         context: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         use std::io::BufRead;
+        use std::task::Poll;
         let this = self.get_mut();
-        let shared = this.shared.clone();
-        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Err(error) = reader.get_ref().set_nonblocking(true) {
-            return std::task::Poll::Ready(Err(rv_net_error("cannot read from the connection", error)));
-        }
-        let outcome = loop {
-            let (found, used) = match reader.fill_buf() {
-                Ok(buffer) if buffer.is_empty() => {
-                    let bytes = std::mem::take(&mut this.partial);
-                    break if bytes.is_empty() {
-                        std::task::Poll::Ready(Ok(None))
+        let shared = &this.shared;
+        let partial = &mut this.partial;
+        let http = this.http;
+        rv_poll_stream(shared, context, "cannot read from the connection", |reader, context| {
+            loop {
+                let (used, finished) = match reader.fill_buf() {
+                    Ok(buffer) if buffer.is_empty() => (0, true),
+                    Ok(buffer) => {
+                        let limit = if http { RV_HTTP_MAX_LINE as usize + 1 - partial.len() } else { buffer.len() };
+                        let buffer = &buffer[..buffer.len().min(limit)];
+                        let newline = buffer.iter().position(|b| *b == b'\n');
+                        let used = newline.map_or(buffer.len(), |index| index + 1);
+                        partial.extend_from_slice(&buffer[..used]);
+                        (used, newline.is_some() || (http && partial.len() > RV_HTTP_MAX_LINE as usize))
+                    }
+                    Err(error) if rv_would_block(&error) => return rv_io_wait(context),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(error) => return Poll::Ready(Err(rv_net_error("cannot read from the connection", error))),
+                };
+                reader.consume(used);
+                if finished {
+                    let bytes = std::mem::take(partial);
+                    return Poll::Ready(if http {
+                        rv_http_line_text(bytes)
+                    } else if bytes.is_empty() {
+                        Ok(None)
                     } else {
-                        std::task::Poll::Ready(rv_line_text(bytes))
-                    };
+                        rv_line_text(bytes)
+                    });
                 }
-                Ok(buffer) => match buffer.iter().position(|b| *b == b'\n') {
-                    Some(at) => {
-                        this.partial.extend_from_slice(&buffer[..=at]);
-                        (true, at + 1)
-                    }
-                    None => {
-                        this.partial.extend_from_slice(buffer);
-                        (false, buffer.len())
-                    }
-                },
-                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
-                Err(error) => {
-                    break std::task::Poll::Ready(Err(rv_net_error(
-                        "cannot read from the connection",
-                        error,
-                    )))
-                }
-            };
-            reader.consume(used);
-            if found {
-                break std::task::Poll::Ready(rv_line_text(std::mem::take(&mut this.partial)));
             }
-        };
-        let _ = reader.get_ref().set_nonblocking(false);
-        outcome
+        })
     }
 }
 
-/// `net::read_line_async`: the next line, `None` at end of stream.
+/// The next line or `None` at end of stream.
 pub fn rv_net_read_line_async(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
-    Box::pin(RvReadLine {
-        shared: stream.shared.clone(),
-        partial: Vec::new(),
+    rv_rec_async("net::read_line_async", &[], || rv_net_read_line_async_real(stream), rv_rec::enc_opt_text, rv_rec::dec_opt_text)
+}
+
+fn rv_net_read_line_async_real(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
+    Box::pin(RvReadLine { shared: rv_shared(stream), partial: Vec::new(), http: false })
+}
+
+struct RvReadExact {
+    shared: RvSharedStream,
+    partial: Vec<u8>,
+    count: usize,
+    operation: &'static str,
+}
+
+impl std::future::Future for RvReadExact {
+    type Output = Result<Vec<u8>, Error>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::io::Read;
+        use std::task::Poll;
+        let this = self.get_mut();
+        let operation = this.operation;
+        if this.partial.len() == this.count {
+            return Poll::Ready(Ok(std::mem::take(&mut this.partial)));
+        }
+        rv_poll_stream(&this.shared, context, operation, |reader, context| {
+            let mut buffer = [0u8; 8192];
+            let count = buffer.len().min(this.count - this.partial.len());
+            match reader.read(&mut buffer[..count]) {
+                Ok(0) => Poll::Ready(Err(rv_net_error(operation, std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof, "failed to fill whole buffer",
+                )))),
+                Ok(read) => {
+                    this.partial.extend_from_slice(&buffer[..read]);
+                    if this.partial.len() == this.count {
+                        Poll::Ready(Ok(std::mem::take(&mut this.partial)))
+                    } else {
+                        context.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                }
+                Err(error) if rv_would_block(&error) => rv_io_wait(context),
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                    context.waker().wake_by_ref();
+                    Poll::Pending
+                }
+                Err(error) => Poll::Ready(Err(rv_net_error(operation, error))),
+            }
+        })
+    }
+}
+
+pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
+    rv_rec_async("net::read_exact_async", &[&count.to_string()], || rv_net_read_exact_async_real(stream, count), rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_net_read_exact_async_real(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
+    let read = RvReadExact {
+        shared: rv_shared(stream), count, partial: Vec::new(),
+        operation: "cannot read from the connection",
+    };
+    Box::pin(async move {
+        String::from_utf8(read.await?).map_err(|_| Error::new("received bytes are not valid UTF-8"))
+    })
+}
+
+pub fn rv_http_read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
+    rv_rec_async("http::read_request_async", &[], || rv_http_read_request_async_real(stream), rv_rec::enc_request, rv_rec::dec_request)
+}
+
+fn rv_http_read_request_async_real(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
+    let shared = rv_shared(stream);
+    Box::pin(async move {
+        let next_line = || RvReadLine { shared: shared.clone(), partial: Vec::new(), http: true };
+        let line = next_line().await?.ok_or_else(|| Error::new("http: connection closed before a request"))?;
+        let (method, path) = rv_http_request_line(&line)?;
+        let mut headers = Vec::new();
+        loop {
+            let line = next_line().await?.ok_or_else(|| Error::new("http: connection closed inside the headers"))?;
+            if line.is_empty() {
+                break;
+            }
+            rv_http_push_header(&mut headers, &line)?;
+        }
+        let count = rv_http_body_length(&headers)?.unwrap_or(0);
+        let bytes = RvReadExact { shared, count, partial: Vec::new(), operation: "cannot read the body" }.await?;
+        let body = rv_http_body_text(bytes)?;
+        Ok(HttpRequest { method, path, headers, body })
     })
 }
 
 struct RvWrite {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: RvSharedStream,
     data: Vec<u8>,
     written: usize,
 }
@@ -808,15 +1898,10 @@ impl std::future::Future for RvWrite {
     ) -> std::task::Poll<Self::Output> {
         use std::io::Write;
         let this = self.get_mut();
-        let shared = this.shared.clone();
-        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let socket = reader.get_mut();
-        if let Err(error) = socket.set_nonblocking(true) {
-            return std::task::Poll::Ready(Err(rv_net_error("cannot write to the connection", error)));
-        }
-        let outcome = loop {
+        rv_poll_stream(&this.shared, context, "cannot write to the connection", |reader, context| {
+            let socket = reader.get_mut();
             if this.written == this.data.len() {
-                break match socket.flush() {
+                return match socket.flush() {
                     Ok(()) => std::task::Poll::Ready(Ok(())),
                     Err(error) if rv_would_block(&error) => rv_io_wait(context),
                     Err(error) => std::task::Poll::Ready(Err(rv_net_error(
@@ -825,31 +1910,75 @@ impl std::future::Future for RvWrite {
                     ))),
                 };
             }
-            match socket.write(&this.data[this.written..]) {
+            let end = this.data.len().min(this.written.saturating_add(8192));
+            match socket.write(&this.data[this.written..end]) {
                 Ok(0) => {
-                    break std::task::Poll::Ready(Err(Error::new(
+                    std::task::Poll::Ready(Err(Error::new(
                         "cannot write to the connection: closed",
                     )))
                 }
-                Ok(count) => this.written += count,
-                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
+                Ok(count) => {
+                    this.written += count;
+                    context.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                }
+                Err(error) if rv_would_block(&error) => rv_io_wait(context),
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                    context.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                }
                 Err(error) => {
-                    break std::task::Poll::Ready(Err(rv_net_error(
+                    std::task::Poll::Ready(Err(rv_net_error(
                         "cannot write to the connection",
                         error,
                     )))
                 }
             }
-        };
-        let _ = socket.set_nonblocking(false);
-        outcome
+        })
+    }
+}
+
+/// `http::respond_async` (ANET-2): the response of `respond`, written without
+/// blocking the other tasks.
+pub fn rv_http_respond_async(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Future<Result<(), Error>> {
+    rv_rec_async(
+        "http::respond_async",
+        &[&status.to_string(), content_type, body],
+        || rv_http_respond_async_real(stream, status, content_type, body),
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
+}
+
+fn rv_http_respond_async_real(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Future<Result<(), Error>> {
+    match rv_http_response_text(status, content_type, body) {
+        Ok(text) => Box::pin(RvWrite {
+            shared: rv_shared(stream),
+            data: text.into_bytes(),
+            written: 0,
+        }),
+        Err(error) => Box::pin(async move { Err(error) }),
     }
 }
 
 /// `net::write_str_async`: the whole text, without blocking the other tasks.
 pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
+    rv_rec_async("net::write_str_async", &[text], || rv_net_write_str_async_real(stream, text), rv_rec::enc_unit, rv_rec::dec_unit)
+}
+
+fn rv_net_write_str_async_real(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
     Box::pin(RvWrite {
-        shared: stream.shared.clone(),
+        shared: rv_shared(stream),
         data: text.as_bytes().to_vec(),
         written: 0,
     })
@@ -864,8 +1993,25 @@ pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
     worker: fn(A) -> R,
     arg: A,
 ) -> JoinHandle<R> {
-    JoinHandle {
-        inner: Some(std::thread::spawn(move || worker(arg))),
+    match rv_det::sched() {
+        None => JoinHandle {
+            inner: Some(std::thread::spawn(move || worker(arg))),
+            det_id: None,
+        },
+        Some(s) => {
+            let id = s.spawn_id();
+            let inner = std::thread::spawn(move || {
+                s.enter(id);
+                let value = worker(arg);
+                s.exit();
+                value
+            });
+            s.switch();
+            JoinHandle {
+                inner: Some(inner),
+                det_id: Some(id),
+            }
+        }
     }
 }
 
@@ -873,7 +2019,10 @@ pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
 /// (`panic: <message>`, exit code 1), so `join` only sees finished threads.
 pub fn rv_thread_join<T>(mut handle: JoinHandle<T>) -> T {
     match handle.inner.take() {
-        Some(inner) => match inner.join() {
+        Some(inner) => match {
+            rv_det::wait_finished(handle.det_id);
+            inner.join()
+        } {
             Ok(value) => value,
             Err(payload) => std::panic::resume_unwind(payload),
         },
@@ -888,6 +2037,14 @@ pub struct Channel<T> {
 
 pub struct Sender<T> {
     inner: std::sync::mpsc::Sender<T>,
+}
+
+impl<T> Drop for Sender<T> {
+    /// A receiver waiting under the deterministic scheduler may now see the
+    /// end of the channel.
+    fn drop(&mut self) {
+        rv_det::event();
+    }
 }
 
 pub struct Receiver<T> {
@@ -920,11 +2077,24 @@ pub fn rv_sync_receiver<T>(channel: Channel<T>) -> Receiver<T> {
 }
 
 pub fn rv_sync_send<T>(sender: &Sender<T>, value: T) -> bool {
-    sender.inner.send(value).is_ok()
+    let sent = sender.inner.send(value).is_ok();
+    rv_det::event();
+    rv_det::switch();
+    sent
 }
 
 pub fn rv_sync_recv<T>(receiver: &Receiver<T>) -> Option<T> {
-    receiver.inner.recv().ok()
+    if rv_det::sched().is_none() {
+        return receiver.inner.recv().ok();
+    }
+    rv_det::switch();
+    loop {
+        match receiver.inner.try_recv() {
+            Ok(value) => return Some(value),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => return None,
+            Err(std::sync::mpsc::TryRecvError::Empty) => rv_det::block(),
+        }
+    }
 }
 
 /// An opaque C pointer (`std::ffi`, RFC-E11-SQLITE NAT-3.3). Ravum code can
@@ -1243,7 +2413,6 @@ macro_rules! rv_canon_tuple {
     ($($name:ident),+) => {
         impl<$($name: RvCanon),+> RvCanon for ($($name,)+) {
             fn rv_put(&self, out: &mut String) {
-                #[allow(non_snake_case)]
                 let ($($name,)+) = self;
                 out.push('(');
                 $( $name.rv_put(out); out.push(';'); )+

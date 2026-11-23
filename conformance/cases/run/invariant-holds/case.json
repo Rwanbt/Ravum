@@ -1,0 +1,6 @@
+{
+  "id": "run/invariant-holds",
+  "mode": "run-pass",
+  "stdout_contains": "0\n7\n",
+  "notes": "RFC-INVARIANTS-1 (PROPOSED): an invariant that holds at construction and at the exit of a `&mut self` method; `invariant` stays an ordinary identifier elsewhere."
+}
