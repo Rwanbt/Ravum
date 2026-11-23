@@ -47,7 +47,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust (stable pinned to 1.95.0)
         uses: dtolnay/rust-toolchain@1.95.0
