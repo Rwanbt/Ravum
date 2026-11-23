@@ -197,6 +197,58 @@ fn schema_changes_and_abi_mixes_are_refused() {
     }
 }
 
+/// T8/T9: the real `examples/dsp-gain-iir/block/process.rv` (not a copy) is
+/// built for the native host (ABI 3, `cdylib`), played bit for bit like the
+/// Rust reference, then edited (gain 2.0 -> 1.0) and swapped with a
+/// 256-frame crossfade, still bit for bit and without allocation.
+#[test]
+fn the_dsp_gain_iir_example_block_plays_and_crossfades_on_the_native_host() {
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repository root")
+        .to_path_buf();
+    let block = fs::read_to_string(repo.join("examples/dsp-gain-iir/block/process.rv")).unwrap();
+    assert!(block.contains("return 2.0;"), "the example's gain changed");
+    let with_main = |b: &str| format!("{b}\nfn main() -> () effects() {{\n}}\n");
+    let dir = scratch("example");
+    let g2 = prepare_block3(&build(&dir, "e2", &with_main(&block))).unwrap();
+    let edited = block.replace("return 2.0;", "return 1.0;");
+    let g1 = prepare_block3(&build(&dir, "e1", &with_main(&edited))).unwrap();
+    let input = signal(4096);
+    let (switch, fade) = (1024usize, 256u32);
+    let mut host = Block3Host::new(g2).unwrap();
+    let mut out = vec![0.0f32; input.len()];
+    let before = EVENTS.with(|e| e.get());
+    for (k, (i, o)) in input.chunks(64).zip(out.chunks_mut(64)).enumerate() {
+        if k * 64 == switch {
+            host.replace_with_fade(g1.clone(), fade).unwrap();
+        }
+        counted(&mut host, i, o);
+        if host.fade_remaining() == 0 {
+            host.collect();
+        }
+    }
+    assert_eq!(
+        EVENTS.with(|e| e.get()) - before,
+        0,
+        "allocations in process()"
+    );
+    let old = reference(&input, |_| 2.0);
+    let new = reference(&input, |n| if n < switch { 2.0 } else { 1.0 });
+    for n in 0..input.len() {
+        let expected = if n < switch {
+            old[n]
+        } else if n < switch + fade as usize {
+            let w = (n - switch + 1) as f32 / fade as f32;
+            old[n] * (1.0 - w) + new[n] * w
+        } else {
+            new[n]
+        };
+        assert_eq!(out[n].to_bits(), expected.to_bits(), "sample {n}");
+    }
+}
+
 #[test]
 fn a_crossfaded_swap_mixes_both_versions_and_allocates_nothing_in_process() {
     let dir = scratch("fade");
