@@ -64,6 +64,43 @@ fn thread_cpu() -> Duration {
     Duration::from_nanos((cycles() as f64 / rate) as u64)
 }
 
+/// Diagnostic only (no assertion depends on it): whether the host is a
+/// virtual machine and its load. In a VM, time the hypervisor takes the vCPU
+/// away while this thread runs is charged to the thread's CPU clock, so a
+/// block can read as "working" past its deadline without doing more work.
+fn host_note() -> String {
+    let mut note = String::new();
+    #[cfg(target_os = "macos")]
+    {
+        let mut v: i32 = -1;
+        let mut len = std::mem::size_of::<i32>();
+        // SAFETY: valid NUL-terminated name, out-pointer and length for an
+        // `int` sysctl; no new value is written.
+        let r = unsafe {
+            libc::sysctlbyname(
+                c"kern.hv_vmm_present".as_ptr(),
+                (&mut v as *mut i32).cast(),
+                &mut len,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        note.push_str(&format!(
+            " vm={}",
+            if r == 0 { v.to_string() } else { "?".into() }
+        ));
+    }
+    #[cfg(unix)]
+    {
+        let mut l = [0f64; 3];
+        // SAFETY: `l` has room for the 3 averages requested.
+        if unsafe { libc::getloadavg(l.as_mut_ptr(), 3) } == 3 {
+            note.push_str(&format!(" load={:.2}/{:.2}/{:.2}", l[0], l[1], l[2]));
+        }
+    }
+    note
+}
+
 const OK: &str = "fn gain(x: f32) -> f32 effects() {\n    return x * 0.5;\n}\n";
 
 fn worst_sample(bad: &str) -> (Duration, f32) {
@@ -149,14 +186,15 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
     let wall_misses = times.iter().filter(|t| **t > DEADLINE).count();
     let cpu_misses = cpu_times.iter().filter(|t| **t > DEADLINE).count();
     eprintln!(
-        "T16 deadline: blocks={BLOCKS} swaps={} cpu p50={:?} p99.9={:?} max={:?} | wall p50={:?} p99.9={:?} max={:?} | deadline={DEADLINE:?} cpu_misses={cpu_misses} wall_misses={wall_misses} (preempted {preempted})",
+        "T16 deadline: blocks={BLOCKS} swaps={} cpu p50={:?} p99.9={:?} max={:?} | wall p50={:?} p99.9={:?} max={:?} | deadline={DEADLINE:?} cpu_misses={cpu_misses} wall_misses={wall_misses} (preempted {preempted}) |{}",
         BLOCKS / 400,
         q(&cpu_times, 0.5),
         q(&cpu_times, 0.999),
         cpu_times.last().unwrap(),
         q(&times, 0.5),
         q(&times, 0.999),
-        times.last().unwrap()
+        times.last().unwrap(),
+        host_note()
     );
     // The work itself: no block, swaps included, needs more CPU than its
     // deadline (with a 10x margin at p99.9).
