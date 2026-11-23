@@ -64,7 +64,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Install Python (vérification d'intégrité des documents seulement)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
