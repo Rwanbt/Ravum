@@ -64,3 +64,5 @@
 - **STD-1.4 (responsable, 2026-11-21)** : `fs::read_to_string` et `fs::write_string` n'ont pas l'effet `io` ; `stdlib.md` et `effects.md` alignés sur le checker.
 - **FEAT-1.5 (responsable, 2026-11-21)** : règle réécrite pour décrire le format réel des cas (`case.json` + programme), imposé par `tools/conformance`.
 - **DET-13 (responsable, 2026-11-21)** : l'en-tête du journal `det` porte l'identité de build déterministe au lieu du digest des octets du binaire ; RFC-DETERMINISTIC-PROFILE-1 amendée.
+- **V2-J1 (responsable, 2026-11-23)** : dépendance `memmap2 0.2.3` (MIT/Apache-2.0) acceptée, via l'option `selinux-fix` de `cranelift-jit`. Le code JIT a ses propres pages `mmap`, et `hot_swap` passe sur macOS arm64. La cause exacte du SIGBUS antérieur n'est pas établie.
+- **V2-J2 (responsable, 2026-11-23)** : `rt_budget::block_processing_meets_its_deadline_across_hot_swaps` garde son contrat (aucun bloc au-delà de l'échéance en CPU) ; l'échec macOS de e799910 (2/20 000 blocs) doit être relancé par un humain, car la relance par l'agent est refusée (HTTP 403).
