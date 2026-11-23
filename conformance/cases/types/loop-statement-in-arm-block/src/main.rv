@@ -1,0 +1,14 @@
+use std::io;
+
+fn main() -> () effects(io, alloc) {
+    let r: Option<i64> = Some(3);
+    match r {
+        Some(n) => {
+            for i in 0..n {
+                io::println(&i.to_string());
+            }
+            io::println("end");
+        }
+        None => io::println("none"),
+    }
+}

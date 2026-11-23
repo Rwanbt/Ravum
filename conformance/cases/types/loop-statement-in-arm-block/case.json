@@ -1,0 +1,6 @@
+{
+  "id": "types/loop-statement-in-arm-block",
+  "mode": "run-pass",
+  "stdout_contains": "0\n1\n2\nend\n",
+  "notes": "EXPR-5.11/G-6.19: a `for` followed by another statement inside a `match` arm block is a direct statement, not a value. The checker refused it (E-TYP-STATEMENT-VALUE) because the arm's value position leaked into the block's statements."
+}
