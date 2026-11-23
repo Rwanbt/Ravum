@@ -131,3 +131,12 @@ l'hôte, à titre de diagnostic, sans changer aucune assertion.
    une copie de son état. Un travail réellement trop long dépasse
    l'échéance à chaque fois ; un retrait de l'hyperviseur, non.
 3. Seule une machine Apple physique peut trancher définitivement.
+
+**Confirmation (job macOS de a4d40ba, 18 h 32).** Le diagnostic affiche
+`vm=1` (le runner est une machine virtuelle) et une charge moyenne de
+`1,97 / 5,17 / 9,03` sur 1, 5 et 15 minutes. Deux blocs à 3,46 ms et
+3,11 ms, avec CPU = mural et 0 préemption détectée. La médiane reste à
+13,5 µs et le p99,9 à 71 µs. Le même code passe quand l'hôte est peu
+chargé. L'hypothèse du temps volé par l'hyperviseur, compté comme
+travail du thread, est étayée par une mesure directe. La décision sur la
+mesure (proposition ci-dessus) reste au responsable.
