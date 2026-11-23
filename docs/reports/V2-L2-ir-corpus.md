@@ -235,7 +235,7 @@ cargo run -p ravum-conformance --release -- run
 Mesure de départ et d'arrivée : `ir_refusal_census` (banc lancé à la main)
 sur les programmes `run-pass` de la conformance contenus dans un seul
 fichier. L'IR en abaissait **86 sur 143** avant ce lot. Elle en abaisse
-**102** après les enums, puis davantage avec les ajouts suivants.
+**105 sur 148** après tout le lot (le corpus a gagné 5 cas entre-temps).
 
 - **Ajouts** (tous dans `lower.rs` ; format de l'IR, interpréteur et JIT
   inchangés sauf mention) :
