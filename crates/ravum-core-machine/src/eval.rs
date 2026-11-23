@@ -728,7 +728,9 @@ impl Machine {
                     "is_some" | "is_ok" => Ok(Value::Bool(ok)),
                     "is_none" | "is_err" => Ok(Value::Bool(!ok)),
                     "unwrap" if ok => Ok(inner[0].clone()),
-                    "unwrap" => panic("called `unwrap` on a `None` or `Err` value"),
+                    // STD-11.2 (MUST): fixed texts, `Err` content not formatted.
+                    "unwrap" if e == "Option" => panic("called Option::unwrap on None"),
+                    "unwrap" => panic("called Result::unwrap on an Err value"),
                     "unwrap_or" if ok => Ok(inner[0].clone()),
                     "unwrap_or" => Ok(vs[0].clone()),
                     _ => fault(format!("unsupported method {name}")),

@@ -1,0 +1,8 @@
+{
+  "id": "types/error-unknown-field-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-FIELD"
+  ],
+  "notes": "STD-13.4 (MUST): `Error` carries no code; only `message` exists, any other field stays E-TYP-FIELD."
+}

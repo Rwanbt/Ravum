@@ -1,0 +1,5 @@
+fn main() -> () effects(alloc) {
+    let e: Error = Error::new("x");
+    let c: String = e.code;
+    drop(c);
+}

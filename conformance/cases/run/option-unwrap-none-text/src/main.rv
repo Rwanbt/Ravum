@@ -1,0 +1,5 @@
+fn main() -> () effects(panic) {
+    let a: Option<i64> = None;
+    let b: i64 = a.unwrap();
+    drop(b);
+}

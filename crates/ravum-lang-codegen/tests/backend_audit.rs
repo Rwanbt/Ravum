@@ -2344,12 +2344,14 @@ fn audit_panic_payloads_and_exit_codes() {
         (PanicKind::Panic, "panic: boom\n", "panic"),
         (
             PanicKind::OptionUnwrap,
-            "panic: called `Option::unwrap()` on a `None` value\n",
+            // STD-11.2 (MUST): the specified text, not Rust's default.
+            "panic: called Option::unwrap on None\n",
             "option-unwrap",
         ),
         (
             PanicKind::ResultUnwrap,
-            "panic: called `Result::unwrap()` on an `Err` value: Error { message: \"x\" }\n",
+            // STD-11.2 (MUST): the `Err` content is not formatted.
+            "panic: called Result::unwrap on an Err value\n",
             "result-unwrap",
         ),
     ];

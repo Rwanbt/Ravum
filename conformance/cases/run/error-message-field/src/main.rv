@@ -1,0 +1,24 @@
+use std::io;
+
+fn half(n: i64) -> Result<i64, Error> effects(alloc) {
+    if n % 2 != 0 {
+        return Err(Error::new("odd"));
+    }
+    return Ok(n / 2);
+}
+
+fn quarter(n: i64) -> Result<i64, Error> effects(alloc) {
+    let h = half(n)?;
+    return half(h);
+}
+
+fn main() -> () effects(io, alloc) {
+    match quarter(12) {
+        Ok(v) => io::println(&v.to_string()),
+        Err(e) => io::println(&e.message),
+    }
+    match quarter(6) {
+        Ok(v) => io::println(&v.to_string()),
+        Err(e) => io::println(&e.message),
+    }
+}
