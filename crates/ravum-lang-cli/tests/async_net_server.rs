@@ -42,6 +42,8 @@ async fn serve_async(mut stream: TcpStream) -> Result<(), Error> effects(io, net
 }
 
 async fn timeout_then_read(mut stream: TcpStream) -> Result<(), Error> effects(io, net, async, nondet, alloc) {
+    // Wait for the test's go byte: the timer cannot start before it.
+    let go = net::read_exact(&mut stream, 1usize)?;
     io::println("timeout started");
     let timed: Option<Result<String, Error>> = task::timeout(80u64, net::read_exact_async(&mut stream, 4usize)).await;
     if timed.is_some() { return Err(Error::new("stalled read finished before timeout")); }
@@ -142,6 +144,16 @@ fn transact(
     peer.set_nonblocking(false).unwrap();
     peer.set_read_timeout(Some(timeout)).unwrap();
     peer.set_write_timeout(Some(timeout)).unwrap();
+    // In timeout mode the program waits for one go byte before starting its
+    // timer: the instant before sending it is a sound lower bound for the
+    // timer's start (the accept is not: it is polled and can be late).
+    let go = if mode == "timeout" {
+        let now = Instant::now();
+        peer.write_all(b"g").unwrap();
+        now
+    } else {
+        accepted
+    };
     if let Some(at) = split {
         peer.write_all(&request[..at]).unwrap();
         let (send, receive) = std::sync::mpsc::channel();
@@ -162,15 +174,15 @@ fn transact(
             let (end, marker) = receive.recv_timeout(timeout).unwrap();
             assert_eq!(marker, "socket timeout\n");
             let elapsed = end.duration_since(start);
-            // Lower bound: measured from the accept, which precedes the
-            // timer's creation (the program connects, prints, then starts
-            // the 80 ms timeout). The marker's timestamp is taken by a
-            // reader thread and can be late, which would make a correct
-            // timer look early (74 ms seen on macOS CI).
-            let since_accept = end.duration_since(accepted);
+            // Lower bound: measured from the go byte, which the program
+            // reads before it starts the 80 ms timeout. Neither the marker's
+            // timestamp (taken late by a reader thread, 74 ms seen on macOS
+            // CI) nor the polled accept (73 ms seen on macOS CI) precedes the
+            // timer for sure.
+            let since_go = end.duration_since(go);
             assert!(
-                since_accept >= Duration::from_millis(75),
-                "80 ms timer fired early: {since_accept:?} after the accept"
+                since_go >= Duration::from_millis(75),
+                "80 ms timer fired early: {since_go:?} after the go byte"
             );
             assert!(
                 elapsed <= Duration::from_millis(90),
