@@ -1,0 +1,84 @@
+// RFC-ASYNC-NET-1 ANET-T3 / ANET-T7: 100 concurrent `http::get_async`
+// clients against an asynchronous server on the single-threaded executor.
+// Each client checks its own answer, then reports it with `post_async` to
+// the same server; the server counts the reports. Completion does not
+// depend on any timing: the server returns after exactly 200 requests.
+use std::http;
+use std::io;
+use std::net;
+use std::task;
+
+async fn handle(stream: TcpStream) -> i64 effects(net, async, alloc) {
+    let mut s: TcpStream = stream;
+    match http::read_request_async(&mut s).await {
+        Ok(request) => {
+            let path: String = http::path(&request);
+            let body: String = http::body(&request);
+            drop(http::respond_async(&mut s, 200, "text/plain", &path).await);
+            if path == String::from("/report") && body == String::from("ok") {
+                return 1;
+            }
+            return 0;
+        }
+        Err(e) => {
+            drop(http::respond_async(&mut s, 400, "text/plain", "bad").await);
+            return 0;
+        }
+    }
+}
+
+async fn serve(listener: TcpListener, requests: i64) -> i64 effects(net, async, alloc, io) {
+    let mut reports: i64 = 0;
+    for i in 0..requests {
+        match net::accept_async(&listener).await {
+            Ok(stream) => {
+                reports = reports + handle(stream).await;
+            }
+            Err(e) => io::println("accept failed"),
+        }
+    };
+    return reports;
+}
+
+async fn client(base: String, i: i64) -> () effects(net, async, alloc) {
+    let mut url: String = base.clone();
+    url.push_str(&i.to_string());
+    let mut verdict: String = String::from("bad");
+    match http::get_async(&url).await {
+        Ok(response) => {
+            let mut expected: String = String::from("/");
+            expected.push_str(&i.to_string());
+            if http::status(&response) == 200u16 && http::response_body(&response) == expected {
+                verdict = String::from("ok");
+            }
+        }
+        Err(e) => {}
+    }
+    let mut report: String = base;
+    report.push_str("report");
+    drop(http::post_async(&report, "text/plain", &verdict).await);
+}
+
+fn spawn_clients(base: &String) -> () effects(net, async, alloc) {
+    for i in 0i64..100i64 {
+        task::spawn(client(base.clone(), i));
+    };
+}
+
+async fn run() -> () effects(net, async, alloc, io) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let mut base: String = String::from("http://127.0.0.1:");
+            base.push_str(&net::local_port(&listener).to_string());
+            base.push_str("/");
+            spawn_clients(&base);
+            let reports: i64 = serve(listener, 200).await;
+            io::println(&reports.to_string());
+        }
+        Err(e) => io::println("listen failed"),
+    }
+}
+
+fn main() -> () effects(net, async, alloc, io) {
+    task::block_on(run());
+}

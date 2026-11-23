@@ -1,0 +1,10 @@
+use std::net;
+use std::task;
+
+async fn go() -> () effects(net, async, alloc) {
+    drop(net::connect_async("127.0.0.1:1").await);
+}
+
+fn main() -> () effects(net, async, alloc) {
+    task::block_on(go());
+}

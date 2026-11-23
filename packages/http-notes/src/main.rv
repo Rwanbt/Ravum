@@ -6,10 +6,13 @@
 //   GET  /notes                        -> 200, one `<id> <text>` per line
 //   anything else                      -> 404 / 405
 // `main` is the client: it drives a fixed scenario on 127.0.0.1, port 0, and
-// prints what it receives, so the whole run is reproducible.
+// prints what it receives, so the whole run is reproducible. With any
+// argument (`-- --async`) the server is the asynchronous one instead.
+use std::env;
 use std::http;
 use std::io;
 use std::net;
+use std::task;
 use std::thread;
 
 
@@ -44,16 +47,17 @@ fn note_lines(db: &sqlite::Db) -> Result<String, Error> effects(alloc, panic, un
     Ok(text)
 }
 
-fn handle(db: &sqlite::Db, stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc, panic, unsafe, ffi) {
-    let request: HttpRequest = http::read_request(stream)?;
-    let method: String = http::method(&request);
-    let path: String = http::path(&request);
+// The answer to one request, shared by the blocking and the asynchronous
+// server (RFC-ASYNC-NET-1 ANET-T2: both must answer byte for byte alike).
+fn answer(db: &sqlite::Db, request: &HttpRequest) -> Result<(u16, String), Error> effects(alloc, panic, unsafe, ffi) {
+    let method: String = http::method(request);
+    let path: String = http::path(request);
     if path.as_str() != "/notes" {
-        return http::respond(stream, 404, "text/plain", "not found\n");
+        return Ok((404u16, String::from("not found\n")));
     }
     if method.as_str() == "POST" {
         let mut params: Vec<sqlite::Value> = Vec::new();
-        params.push(sqlite::Value::Text(http::body(&request)));
+        params.push(sqlite::Value::Text(http::body(request)));
         let changed: i64 = sqlite::execute(db, "INSERT INTO notes (body) VALUES (?1)", params)?;
         drop(changed);
         let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT last_insert_rowid()", Vec::new())?;
@@ -70,13 +74,20 @@ fn handle(db: &sqlite::Db, stream: &mut TcpStream) -> Result<(), Error> effects(
             None => reply.push_str("?"),
         }
         reply.push_str("\n");
-        return http::respond(stream, 201, "text/plain", reply.as_str());
+        return Ok((201u16, reply));
     }
     if method.as_str() == "GET" {
         let text: String = note_lines(db)?;
-        return http::respond(stream, 200, "text/plain", text.as_str());
+        return Ok((200u16, text));
     }
-    http::respond(stream, 405, "text/plain", "method not allowed\n")
+    Ok((405u16, String::from("method not allowed\n")))
+}
+
+fn handle(db: &sqlite::Db, stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc, panic, unsafe, ffi) {
+    let request: HttpRequest = http::read_request(stream)?;
+    match answer(db, &request)? {
+        (status, body) => http::respond(stream, status, "text/plain", body.as_str()),
+    }
 }
 
 fn serve_all(db: &sqlite::Db, listener: &TcpListener, requests: i32) -> () effects(net, alloc, panic, unsafe, ffi) {
@@ -109,6 +120,48 @@ fn serve(job: (TcpListener, i32)) -> () effects(net, alloc, panic, unsafe, ffi) 
     }
 }
 
+// The same service on the single-threaded executor (`--async`): the
+// connection is owned by value, since an `async fn` binds no reference.
+async fn handle_async(db: sqlite::Db, stream: TcpStream) -> sqlite::Db effects(net, async, alloc, panic, unsafe, ffi) {
+    let mut s: TcpStream = stream;
+    let reply: Result<(u16, String), Error> = match http::read_request_async(&mut s).await {
+        Ok(request) => answer(&db, &request),
+        Err(e) => Err(e),
+    };
+    match reply {
+        Ok((status, body)) => drop(http::respond_async(&mut s, status, "text/plain", body.as_str()).await),
+        Err(e) => drop(http::respond_async(&mut s, 500, "text/plain", "error\n").await),
+    }
+    return db;
+}
+
+async fn serve_all_async(db: sqlite::Db, listener: TcpListener, requests: i32) -> sqlite::Db effects(net, async, alloc, panic, unsafe, ffi) {
+    let mut db: sqlite::Db = db;
+    let mut served: i32 = 0;
+    while served < requests {
+        match net::accept_async(&listener).await {
+            Ok(conn) => {
+                db = handle_async(db, conn).await;
+            }
+            Err(e) => drop(e),
+        }
+        served = served + 1;
+    }
+    return db;
+}
+
+fn serve_async(job: (TcpListener, i32)) -> () effects(net, async, alloc, panic, unsafe, ffi) {
+    match job {
+        (listener, requests) => {
+            let db: sqlite::Db = sqlite::open_memory().unwrap();
+            let made: i64 = sqlite::execute(&db, "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)", Vec::new()).unwrap();
+            drop(made);
+            let db: sqlite::Db = task::block_on(serve_all_async(db, listener, requests));
+            sqlite::close(db);
+        }
+    }
+}
+
 fn call(base: &str, method: &str, path: &str, body: &str) -> Result<(), Error> effects(io, net, alloc) {
     let mut url: String = String::from(base);
     url.push_str(path);
@@ -127,11 +180,16 @@ fn call(base: &str, method: &str, path: &str, body: &str) -> Result<(), Error> e
     Ok(())
 }
 
-fn main() -> Result<(), Error> effects(io, net, thread, alloc, panic, unsafe, ffi) {
+fn main() -> Result<(), Error> effects(io, net, thread, async, alloc, panic, unsafe, ffi) {
     let listener: TcpListener = net::listen("127.0.0.1:0")?;
     let mut base: String = String::from("http://127.0.0.1:");
     base.push_str(net::local_port(&listener).to_string().as_str());
-    let server: JoinHandle<()> = thread::spawn(serve, (listener, 6));
+    let asynchronous: bool = env::args().len() > 1usize;
+    let server: JoinHandle<()> = if asynchronous {
+        thread::spawn(serve_async, (listener, 6))
+    } else {
+        thread::spawn(serve, (listener, 6))
+    };
     call(base.as_str(), "POST", "/notes", "buy milk")?;
     call(base.as_str(), "POST", "/notes", "'); DROP TABLE notes; --")?;
     call(base.as_str(), "GET", "/notes", "")?;

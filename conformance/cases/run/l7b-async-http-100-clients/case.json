@@ -1,0 +1,6 @@
+{
+  "id": "run/l7b-async-http-100-clients",
+  "mode": "run-pass",
+  "stdout_contains": "100\n",
+  "notes": "RFC-ASYNC-NET-1 ANET-T3 (and ANET-T7: selected by tools/tsan_run.py through `http::`/`task::`): 100 concurrent `http::get_async` clients on one asynchronous server; every client receives its own path back, none is starved."
+}

@@ -1,0 +1,74 @@
+// RFC-ASYNC-NET-1 ANET-T4 (ANET-2): the STD-19.3 limits hold for
+// `http::read_request_async` exactly as for `read_request`: a line over
+// 8 KiB, more than 100 headers and a declared body over 16 MiB are `Err`.
+// Requests are sent and judged one at a time, so the output order is fixed.
+use std::http;
+use std::io;
+use std::net;
+use std::task;
+
+async fn send(addr: String, raw: String) -> () effects(net, async, alloc) {
+    match net::connect_async(&addr).await {
+        Ok(stream) => {
+            let mut s: TcpStream = stream;
+            drop(net::write_str_async(&mut s, &raw).await);
+        }
+        Err(e) => {}
+    }
+}
+
+async fn judge(listener: TcpListener, label: String) -> TcpListener effects(io, net, async, alloc) {
+    match net::accept_async(&listener).await {
+        Ok(stream) => {
+            let mut s: TcpStream = stream;
+            let mut line: String = label;
+            match http::read_request_async(&mut s).await {
+                Ok(request) => line.push_str(" accepted"),
+                Err(e) => line.push_str(" is Err"),
+            }
+            io::println(&line);
+        }
+        Err(e) => io::println("accept failed"),
+    }
+    return listener;
+}
+
+fn long_line() -> String effects(alloc) {
+    let mut raw: String = String::from("GET /");
+    for i in 0..9000 {
+        raw.push_str("a");
+    };
+    raw.push_str(" HTTP/1.1\r\n\r\n");
+    return raw;
+}
+
+fn many_headers() -> String effects(alloc) {
+    let mut raw: String = String::from("GET / HTTP/1.1\r\n");
+    for i in 0..101 {
+        raw.push_str("X-H: v\r\n");
+    };
+    raw.push_str("\r\n");
+    return raw;
+}
+
+async fn run() -> () effects(io, net, async, alloc) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let mut addr: String = String::from("127.0.0.1:");
+            addr.push_str(&net::local_port(&listener).to_string());
+            task::spawn(send(addr.clone(), String::from("GET /ok HTTP/1.1\r\nHost: x\r\n\r\n")));
+            let listener: TcpListener = judge(listener, String::from("small request")).await;
+            task::spawn(send(addr.clone(), long_line()));
+            let listener: TcpListener = judge(listener, String::from("line over 8 KiB")).await;
+            task::spawn(send(addr.clone(), many_headers()));
+            let listener: TcpListener = judge(listener, String::from("101 headers")).await;
+            task::spawn(send(addr.clone(), String::from("POST / HTTP/1.1\r\nContent-Length: 16777217\r\n\r\n")));
+            let listener: TcpListener = judge(listener, String::from("body over 16 MiB")).await;
+        }
+        Err(e) => io::println("listen failed"),
+    }
+}
+
+fn main() -> () effects(io, net, async, alloc) {
+    task::block_on(run());
+}

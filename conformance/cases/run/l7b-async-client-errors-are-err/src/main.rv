@@ -1,0 +1,42 @@
+// RFC-ASYNC-NET-1 ANET-T6 (and ANET-2): the asynchronous client forms
+// return `Err`, never panic, exactly like their blocking forms: refused
+// connection, `https://`, other schemes and DNS names (no DNS, STD-17).
+use std::http;
+use std::io;
+use std::net;
+use std::task;
+
+fn say(label: &str, is_err: bool) -> () effects(io, alloc) {
+    if is_err {
+        let mut line: String = String::from(label);
+        line.push_str(" is Err");
+        io::println(&line);
+    } else {
+        io::println("?");
+    }
+}
+
+async fn run() -> () effects(io, net, async, alloc) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let mut addr: String = String::from("127.0.0.1:");
+            addr.push_str(&net::local_port(&listener).to_string());
+            let mut url: String = String::from("http://");
+            url.push_str(&addr);
+            url.push_str("/");
+            drop(listener);
+            say("refused connect", net::connect_async(&addr).await.is_err());
+            say("refused get", http::get_async(&url).await.is_err());
+            say("refused post", http::post_async(&url, "text/plain", "x").await.is_err());
+        }
+        Err(e) => io::println("listen failed"),
+    }
+    say("https", http::get_async("https://127.0.0.1/").await.is_err());
+    say("ftp", http::get_async("ftp://127.0.0.1/").await.is_err());
+    say("dns get", http::get_async("http://example.invalid/").await.is_err());
+    say("dns connect", net::connect_async("example.invalid:80").await.is_err());
+}
+
+fn main() -> () effects(io, net, async, alloc) {
+    task::block_on(run());
+}

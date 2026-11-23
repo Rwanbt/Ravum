@@ -1,0 +1,6 @@
+{
+  "id": "run/l7b-async-client-errors-are-err",
+  "mode": "run-pass",
+  "stdout_contains": "refused connect is Err\nrefused get is Err\nrefused post is Err\nhttps is Err\nftp is Err\ndns get is Err\ndns connect is Err\n",
+  "notes": "RFC-ASYNC-NET-1 ANET-T6 / ANET-2 (MUST): `connect_async`, `get_async` and `post_async` return `Err` (never panic) for a refused connection, `https://`, another scheme and a DNS name, like the blocking forms (STD-17, STD-19)."
+}
