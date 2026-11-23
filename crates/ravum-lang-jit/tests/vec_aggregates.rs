@@ -96,12 +96,12 @@ fn unsupported_vec_aggregate_forms_are_refused() {
             "`clone` of a `Vec` of aggregates",
         ),
         (
-            "let mut v: Vec<P> = Vec::new(); v.push(P { a: 1, b: 2 }); bump(&mut v[0]);",
-            "`&mut` borrow of an aggregate `Vec` element",
+            "let mut v: Vec<A> = Vec::new(); v.push(A { z: [1, 2] }); let x: i64 = v[0].z[1]; drop(x);",
+            "an array inside a `Vec` element",
         ),
     ] {
         let source = format!(
-            "struct P {{ a: i64, b: i64 }}\nfn bump(p: &mut P) -> () effects() {{ p.a = 3; }}\nfn main() -> () effects(alloc) {{ {body} }}\n"
+            "struct P {{ a: i64, b: i64 }}\nstruct A {{ z: [i64; 2] }}\nfn bump(p: &mut P) -> () effects() {{ p.a = 3; }}\nfn main() -> () effects(alloc) {{ {body} }}\n"
         );
         let err = format!("{:?}", compile_source(&source).expect_err(body));
         assert!(err.contains(why), "{body}: {err}");
@@ -357,4 +357,40 @@ fn main() -> () effects(io, alloc) {
 }
 "#;
     assert_eq!(agree(src).1, "19\ninner none\n3\n");
+}
+
+#[test]
+fn mutable_borrows_of_vec_struct_elements_write_back() {
+    let src = r#"use std::io;
+
+struct Counter { hits: i64, last: i64 }
+
+impl Counter {
+    fn hit(&mut self, v: i64) -> () effects() {
+        self.hits = self.hits + 1;
+        self.last = v;
+    }
+}
+
+fn reset(c: &mut Counter, to: i64) -> i64 effects() {
+    let before = c.hits;
+    c.hits = to;
+    return before;
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<Counter> = Vec::new();
+    v.push(Counter { hits: 0, last: 0 });
+    v.push(Counter { hits: 10, last: 0 });
+    v[1].hit(7);
+    v[1].hit(8);
+    v[0].hit(1);
+    let was = reset(&mut v[1], 100);
+    io::println(&was.to_string());
+    io::println(&v[0].hits.to_string());
+    io::println(&v[1].hits.to_string());
+    io::println(&v[1].last.to_string());
+}
+"#;
+    assert_eq!(agree(src).1, "12\n1\n100\n8\n");
 }

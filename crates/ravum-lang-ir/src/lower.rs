@@ -549,6 +549,11 @@ struct FnLower<'a> {
     /// stack slot from their declaration on, `mem_vars` holds those slots.
     borrowed: std::collections::BTreeSet<(Span, String)>,
     mem_vars: std::collections::BTreeSet<Local>,
+    /// `&mut v[i]` of an aggregate `Vec` element: a private copy is lent to
+    /// the call and stored back after it (Core 1.0 cannot keep a borrow past
+    /// a call). `wb_marks` opens one frame per user call being lowered.
+    writebacks: Vec<(Local, u32, Type, Local)>,
+    wb_marks: Vec<usize>,
     loops: Vec<LoopCtx>,
     ret: Type,
     /// Hidden result address when the function returns an aggregate.
@@ -625,6 +630,8 @@ impl<'a> FnLower<'a> {
             vars: BTreeMap::new(),
             borrowed: std::collections::BTreeSet::new(),
             mem_vars: std::collections::BTreeSet::new(),
+            writebacks: Vec::new(),
+            wb_marks: Vec::new(),
             loops: Vec::new(),
             ret: sig.ret.clone(),
             sret: None,
@@ -1715,9 +1722,7 @@ impl<'a> FnLower<'a> {
                     // `&v[i]` of an aggregate element: a private copy is a
                     // sound shared borrow; `&mut` would need its address.
                     p @ Place::VecAgg { .. } if *op == ast::UnOp::Ref => self.read(p),
-                    Place::VecAgg { .. } => {
-                        unsupported("`&mut` borrow of an aggregate `Vec` element")
-                    }
+                    Place::VecAgg { o, base, ty } => self.lend_mut(o, base, ty),
                     Place::Reg(_) | Place::VecElem { .. } => {
                         unsupported("reference to a scalar local")
                     }
@@ -3315,6 +3320,7 @@ impl<'a> FnLower<'a> {
             .ok_or_else(|| LowerError::MissingFact("method signature".into()))?;
         let by_ref = !matches!(sig.receiver, Some(ast::Receiver::ByValue));
         let rt = self.type_of(recv)?;
+        self.wb_marks.push(self.writebacks.len());
         let first = if by_ref {
             if matches!(rt, Type::Ref { .. }) {
                 self.expr(recv)?
@@ -3326,9 +3332,7 @@ impl<'a> FnLower<'a> {
                     {
                         self.vec_materialize(o, base, &ty)?
                     }
-                    Place::VecAgg { .. } => {
-                        return unsupported("`&mut self` method on an aggregate `Vec` element")
-                    }
+                    Place::VecAgg { o, base, ty } => self.lend_mut(o, base, ty)?,
                     Place::Reg(_) | Place::VecElem { .. } => {
                         return unsupported("method on a scalar receiver")
                     }
@@ -3349,7 +3353,34 @@ impl<'a> FnLower<'a> {
         };
         let mut vals = vec![first];
         vals.extend(self.eval_args(args)?);
-        self.call_func(e, func, vals)
+        let r = self.call_func(e, func, vals)?;
+        self.store_back()?;
+        Ok(r)
+    }
+
+    /// Lend a private copy of a `Vec` aggregate element as `&mut`; it is
+    /// stored back once the enclosing user call returns.
+    fn lend_mut(&mut self, o: Local, base: u32, ty: Type) -> R<Local> {
+        if self.wb_marks.is_empty() {
+            return unsupported("`&mut` borrow of an aggregate `Vec` element outside a call");
+        }
+        let addr = self.vec_materialize(o, base, &ty)?;
+        self.writebacks.push((o, base, ty, addr));
+        Ok(addr)
+    }
+
+    /// Close the innermost call frame: store every copy it lent back into
+    /// its vector, in lending order.
+    fn store_back(&mut self) -> R<()> {
+        let mark = self
+            .wb_marks
+            .pop()
+            .ok_or_else(|| LowerError::MissingFact("write-back frame".into()))?;
+        let lent: Vec<_> = self.writebacks.drain(mark..).collect();
+        for (o, base, ty, addr) in lent {
+            self.vec_store(o, base, &ty, addr)?;
+        }
+        Ok(())
     }
 
     /// Emit a call to `func` with already-evaluated `vals`, adding the hidden
@@ -3396,6 +3427,7 @@ impl<'a> FnLower<'a> {
                 // MACH O1: arguments are evaluated left to right; a by-value
                 // aggregate is copied at once, so later arguments cannot
                 // change it.
+                self.wb_marks.push(self.writebacks.len());
                 for a in args {
                     let at = self.type_of(a)?;
                     let v = self.expr(a)?;
@@ -3411,6 +3443,7 @@ impl<'a> FnLower<'a> {
                         func,
                         args: vals,
                     });
+                    self.store_back()?;
                     return Ok(out);
                 }
                 let dst = self.new_local(map_ty(&rt)?);
@@ -3419,6 +3452,7 @@ impl<'a> FnLower<'a> {
                     func,
                     args: vals,
                 });
+                self.store_back()?;
                 Ok(dst)
             }
             Some(CallTarget::BuiltinFn { path }) if path.ends_with("panic") => match args {
