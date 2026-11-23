@@ -88,7 +88,7 @@ jobs:
             echo "file=$name.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
           path: dist/${{ steps.package.outputs.file }}
@@ -111,7 +111,7 @@ jobs:
           cmp dist/a.spdx.json dist/ravum.spdx.json
           rm dist/a.spdx.json
           python3 -c 'import json; d=json.load(open("dist/ravum.spdx.json")); assert d["spdxVersion"]=="SPDX-2.3" and d["packages"], d.get("spdxVersion")'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-sbom
           path: dist/ravum.spdx.json
@@ -156,7 +156,7 @@ jobs:
               --signer-workflow "${{ github.repository }}/.github/workflows/release.yml"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-bundle
           path: dist/
