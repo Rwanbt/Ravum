@@ -441,9 +441,47 @@ fn main() -> () effects(io, alloc, panic) {
 "#;
     let (render, out) = agree(src);
     assert_eq!(out, "3\n1\n");
-    // The rustc path names length and index (EXPR-7.6, case
-    // types/l2-array-in-vec-element); the IR gives the short form for fixed
-    // arrays, a documented T14 gap: its note would be a write the real-time
-    // validator refuses (INV-05).
-    assert!(render.contains("index out of bounds"), "{render}");
+    // Same text as the rustc path (EXPR-7.6, case
+    // types/l2-array-in-vec-element), through `Term::TrapBounds` (IR 1.5),
+    // which prints nothing and so stays valid in real-time modules (INV-05).
+    assert!(
+        render.contains("index out of bounds: the len is 3 but the index is 3"),
+        "{render}"
+    );
+}
+
+/// Fail-closed (IR 1.5): the JIT and the hot-swap engine refuse a bounds
+/// trap whose operands are out of range or not `u64`, before compiling.
+#[test]
+fn the_jit_refuses_a_malformed_bounds_trap() {
+    use ravum_lang_ir::ir::{Term, Ty};
+    let src = "fn gain(x: f32) -> f32 effects() {\n    let a: [f32; 2] = [x, x];\n    let i: usize = 2;\n    return a[i];\n}\n";
+    let m = ravum_lang_ir::compile_source(src).unwrap();
+    assert!(ravum_lang_jit::compile(&m).is_ok());
+    let f = m.func_id("gain").unwrap() as usize;
+    let bi = m.functions[f]
+        .blocks
+        .iter()
+        .position(|b| matches!(b.term, Term::TrapBounds { .. }))
+        .expect("a bounds trap");
+    let Term::TrapBounds { len, .. } = m.functions[f].blocks[bi].term else {
+        unreachable!()
+    };
+    let f32_local = m.functions[f]
+        .locals
+        .iter()
+        .position(|t| *t == Ty::F32)
+        .unwrap() as u32;
+    for (l, i) in [(len, 7_777), (len, f32_local)] {
+        let mut bad = m.clone();
+        bad.functions[f].blocks[bi].term = Term::TrapBounds { len: l, index: i };
+        assert!(
+            ravum_lang_jit::compile(&bad).is_err(),
+            "JIT compiled a malformed trap"
+        );
+        assert!(
+            ravum_lang_jit::hot::HotEngine::start(&bad, "gain").is_err(),
+            "hot engine started a malformed module"
+        );
+    }
 }

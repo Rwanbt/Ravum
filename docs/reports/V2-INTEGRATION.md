@@ -140,3 +140,22 @@ l'hôte, à titre de diagnostic, sans changer aucune assertion.
 chargé. L'hypothèse du temps volé par l'hyperviseur, compté comme
 travail du thread, est étayée par une mesure directe. La décision sur la
 mesure (proposition ci-dessus) reste au responsable.
+
+## `rt_budget` : borne de travail par le carburant (V2-G9, 2026-11-24)
+
+`RtRunner::last_fuel_used()` expose le carburant consommé par le dernier
+appel (une lecture de champ, sans allocation). Le test
+`block_processing_meets_its_deadline_across_hot_swaps` additionne ce
+carburant pour chaque bloc et exige, de façon déterministe :
+- que chacun des 20 000 blocs, hot swaps compris, consomme exactement la
+  même quantité ;
+- que cette quantité soit inférieure au budget d'**un seul** appel
+  (`RT_FUEL` = 100 000).
+
+Sur Linux, chaque bloc consomme 2 112 unités : 64 échantillons × (32 tours
+de boucle + 1 entrée de fonction). Le nouveau test
+`a_spinning_edit_burns_exactly_one_budget_of_fuel` vérifie qu'une boucle
+infinie consomme exactement `RT_FUEL`. Les assertions de temps CPU et de
+temps mural sont **inchangées**. Sur une VM chargée, elles peuvent toujours
+échouer sans que le code soit en cause. La borne par carburant établit, elle,
+le travail du bloc indépendamment de l'hôte.

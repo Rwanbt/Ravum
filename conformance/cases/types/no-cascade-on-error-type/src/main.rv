@@ -1,0 +1,20 @@
+struct Task {
+    title: String,
+    done: bool,
+}
+
+fn pending(tasks: &Vec<Task>) -> usize {
+    let mut n: usize = 0;
+    for t in tasks {
+        if !t.done {
+            n += 1;
+        }
+        let s = t.title.as_str();
+    }
+    n
+}
+
+fn main() {
+    let v: Vec<Task> = Vec::new();
+    let _n = pending(&v);
+}

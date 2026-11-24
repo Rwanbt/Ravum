@@ -14,7 +14,7 @@ sans interprétation ajoutée.
     `examples/dsp-gain-iir` lui-même ;
   - T9 : l'E2E navigateur n'était lancé qu'à la main ; il tourne désormais
     sur chaque PR.
-  Restent non `PASS` : T1 (choix du backend, en attente), T4, T10, T15
+  Restent non `PASS` : T4, T10, T15
   (audits externes), T11 (clé de signature, D9), T12 (Go/No-Go), T14
   (améliorations IR/JIT en cours).
 - **V2-G2 — Dette T2** : « il faut corriger la dette technique, je veux un

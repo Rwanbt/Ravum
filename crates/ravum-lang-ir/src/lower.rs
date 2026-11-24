@@ -1480,7 +1480,7 @@ impl<'a> FnLower<'a> {
                     else_to: oob,
                 });
                 self.switch_to(oob);
-                self.set_term(Term::Trap("index out of bounds".into()));
+                self.set_term(Term::TrapBounds { len: n, index: j });
                 self.switch_to(inb);
                 let first = self.u64_const(b as u64);
                 let i = self.new_local(Ty::U64);
@@ -1527,7 +1527,7 @@ impl<'a> FnLower<'a> {
                     else_to: oob,
                 });
                 self.switch_to(oob);
-                self.set_term(Term::Trap("index out of bounds".into()));
+                self.set_term(Term::TrapBounds { len: n, index: i });
                 self.switch_to(inb);
                 let base_addr = self.offset(addr, off);
                 let dst = self.new_local(Ty::Ptr);
@@ -3940,7 +3940,7 @@ fn prune_unreachable(mut blocks: Vec<Block>) -> Vec<Block> {
                 stack.push(*then_to as usize);
                 stack.push(*else_to as usize);
             }
-            Term::Return(_) | Term::Trap(_) | Term::Unreachable => {}
+            Term::Return(_) | Term::Trap(_) | Term::TrapBounds { .. } | Term::Unreachable => {}
         }
     }
     for (b, reached) in blocks.iter_mut().zip(seen) {

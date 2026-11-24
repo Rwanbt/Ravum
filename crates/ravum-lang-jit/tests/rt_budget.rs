@@ -158,6 +158,9 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
     let mut times = Vec::with_capacity(BLOCKS);
     let mut cpu_times = Vec::with_capacity(BLOCKS);
     let mut preempted = 0usize;
+    // V2-G9: the work of each block measured in fuel, independent of the
+    // host's clock and load (a VM's steal time is charged to CPU time).
+    let mut block_fuel = Vec::with_capacity(BLOCKS);
     let input = [0.25f32; BLOCK];
     let mut out = [0.0f32; BLOCK];
     for b in 0..BLOCKS {
@@ -169,10 +172,13 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
         let t = Instant::now();
         let c = thread_cpu();
         rt.poll();
+        let mut fuel = 0u64;
         for (o, &x) in out.iter_mut().zip(&input) {
             *o = rt.process_sample(x);
+            fuel += rt.last_fuel_used();
         }
         let cpu = thread_cpu() - c;
+        block_fuel.push(fuel);
         let d = t.elapsed();
         if d > DEADLINE {
             // Wall time over the deadline: either our work, or the OS ran
@@ -202,6 +208,19 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
         times.last().unwrap(),
         host_note()
     );
+    // Deterministic work bound (V2-G9): every block, swaps included, does
+    // exactly the same work, and a whole block costs less fuel than the
+    // budget of one single call.
+    let first = block_fuel[0];
+    assert!(first > 0, "the loop burns fuel");
+    assert!(
+        block_fuel.iter().all(|f| *f == first),
+        "block work varied: {:?}..={:?}",
+        block_fuel.iter().min(),
+        block_fuel.iter().max()
+    );
+    assert!(first < RT_FUEL, "block fuel {first} >= one call's budget");
+    eprintln!("T16 fuel: every block used {first} units (one call's budget: {RT_FUEL})");
     // The work itself: no block, swaps included, needs more CPU than its
     // deadline (with a 10x margin at p99.9).
     assert_eq!(cpu_misses, 0, "a block's own work exceeded its deadline");
@@ -283,4 +302,19 @@ fn a_small_stack_budget_protects_a_small_callback_thread() {
         .join()
         .expect("overflowed a 512 KiB callback thread");
     assert_eq!(y, 0.5, "trapped and rolled back");
+}
+
+/// V2-G9: a spinning entry burns exactly one call's budget of fuel,
+/// whatever the host's clock; a straight-line edit then burns one unit.
+#[test]
+fn a_spinning_edit_burns_exactly_one_budget_of_fuel() {
+    let spin = "fn gain(x: f32) -> f32 effects() {\n    let mut i: i64 = 0;\n    while i >= 0 {\n        i = i + 0;\n    }\n    return x;\n}\n";
+    let (mut e, mut rt) = HotEngine::start(&compile_source(spin).unwrap(), "gain").unwrap();
+    assert_eq!(rt.process_f32(1.0), 0.0, "nothing to roll back to");
+    assert_eq!(rt.last_fuel_used(), RT_FUEL);
+    e.update(&compile_source(OK).unwrap()).unwrap();
+    rt.poll();
+    assert_eq!(rt.process_f32(1.0), 0.5);
+    // One unit per function entry (the recursion bound), no loop.
+    assert_eq!(rt.last_fuel_used(), 1);
 }

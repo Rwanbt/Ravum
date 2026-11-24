@@ -1,0 +1,191 @@
+// Application d'essai (V2-G3) : liste de tâches persistée dans un fichier.
+//
+//   todo <fichier> list
+//   todo <fichier> add <titre>
+//   todo <fichier> done <numéro>
+//   todo <fichier> clear-done
+//
+// Format du fichier : deux lignes par tâche, l'état (`todo` ou `done`)
+// puis le titre. Ce format contourne l'absence de découpage de chaîne
+// (pas de `split`, de `find` ni de sous-chaîne en Core 1.0, STD-9.11).
+use std::env;
+use std::fs;
+use std::io;
+use std::process;
+use std::string;
+
+struct Task {
+    title: String,
+    done: bool,
+}
+
+fn load(path: &str) -> Result<Vec<Task>, Error> {
+    let mut tasks: Vec<Task> = Vec::new();
+    if !fs::exists(path) {
+        return Ok(tasks);
+    }
+    let text = fs::read_to_string(path)?;
+    let lines = text.lines();
+    if lines.len() % 2 != 0 {
+        return Err(Error::new("corrupt task file: odd number of lines"));
+    }
+    let mut i: usize = 0;
+    while i < lines.len() {
+        let state = lines[i].trim();
+        let done = if state == "done" {
+            true
+        } else if state == "todo" {
+            false
+        } else {
+            return Err(Error::new("corrupt task file: bad state line"));
+        };
+        tasks.push(Task {
+            title: lines[i + 1].clone(),
+            done: done
+        });
+        i += 2;
+    }
+    Ok(tasks)
+}
+
+fn render(tasks: &Vec<Task>) -> String {
+    let mut out = String::new();
+    let mut i: usize = 0;
+    while i < tasks.len() {
+        if tasks[i].done {
+            out.push_str("done\n");
+        } else {
+            out.push_str("todo\n");
+        }
+        out.push_str(tasks[i].title.as_str());
+        out.push_str("\n");
+        i += 1;
+    }
+    out
+}
+
+fn line_of(n: usize, t: &Task) -> String {
+    let mut s = n.to_string();
+    if t.done {
+        s.push_str(". [x] ");
+    } else {
+        s.push_str(". [ ] ");
+    }
+    s.push_str(t.title.as_str());
+    s
+}
+
+fn pending(tasks: &Vec<Task>) -> usize {
+    let mut n: usize = 0;
+    let mut i: usize = 0;
+    while i < tasks.len() {
+        if !tasks[i].done {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+fn without_done(tasks: Vec<Task>) -> Vec<Task> {
+    let mut kept: Vec<Task> = Vec::new();
+    for t in tasks {
+        if !t.done {
+            kept.push(t);
+        }
+    }
+    kept
+}
+
+fn usage() {
+    io::eprintln("usage: todo <file> list | add <title> | done <n> | clear-done");
+    process::exit(2);
+}
+
+fn main() -> Result<(), Error> {
+    let args = env::args();
+    if args.len() < 3 {
+        usage();
+    }
+    let path = args[1].clone();
+    let cmd = args[2].clone();
+    let mut tasks = load(path.as_str())?;
+    if cmd == "list" {
+        let mut i: usize = 0;
+        while i < tasks.len() {
+            io::println(&line_of(i + 1, &tasks[i]));
+            i += 1;
+        }
+        let mut summary = pending(&tasks).to_string();
+        summary.push_str(" pending");
+        io::println(&summary);
+        return Ok(());
+    }
+    if cmd == "add" {
+        if args.len() != 4 || args[3].trim().is_empty() {
+            usage();
+        }
+        tasks.push(Task {
+            title: args[3].trim(),
+            done: false
+        });
+    } else if cmd == "done" {
+        if args.len() != 4 {
+            usage();
+        }
+        let n = string::parse_i64(args[3].as_str())?;
+        if n < 1 || n as usize > tasks.len() {
+            return Err(Error::new("no such task"));
+        }
+        tasks[(n - 1) as usize].done = true;
+    } else if cmd == "clear-done" {
+        tasks = without_done(tasks);
+    } else {
+        usage();
+    }
+    fs::write_string(path.as_str(), &render(&tasks))?;
+    io::println("ok");
+    Ok(())
+}
+
+test fn render_then_load_round_trips() -> Result<(), Error> {
+    let mut tasks: Vec<Task> = Vec::new();
+    tasks.push(Task {
+        title: String::from("écrire le rapport"),
+        done: false
+    });
+    tasks.push(Task {
+        title: String::from("relire"),
+        done: true
+    });
+    let path = ".ravum/todo-roundtrip.txt";
+    fs::write_string(path, &render(&tasks))?;
+    let back = load(path)?;
+    assert_eq(back.len(), 2);
+    assert_eq(back[0].title.clone(), String::from("écrire le rapport"));
+    assert(back[1].done);
+    assert_eq(pending(&back), 1);
+    Ok(())
+}
+
+test fn clear_done_keeps_pending_tasks() {
+    let mut tasks: Vec<Task> = Vec::new();
+    tasks.push(Task {
+        title: String::from("a"),
+        done: true
+    });
+    tasks.push(Task {
+        title: String::from("b"),
+        done: false
+    });
+    let kept = without_done(tasks);
+    assert_eq(kept.len(), 1);
+    assert_eq(kept[0].title.clone(), String::from("b"));
+}
+
+test fn a_corrupt_file_is_refused() {
+    let path = ".ravum/todo-corrupt.txt";
+    let w = fs::write_string(path, "maybe\nx\n");
+    assert(w.is_ok());
+    assert(load(path).is_err());
+}

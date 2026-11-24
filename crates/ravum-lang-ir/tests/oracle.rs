@@ -123,6 +123,57 @@ fn json_round_trip_is_lossless_and_versioned() {
     assert!(broken.validate().is_err());
 }
 
+/// Fail-closed for `Term::TrapBounds` (IR 1.5): each operand must be an
+/// in-range local of type `u64`; the validator, the interpreter and the JIT
+/// all refuse a module that breaks this, and never index with it.
+#[test]
+fn a_malformed_bounds_trap_is_refused_by_every_backend() {
+    use ravum_lang_ir::ir::Term;
+    let m = compile_source(
+        "fn check(i: usize) -> i64 effects() {\n    let a: [i64; 3] = [1, 2, 3];\n    return a[i];\n}\n\nfn entry() -> i64 effects() {\n    return check(5);\n}\n",
+    )
+    .unwrap();
+    m.validate().unwrap();
+    let f = m.func_id("check").unwrap() as usize;
+    let (bi, len, index) = m.functions[f]
+        .blocks
+        .iter()
+        .enumerate()
+        .find_map(|(i, b)| match b.term {
+            Term::TrapBounds { len, index } => Some((i, len, index)),
+            _ => None,
+        })
+        .expect("the lowering emits a bounds trap");
+    // Positive: the well-formed module stops with the spec message.
+    let ok = ravum_lang_ir::interp::run(&m, "entry", 1_000_000).render();
+    assert!(ok.contains("the len is 3 but the index is 5"), "{ok}");
+    let wrong_type = m.functions[f]
+        .locals
+        .iter()
+        .position(|t| *t != ravum_lang_ir::ir::Ty::U64)
+        .expect("a non-u64 local") as u32;
+    for (name, l, i) in [
+        ("len out of range", 9_999, index),
+        ("index out of range", len, 9_999),
+        ("len not u64", wrong_type, index),
+        ("index not u64", len, wrong_type),
+    ] {
+        let mut bad = m.clone();
+        bad.functions[f].blocks[bi].term = Term::TrapBounds { len: l, index: i };
+        assert!(bad.validate().is_err(), "{name}: validate accepted it");
+        let run = ravum_lang_ir::interp::run(&bad, "entry", 1_000_000);
+        assert!(
+            run.render().contains("invalid IR"),
+            "{name}: interpreter ran it: {}",
+            run.render()
+        );
+        assert!(
+            Module::from_json(&bad.to_json()).is_err(),
+            "{name}: from_json accepted it"
+        );
+    }
+}
+
 #[test]
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [

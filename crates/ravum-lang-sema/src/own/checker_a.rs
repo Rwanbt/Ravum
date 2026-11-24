@@ -444,6 +444,16 @@ impl<'a> OwnChecker<'a> {
                 }
                 UnOp::Neg | UnOp::Not => self.eval_value(inner),
             },
+            ExprKind::Binary {
+                op: BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge,
+                lhs,
+                rhs,
+            } => {
+                // A comparison reads its operands (TYP-7.3: text is compared
+                // through a `&str` view); it never moves a `String`.
+                self.eval_compared(lhs);
+                self.eval_compared(rhs);
+            }
             ExprKind::Binary { op, lhs, rhs } => {
                 self.eval_value(lhs);
                 if matches!(op, BinOp::And | BinOp::Or) {
@@ -587,6 +597,25 @@ impl<'a> OwnChecker<'a> {
             }
         }
         self.leave();
+    }
+
+    /// An operand of a comparison: a place is read, not consumed.
+    fn eval_compared(&mut self, operand: &Expr) {
+        let place_like = matches!(
+            operand.kind,
+            ExprKind::SelfValue
+                | ExprKind::Path(_)
+                | ExprKind::Field { .. }
+                | ExprKind::TupleIndex { .. }
+                | ExprKind::Index { .. }
+        );
+        if place_like {
+            if let Some(place) = self.eval_place_expr(operand) {
+                self.read_place(&place, operand.span, operand.id);
+                return;
+            }
+        }
+        self.eval_value(operand);
     }
 
     pub(super) fn eval_borrow(&mut self, operand: &Expr, mutable: bool, span: Span) {

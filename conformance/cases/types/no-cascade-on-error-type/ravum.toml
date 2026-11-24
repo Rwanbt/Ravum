@@ -1,0 +1,4 @@
+[package]
+name = "types-no-cascade-on-error-type"
+version = "0.1.0"
+edition = "core-1.0"
