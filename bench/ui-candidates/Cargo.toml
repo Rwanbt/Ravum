@@ -1,9 +1,0 @@
-# Banc d'essai U1-B (UI-D8) : workspace SÉPARÉ du workspace Ravum, pour que
-# les bibliothèques candidates n'entrent dans aucun crate Ravum avant la
-# décision du responsable (UI-D4). Versions épinglées exactement.
-[workspace]
-members = ["headless", "footprint/egui", "footprint/slint", "footprint/modular", "footprint/blitz"]
-resolver = "2"
-
-[profile.release]
-debug = false

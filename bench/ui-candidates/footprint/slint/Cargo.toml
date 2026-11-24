@@ -1,8 +1,0 @@
-[package]
-name = "fp-slint"
-version = "0.0.0"
-edition = "2021"
-publish = false
-
-[dependencies]
-slint = "=1.19.1"
