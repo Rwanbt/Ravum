@@ -207,8 +207,8 @@ fn g(x: &str, y: &str) -> bool { return x == y; }
 
 // NÉGATIF — E-TYP-MISMATCH (types différents)
 fn h(a: i32, b: i64) -> i64 { return a + b; }
-// NÉGATIF — E-TYP-EQ (égalité structurelle sur String)
-fn i(a: String, b: String) -> bool { return a == b; }
+// NÉGATIF — E-TYP-EQ (égalité structurelle sur Vec)
+fn i(a: Vec<i32>, b: Vec<i32>) -> bool { return a == b; }
 // NÉGATIF — E-TYP-CMP (ordre sur &str)
 fn j(a: &str, b: &str) -> bool { return a < b; }
 // NÉGATIF — E-TYP-MISMATCH (négation d'un non signé)
@@ -224,7 +224,7 @@ fn k(a: u32) -> u32 { return -a; }
 | TYP-8.1 | Un `String` contient **toujours** de l'UTF-8 valide. Il ne peut pas exister de `String` invalide, y compris après mutation (`push`, `push_str`). | MUST |
 | TYP-8.2 | `s.len()` est le nombre d'**octets** UTF-8, pas le nombre de caractères. Aucune API de comptage de caractères n'est fournie en Core 1.0 (voir [`stdlib.md`](stdlib.md)). | MUST |
 | TYP-8.3 | `String` n'est **pas** indexable : `s[0]` est `E-TYP-INDEX`. Accès au texte via `.as_str()` (référence non échappante) ou `.bytes()` n'existe pas. | MUST |
-| TYP-8.4 | `String` n'est pas comparable avec `==` (TYP-7.3) ; comparer `s.as_str()` à une `&str`. | MUST |
+| TYP-8.4 | `String` est comparable avec `==`/`!=` par **contenu** (TYP-7.3, Q-TYP-7), avec un `String` ou une `&str` ; la comparaison lit ses opérandes sans les déplacer. L'**ordre** (`<`, `<=`, `>`, `>=`) n'est pas défini sur le texte (`E-TYP-CMP`). | MUST |
 | TYP-8.5 | La conversion `&str → String` est explicite (`String::from(s)`), jamais implicite. La conversion `String → &str` est explicite (`.as_str()`). | MUST |
 | TYP-8.6 | Il n'y a **aucun** littéral de type `String` : `"x"` a le type `&'static str`. `let s: String = "x";` est `E-TYP-MISMATCH`. | MUST |
 | TYP-8.7 | `String` n'a pas de `Drop` utilisateur ; sa destruction est celle du runtime (`DROP` interne, `E-UNSUPPORTED-DROP-IMPL` pour toute tentative d'implémentation). | MUST |

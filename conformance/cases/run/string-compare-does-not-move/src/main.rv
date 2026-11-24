@@ -1,0 +1,21 @@
+use std::io;
+
+struct Task {
+    title: String,
+}
+
+fn main() {
+    let state = String::from("todo");
+    if state == "done" {
+        io::println("done");
+    } else if state == "todo" {
+        io::println("todo");
+    }
+    let t = Task { title: String::from("b") };
+    if t.title != "a" && "b" == t.title {
+        io::println("b");
+    }
+    let moved = state;
+    io::println(moved.as_str());
+    io::println(t.title.as_str());
+}

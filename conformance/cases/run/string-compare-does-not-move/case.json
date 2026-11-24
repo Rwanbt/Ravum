@@ -1,0 +1,6 @@
+{
+  "id": "run/string-compare-does-not-move",
+  "mode": "run-pass",
+  "stdout_contains": "todo\nb\ntodo\nb\n",
+  "notes": "TYP-7.3 (MUST): text is compared through a `&str` view, so `==`/`!=` read a `String` (local or field) without moving it; the checker used to report E-OWN-DOUBLE-MOVE on the second comparison. Found by the trial app apps/todo (V2-G3)."
+}
