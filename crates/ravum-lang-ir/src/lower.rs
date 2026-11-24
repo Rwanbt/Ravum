@@ -2239,24 +2239,23 @@ impl<'a> FnLower<'a> {
         t: &Type,
         agg: bool,
     ) -> R<Local> {
-        if map_ty(&Type::Ref {
+        let heap = map_ty(&Type::Ref {
             mutable,
             inner: Box::new(inner.clone()),
-        })? != Ty::Ptr
-        {
-            return unsupported("`match` on a reference to a heap object");
-        }
-        let marks = self.writebacks.len();
+        })? == Ty::Obj;
+        // `&mut v[i]` of an aggregate `Vec` is refused by `expr` itself
+        // (its copy is lent to calls only): limit L-OWN-020-1.
         let addr = self.expr(scrutinee)?;
-        if self.writebacks.len() != marks {
-            // `&mut v[i]` lends a copy written back after a *call*; a match
-            // would need the write-back at its end. Refused, not approximated.
-            return unsupported("`match` on `&mut` of a vector element");
-        }
-        let place = Place::Mem {
-            addr,
-            off: 0,
-            ty: inner.clone(),
+        // A borrow of a heap object (`&String`, `&Vec<T>`) is its handle:
+        // bindings receive the handle itself (see `pat_bind`).
+        let place = if heap {
+            Place::Reg(addr)
+        } else {
+            Place::Mem {
+                addr,
+                off: 0,
+                ty: inner.clone(),
+            }
         };
         let join = self.new_block();
         for arm in arms {

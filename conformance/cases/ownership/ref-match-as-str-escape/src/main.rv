@@ -1,0 +1,13 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+fn f(n: &N) -> &str {
+    match n {
+        N::L(s) => s.as_str(),
+        N::M(v) => "none",
+    }
+}
+
+fn main() {}

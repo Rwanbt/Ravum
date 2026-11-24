@@ -485,3 +485,23 @@ fn the_jit_refuses_a_malformed_bounds_trap() {
         );
     }
 }
+
+/// OWN-6.9 / P1, documented limit L-OWN-020-1: a match on `&mut v[i]` of a
+/// `Vec` of aggregates needs its lent copy written back on every exit of
+/// the match (RFC-UI-LANG-1 §2.1); until that is implemented the IR refuses
+/// it explicitly instead of approximating it. A shared `&v[i]` is accepted
+/// and agrees with the rustc path.
+#[test]
+fn match_on_mut_vec_aggregate_element_is_refused_not_approximated() {
+    let refused = "struct P { x: i64 }\nenum S { A(P), B }\nfn f(v: &mut Vec<S>) -> i64 {\n    match &mut v[0] {\n        S::A(p) => { p.x += 1; p.x }\n        S::B => 0,\n    }\n}\nfn check() -> i64 effects(alloc) {\n    let mut v: Vec<S> = Vec::new();\n    v.push(S::A(P { x: 1 }));\n    return f(&mut v);\n}\n";
+    let err = format!("{:?}", compile_source(refused).unwrap_err());
+    assert!(
+        err.contains("`&mut` borrow of an aggregate `Vec` element outside a call"),
+        "{err}"
+    );
+    let shared = "struct P { x: i64 }\nenum S { A(P), B }\nfn f(v: &Vec<S>) -> i64 {\n    match &v[0] {\n        S::A(p) => p.x,\n        S::B => 0,\n    }\n}\nfn check() -> i64 effects(alloc) {\n    let mut v: Vec<S> = Vec::new();\n    v.push(S::A(P { x: 41 }));\n    return f(&v) + 1;\n}\n";
+    let m = compile_source(shared).unwrap();
+    let (r, _) = run_with_output(&m, "check", DEFAULT_STEPS);
+    assert_eq!(r.render(), "value i64 42");
+    assert_eq!(compile(&m).unwrap().run("check", DEFAULT_FUEL).render(), "value i64 42");
+}

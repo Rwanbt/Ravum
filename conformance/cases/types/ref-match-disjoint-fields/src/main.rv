@@ -1,0 +1,27 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+struct W {
+    a: N,
+    b: N,
+}
+
+fn f(w: &mut W) -> i64 {
+    match &mut w.a {
+        N::M(v) => {
+            v.push(1);
+            match &w.b {
+                N::L(s) => s.len() as i64,
+                N::M(u) => u.len() as i64,
+            }
+        }
+        N::L(s) => 0,
+    }
+}
+
+fn main() {
+    let mut w = W { a: N::M(Vec::new()), b: N::L(String::from("ab")) };
+    let _n = f(&mut w);
+}

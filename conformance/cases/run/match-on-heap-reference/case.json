@@ -1,0 +1,6 @@
+{
+  "id": "run/match-on-heap-reference",
+  "mode": "run-pass",
+  "stdout_contains": "87\n",
+  "notes": "OWN-6.9 / P1: a match on `&Vec<T>` / `&String` binds the borrowed object (a handle in the IR), without consuming it; the vector is read twice. Run through rustc, the IR interpreter and the JIT (ir_corpus_oracle)."
+}
