@@ -37,3 +37,15 @@ sans interprétation ajoutée.
   conflit, CI verte. La PR a été fusionnée (`578af68`).
 - **T1 et T11** : explications données en conversation. Aucune décision n'a
   encore été prise ; D9 reste **différée** jusqu'à la mise en production.
+
+## 2026-11-24 — « on suit ta recommandation »
+
+- **V2-G6 — PR #209** : fusion vers `dev` autorisée (CI entièrement verte).
+- **V2-G7 — T1** : voie B est le backend de référence ; voie C (JIT
+  Cranelift sur l'IR) reste le moteur de développement vérifié par oracle.
+- **V2-G8 — Bornes de tableau dans l'IR (EXPR-7.6)** : un terminateur de
+  trap dédié, avec son message, sera introduit en IR 1.5. Le validateur rt
+  (INV-05) n'est pas relâché.
+- **V2-G9 — `rt_budget`** : le travail d'un bloc sera borné par le carburant
+  consommé (déterministe), en plus du temps mesuré. Aucun seuil existant
+  n'est retiré ni affaibli.
