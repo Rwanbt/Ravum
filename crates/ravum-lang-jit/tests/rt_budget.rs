@@ -243,6 +243,17 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
     // guarantees above (fuel, which stay blocking everywhere).
     let p50 = q(&cpu_times, 0.5);
     let p999 = q(&cpu_times, 0.999);
+    // Machine-readable temporal evidence, parsed by
+    // tools/qualification/rt_budget_physical.sh (never inferred from the
+    // absence of a failure).
+    let stats = format!(
+        "cpu_ns p50={} p95={} p99={} p999={} max={} cpu_misses={cpu_misses} wall_misses={wall_misses} preempted={preempted}",
+        p50.as_nanos(),
+        q(&cpu_times, 0.95).as_nanos(),
+        q(&cpu_times, 0.99).as_nanos(),
+        p999.as_nanos(),
+        cpu_times.last().unwrap().as_nanos()
+    );
     match virtualized() {
         Some(true) => {
             // An identified virtual runner: the hypervisor's steal time is
@@ -250,9 +261,7 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
             // attributed to the work. The times are reported and the
             // temporal verdict is INCONCLUSIVE, never PASS. A regression
             // guard stays blocking on the median, which steal does not move.
-            eprintln!(
-                "T16 temporal: INCONCLUSIVE (virtualized runner) cpu_misses={cpu_misses} wall_misses={wall_misses} preempted={preempted} p50={p50:?} p99.9={p999:?}"
-            );
+            eprintln!("T16 temporal: INCONCLUSIVE (virtualized runner) {stats}");
             assert!(p50 < DEADLINE / 10, "regression: cpu p50 {p50:?}");
         }
         // A physical machine, or one that cannot be identified (never an
@@ -265,7 +274,7 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
             // A wall-clock miss is only acceptable when the thread was
             // preempted (non-RT scheduler): never when it was working.
             assert_eq!(wall_misses, preempted, "a wall miss without preemption");
-            eprintln!("T16 temporal: blocking assertions held (host not identified as virtual)");
+            eprintln!("T16 temporal: PASS (host not identified as virtual) {stats}");
         }
     }
 }
@@ -374,4 +383,62 @@ fn a_spinning_edit_burns_exactly_one_budget_of_fuel() {
     assert_eq!(rt.process_f32(1.0), 0.5);
     // One unit per function entry (the recursion bound), no loop.
     assert_eq!(rt.last_fuel_used(), 1);
+}
+
+/// V2-G10: when the re-run after rollback traps too, the call is bounded by
+/// two attempts (`RT_FUEL_MAX_PER_CALL`), outputs 0 and never retries again.
+#[test]
+fn a_call_whose_rerun_also_traps_is_bounded_by_two_attempts() {
+    use ravum_lang_jit::hot::RT_FUEL_MAX_PER_CALL;
+    let spin = |t: &str| {
+        format!("fn gain(x: {t}) -> {t} effects() {{\n    let mut i: i64 = 0;\n    while i >= 0 {{\n        i = i + 0;\n    }}\n    return x;\n}}\n")
+    };
+    let spin2 = |t: &str| spin(t).replace("i + 0", "i + 0 + 0");
+    for t in ["f32", "f64"] {
+        let (mut e, mut rt) = HotEngine::start(&compile_source(&spin(t)).unwrap(), "gain").unwrap();
+        e.update(&compile_source(&spin2(t)).unwrap()).unwrap();
+        rt.poll();
+        let y = if t == "f32" {
+            rt.process_f32(1.0) as f64
+        } else {
+            rt.process_f64(1.0)
+        };
+        assert_eq!(y, 0.0, "{t}: both attempts trapped");
+        assert_eq!(
+            rt.last_fuel_used(),
+            RT_FUEL_MAX_PER_CALL,
+            "{t}: two attempts, no third"
+        );
+        assert_eq!(RT_FUEL_MAX_PER_CALL, 2 * RT_FUEL);
+    }
+}
+
+/// V2-G10 with state (HR-1.5): both attempts trap, the state is the one
+/// before the call, and the fuel is the sum of the two attempts.
+#[test]
+fn a_dsp_call_whose_rerun_also_traps_keeps_its_state() {
+    let src = |extra: &str| {
+        format!("struct State {{\n    z: f32,\n}}\n\nfn process_sample(state: &mut State, input: f32) -> f32 effects() {{\n    state.z = state.z + 1.0;\n    let mut i: i64 = 0;\n    while i >= 0 {{\n        i = i + 0{extra};\n    }}\n    return state.z;\n}}\n")
+    };
+    let (mut e, mut rt) =
+        HotEngine::start(&compile_source(&src("")).unwrap(), "process_sample").unwrap();
+    let before = rt.state_words().to_vec();
+    e.update(&compile_source(&src(" + 0")).unwrap()).unwrap();
+    rt.poll();
+    assert_eq!(rt.process_sample(0.5), 0.0);
+    assert_eq!(
+        rt.state_words(),
+        &before[..],
+        "state restored after both traps"
+    );
+    assert_eq!(rt.last_fuel_used(), 2 * RT_FUEL);
+}
+
+/// `set_fuel_budget` refuses a budget whose two-attempt total cannot be
+/// represented (checked on the host side, outside the audio callback).
+#[test]
+#[should_panic(expected = "the total of two attempts must fit a u64")]
+fn a_fuel_budget_whose_total_overflows_is_refused() {
+    let (_e, mut rt) = HotEngine::start(&compile_source(OK).unwrap(), "gain").unwrap();
+    rt.set_fuel_budget(u64::MAX / 2 + 1);
 }

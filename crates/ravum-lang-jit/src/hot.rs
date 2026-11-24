@@ -203,15 +203,30 @@ pub struct HotEngine {
     migrating: Option<(Box<Version>, Module, u64)>,
 }
 
-/// Fuel of one real-time call (one sample): each loop back-edge and each
+/// Fuel of one real-time **attempt** (V2-G10): each loop back-edge and each
 /// function entry costs 1. An edit that loops or recurses without end traps
-/// after this budget and the runner rolls back to the previous version, so
-/// one call costs at most `RT_FUEL` units (≈ 0.25 ms for a minimal loop on
-/// the reference machine, below a 64-frame block at 48 kHz; a loop with a
-/// larger body costs proportionally more per unit). Legitimate DSP code
-/// uses far less (a 64-tap filter: 64). Hosts can tune it:
-/// [`RtRunner::set_fuel_budget`].
+/// after this budget and the runner rolls back to the previous version.
+///
+/// Budgets, made explicit:
+/// - **per attempt**: `RT_FUEL` (or the host's [`RtRunner::set_fuel_budget`]);
+/// - **rollback re-run**: the previous version runs the same call once more,
+///   with its own budget of the same size;
+/// - **total per call**: therefore at most twice the budget,
+///   [`RT_FUEL_MAX_PER_CALL`] by default (a call is never retried more
+///   than once);
+/// - **per audio block**: the block length times the total per call.
+///
+/// Fuel is a work bound in the fuel model, **not** a time bound: the time a
+/// unit costs depends on the code and the machine, and is qualified
+/// separately on physical hardware (`tools/qualification/`). At the default,
+/// one attempt of a minimal loop is about 0.25 ms on the reference machine.
+/// Legitimate DSP code uses far less (a 64-tap filter: 64).
 pub const RT_FUEL: u64 = 100_000;
+
+/// V2-G10: bound on the fuel of one call, all attempts included (the
+/// trapping attempt plus the single re-run after rollback), at the default
+/// budget.
+pub const RT_FUEL_MAX_PER_CALL: u64 = 2 * RT_FUEL;
 
 /// Real-time side: calls the entry and switches versions at safepoints.
 pub struct RtRunner {
@@ -803,9 +818,17 @@ impl RtRunner {
         }
     }
 
-    /// Per-call fuel budget (see [`RT_FUEL`]); 0 is refused (no call could run).
+    /// Per-**attempt** fuel budget (see [`RT_FUEL`]); a call costs at most
+    /// twice this (one re-run after rollback). 0 is refused (no call could
+    /// run), and so is a budget whose doubled total would not fit a `u64`:
+    /// the total of a call is then always representable. Called by the host
+    /// outside the audio callback.
     pub fn set_fuel_budget(&mut self, fuel: u64) {
         assert!(fuel > 0, "fuel budget");
+        assert!(
+            fuel <= u64::MAX / 2,
+            "fuel budget: the total of two attempts must fit a u64"
+        );
         self.fuel = fuel;
     }
 
@@ -847,7 +870,9 @@ impl RtRunner {
         }
         if self.roll_back(code) {
             let (y, code) = call_f32(&mut self.ctx, self.fuel, &self.current, x);
-            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }
@@ -869,7 +894,9 @@ impl RtRunner {
         self.state.copy_from_slice(&self.backup);
         if self.roll_back(code) {
             let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
-            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }
@@ -930,7 +957,9 @@ impl RtRunner {
         }
         if self.roll_back(code) {
             let (y, code) = call_f64(&mut self.ctx, self.fuel, &self.current, x);
-            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }
