@@ -2216,14 +2216,22 @@ fn f() -> Option<i32> {
 
 #[test]
 fn method_resolution_errors() {
-    // TYP-14.4: `Vec<T>::clone` requires a `Copy` element.
+    // TYP-14.4 / OWN-6.14: `Vec<T>::clone` requires a clonable element; a
+    // resource (`Sender<T>`) is not, a `String` is.
     expect_code(
+        r#"
+fn f(v: Vec<Sender<i64>>) {
+    let c = v.clone();
+}
+"#,
+        "E-RES-UNKNOWN",
+    );
+    accept(
         r#"
 fn f(v: Vec<String>) {
     let c = v.clone();
 }
 "#,
-        "E-RES-UNKNOWN",
     );
     // An unknown method on a nominal type.
     expect_code(

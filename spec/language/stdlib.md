@@ -415,7 +415,7 @@ impl<T> Vec<T> {
     pub fn push(&mut self, x: T) effects(alloc)
     pub fn pop(&mut self) -> Option<T> effects()
     pub fn clear(&mut self) effects()
-    pub fn clone(&self) -> Vec<T> effects(alloc)   // disponible seulement si T: Copy
+    pub fn clone(&self) -> Vec<T> effects(alloc)   // disponible seulement si T est clonable (OWN-6.14)
     pub fn as_slice(&self) -> &[T] effects()       // vue &[T] utilisable dans l'instruction
 }
 
@@ -456,8 +456,8 @@ fn main() {
 ```
 
 ```rv
-// NÉGATIF — E-RES-UNKNOWN (clone d'un Vec de non-Copy)
-fn f(v: Vec<String>) -> Vec<String> { return v.clone(); }
+// NÉGATIF — E-RES-UNKNOWN (clone d'un Vec de ressources, OWN-6.14)
+fn f(v: Vec<Sender<i64>>) -> Vec<Sender<i64>> { return v.clone(); }
 // NÉGATIF — E-RES-UNKNOWN (méthode absente)
 fn g(v: Vec<i32>) -> Option<i32> { return v.get(0); }
 ```
