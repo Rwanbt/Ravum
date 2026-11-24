@@ -503,5 +503,8 @@ fn match_on_mut_vec_aggregate_element_is_refused_not_approximated() {
     let m = compile_source(shared).unwrap();
     let (r, _) = run_with_output(&m, "check", DEFAULT_STEPS);
     assert_eq!(r.render(), "value i64 42");
-    assert_eq!(compile(&m).unwrap().run("check", DEFAULT_FUEL).render(), "value i64 42");
+    assert_eq!(
+        compile(&m).unwrap().run("check", DEFAULT_FUEL).render(),
+        "value i64 42"
+    );
 }
