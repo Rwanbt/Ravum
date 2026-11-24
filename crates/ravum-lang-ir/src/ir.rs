@@ -564,7 +564,20 @@ impl Module {
                         b(*else_to)?
                     }
                     Term::Return(Some(x)) => l(*x)?,
-                    _ => {}
+                    Term::TrapBounds { len, index } => {
+                        for x in [*len, *index] {
+                            l(x)?;
+                            if f.locals[x as usize] != Ty::U64 {
+                                return Err(format!(
+                                    "{}: bounds trap operand {x} is not u64",
+                                    f.name
+                                ));
+                            }
+                        }
+                    }
+                    // Exhaustive on purpose: a new terminator must state
+                    // what it validates (fail-closed).
+                    Term::Return(None) | Term::Trap(_) | Term::Unreachable => {}
                 }
             }
         }

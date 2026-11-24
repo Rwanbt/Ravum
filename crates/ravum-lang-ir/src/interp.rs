@@ -129,6 +129,13 @@ pub fn run_with_output(module: &Module, entry: &str, steps: u64) -> (RunOutcome,
 }
 
 fn run_with_output_here(module: &Module, entry: &str, steps: u64) -> (RunOutcome, Output) {
+    // Fail-closed: a malformed module never runs (same check as the JIT).
+    if let Err(e) = module.validate() {
+        return (
+            RunOutcome::Fault(format!("invalid IR: {e}")),
+            Output::default(),
+        );
+    }
     let Some(id) = module.func_id(entry) else {
         return (
             RunOutcome::Fault(format!("no function `{entry}`")),
@@ -177,6 +184,9 @@ fn run_dsp_here(
     inputs: &[f32],
     steps: u64,
 ) -> Result<Vec<f32>, RunOutcome> {
+    module
+        .validate()
+        .map_err(|e| RunOutcome::Fault(format!("invalid IR: {e}")))?;
     let size = module.state.as_ref().map(|s| s.size as usize).unwrap_or(0);
     let mut m = Machine::new(module, steps, size);
     let state = Val::Int(Ty::Ptr, STATE_BASE as i128);

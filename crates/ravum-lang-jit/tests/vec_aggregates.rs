@@ -449,3 +449,39 @@ fn main() -> () effects(io, alloc, panic) {
         "{render}"
     );
 }
+
+/// Fail-closed (IR 1.5): the JIT and the hot-swap engine refuse a bounds
+/// trap whose operands are out of range or not `u64`, before compiling.
+#[test]
+fn the_jit_refuses_a_malformed_bounds_trap() {
+    use ravum_lang_ir::ir::{Term, Ty};
+    let src = "fn gain(x: f32) -> f32 effects() {\n    let a: [f32; 2] = [x, x];\n    let i: usize = 2;\n    return a[i];\n}\n";
+    let m = ravum_lang_ir::compile_source(src).unwrap();
+    assert!(ravum_lang_jit::compile(&m).is_ok());
+    let f = m.func_id("gain").unwrap() as usize;
+    let bi = m.functions[f]
+        .blocks
+        .iter()
+        .position(|b| matches!(b.term, Term::TrapBounds { .. }))
+        .expect("a bounds trap");
+    let Term::TrapBounds { len, .. } = m.functions[f].blocks[bi].term else {
+        unreachable!()
+    };
+    let f32_local = m.functions[f]
+        .locals
+        .iter()
+        .position(|t| *t == Ty::F32)
+        .unwrap() as u32;
+    for (l, i) in [(len, 7_777), (len, f32_local)] {
+        let mut bad = m.clone();
+        bad.functions[f].blocks[bi].term = Term::TrapBounds { len: l, index: i };
+        assert!(
+            ravum_lang_jit::compile(&bad).is_err(),
+            "JIT compiled a malformed trap"
+        );
+        assert!(
+            ravum_lang_jit::hot::HotEngine::start(&bad, "gain").is_err(),
+            "hot engine started a malformed module"
+        );
+    }
+}
