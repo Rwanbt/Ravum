@@ -143,3 +143,36 @@ contredit).
   - n'interroger le responsable que pour les décisions non délégables.
 
   Rien sur `main`, aucune publication ; Unifia et le Web restent reportés.
+
+## Autonomie conditionnelle et qualification temporelle (2026-11-24, transmises par le responsable)
+
+- **UI-D19 — Fusion autonome de P1 à P5** (RFC-UI-LANG-1) vers `dev`
+  uniquement, sans nouvelle demande, si **toutes** ces conditions sont
+  réunies :
+  - branche à jour par rapport à `dev` ;
+  - CI verte sur le SHA exact ;
+  - conformité aux spécifications et décisions ratifiées ;
+  - tests positifs, négatifs, adversariaux et différentiels ;
+  - parité B/C sur le périmètre revendiqué ;
+  - aucune régression de sécurité mémoire ni affaiblissement de contrat ;
+  - aucune dette connue non traitée, aucune promotion artificielle de gate,
+    aucun conflit.
+
+  Sont exclus : les changements de sémantique non ratifiés, l'adoption de
+  dépendances, `main`, les releases et les déploiements. Une CI verte est
+  nécessaire, mais pas suffisante.
+- **V2-G10 — `rt_budget`** : la garantie **algorithmique** et la
+  qualification **temporelle matérielle** sont séparées.
+  - **Bloquant partout** : borne par carburant (travail **total** d'un appel,
+    tentative échouée et réexécution après rollback comprises), pile,
+    absence d'allocation et de blocage RT, sécurité mémoire, correction du
+    rollback, exactitude, invariants RT.
+  - **Runner virtualisé identifié** : les mesures de temps restent
+    obligatoires et rapportées (CPU, écoulé, p50 à p99.9, max, dépassements,
+    charge, runner, carburant). Le verdict temporel est `INCONCLUSIVE`,
+    **jamais** `PASS`. Une alerte de régression statistique est conservée.
+  - **Machine physique ou plateforme non identifiée** : les assertions de
+    temps restent **bloquantes**, avec les seuils actuels. Une détection
+    incertaine ne vaut jamais exemption.
+  - Le carburant mesure du travail selon un modèle ; ce n'est **pas** une
+    preuve de temps d'exécution maximal.

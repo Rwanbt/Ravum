@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-as-str-escape",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "OWN-6.8 provenance (MUST): a view derived from a bounded borrow () is bounded too and cannot be returned; it is not mistaken for static text."
+}

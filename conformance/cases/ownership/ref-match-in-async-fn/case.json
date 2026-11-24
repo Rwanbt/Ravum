@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-in-async-fn",
+  "mode": "compile-fail",
+  "expect_codes": ["E-CONC-REF-ACROSS-AWAIT"],
+  "notes": "OWN-6.12 (MUST): a bounded borrow never lives across an `.await`. Inside an `async fn`, the bindings of a match on a reference are references, which CONC refuses to bind at all, so a borrow held across `.await` cannot be written."
+}

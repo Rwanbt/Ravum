@@ -1,0 +1,6 @@
+{
+  "id": "run/structural-clone",
+  "mode": "run-pass",
+  "stdout_contains": "21522406312\n",
+  "notes": "OWN-6.14 / P5: deep structural clone of a struct with a String, an enum with String and struct payloads, a tuple, a Vec of such structs and a Vec<String>; mutating the clones leaves the originals unchanged. Run through rustc, the IR interpreter and the JIT (ir_corpus_oracle)."
+}

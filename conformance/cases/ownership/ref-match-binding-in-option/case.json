@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-binding-in-option",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "OWN-6.8 / OWN-6.1 (MUST): a bounded borrow cannot be put in a user-built Option."
+}

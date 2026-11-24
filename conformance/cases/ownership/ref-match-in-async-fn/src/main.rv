@@ -1,0 +1,24 @@
+use std::task;
+
+enum N {
+    L(i64),
+    M(i64),
+}
+
+async fn tick() -> i64 effects(async) {
+    task::yield_now().await;
+    1
+}
+
+async fn f(n: N) -> i64 effects(async) {
+    let owned = n;
+    match &owned {
+        N::L(x) => {
+            let k = tick().await;
+            *x + k
+        }
+        N::M(y) => *y,
+    }
+}
+
+fn main() {}

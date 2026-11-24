@@ -1,0 +1,6 @@
+{
+  "id": "ownership/borrowed-for-move-out",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-MOVE-OUT-OF-BORROW"],
+  "notes": "OWN-6.11 (MUST): a non-Copy element cannot be moved out through the item."
+}

@@ -1,0 +1,11 @@
+struct C {
+    a: i64,
+    b: bool,
+}
+
+fn f(c: &C) -> i64 effects() {
+    let d = c.clone();
+    d.a
+}
+
+fn main() {}

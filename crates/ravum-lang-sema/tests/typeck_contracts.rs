@@ -2439,11 +2439,22 @@ const POSITIF_TROP_GRAND: i8 = 128;
 
 #[test]
 fn for_over_a_borrowed_collection_is_a_type_mismatch() {
-    // EXPR-6.4 / TYP-5.8 (MUST): the collection form consumes an **owned**
-    // `Vec<T>`; a `&Vec<T>` or `&[T]` is iterated by index. The checker used to
-    // accept both and the ownership pass then reported E-OWN-REF-ESCAPE, i.e. a
-    // rule owned by the type checker was enforced by the wrong phase with the
-    // wrong code.
+    // EXPR-6.4 (MUST): the collection form takes an owned `Vec<T>` or, since
+    // OWN-6.13 (RFC-UI-LANG-1 P2), a borrowed `Vec` whose items are `&T`; a
+    // slice or an array is iterated by index. The item of `for x in v` with
+    // `v: &Vec<i32>` is `&i32`: reading it needs `*x`, and `s += x` mixes
+    // `i32` and `&i32`.
+    accept(
+        r#"
+fn total(v: &Vec<i32>) -> i32 {
+    let mut s = 0;
+    for x in v {
+        s += *x;
+    }
+    s
+}
+"#,
+    );
     expect_code(
         r#"
 fn total(v: &Vec<i32>) -> i32 {
@@ -2515,4 +2526,36 @@ fn an_error_component_is_compatible_inside_every_constructor() {
         let src = format!("fn main() {{\n    {init}\n}}\n");
         assert_eq!(codes(&run(&src)), ["E-RES-UNKNOWN"], "{init}");
     }
+}
+
+/// DIAG-4.2: one error per cause. The loop variable of a refused `for` has
+/// the error type; a field read on it, an operator and a compound assignment
+/// using it add no diagnostic of their own (the compound assignment used to
+/// report `+=` for `usize` and `<error>`).
+#[test]
+fn an_error_typed_operand_adds_no_cascade() {
+    let result = run(r#"
+struct Task {
+    title: String,
+    done: bool,
+}
+
+fn pending(tasks: &[Task; 2]) -> usize {
+    let mut n: usize = 0;
+    for t in tasks {
+        if !t.done {
+            n += 1;
+        }
+        n += t.title.len();
+        n = n + t.title.len();
+    }
+    n
+}
+"#);
+    assert_eq!(
+        codes(&result),
+        vec!["E-TYP-MISMATCH".to_string()],
+        "{}",
+        describe(&result)
+    );
 }

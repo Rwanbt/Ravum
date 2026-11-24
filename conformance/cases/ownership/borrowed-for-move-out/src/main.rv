@@ -1,0 +1,8 @@
+fn f(v: &Vec<String>) -> String {
+    for s in v {
+        return *s;
+    }
+    String::new()
+}
+
+fn main() {}

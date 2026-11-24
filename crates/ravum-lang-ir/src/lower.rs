@@ -516,6 +516,21 @@ impl FnTable {
 struct LoopCtx {
     break_to: BlockId,
     continue_to: BlockId,
+    /// OWN-6.8 / P2: length of `loop_wb` when this loop was entered; a
+    /// `break` or `continue` of this loop writes back the entries from here.
+    wb_base: usize,
+}
+
+/// OWN-6.8 / P2: a `&mut` item of `for x in &mut v` lent as a private copy
+/// for one iteration: scalar slot or materialized aggregate, stored back
+/// into `v[i]` on **every** exit of the iteration (end of body, `continue`,
+/// `break`, `return`, `?`), so the copy is never observable (RFC §2.1).
+struct LoopWriteBack {
+    h: Local,
+    i: Local,
+    ty: Type,
+    addr: Local,
+    agg: Option<Local>,
 }
 
 /// Where a value lives.
@@ -545,6 +560,12 @@ struct FnLower<'a> {
     /// (declaration span, name) → (slot, checker type). Aggregate variables
     /// hold the address of their own storage.
     vars: BTreeMap<(Span, String), (Local, Type)>,
+    /// Pending per-iteration write-backs of `for x in &mut v` (OWN-6.8 / P2).
+    loop_wb: Vec<LoopWriteBack>,
+    /// OWN-6.8 / P1: `Some(mutable)` while binding the patterns of a match on
+    /// a reference: bindings are the addresses (or handles) of the matched
+    /// parts, never copies.
+    bind_ref: Option<bool>,
     /// `let` scalars whose address is taken (`&x`, `&mut x`): they live in a
     /// stack slot from their declaration on, `mem_vars` holds those slots.
     borrowed: std::collections::BTreeSet<(Span, String)>,
@@ -628,6 +649,8 @@ impl<'a> FnLower<'a> {
             }],
             cur: 0,
             vars: BTreeMap::new(),
+            loop_wb: Vec::new(),
+            bind_ref: None,
             borrowed: std::collections::BTreeSet::new(),
             mem_vars: std::collections::BTreeSet::new(),
             writebacks: Vec::new(),
@@ -979,6 +1002,8 @@ impl<'a> FnLower<'a> {
     }
 
     fn return_term(&mut self, v: Local) -> R<Term> {
+        // Every pending `for x in &mut v` copy is stored back first.
+        self.flush_wb(0)?;
         self.check_ensures(v)?;
         if let Some((def, recv)) = self.inv_receiver {
             if !self.dead {
@@ -1993,6 +2018,7 @@ impl<'a> FnLower<'a> {
                 self.loops.push(LoopCtx {
                     break_to: exit,
                     continue_to: head,
+                    wb_base: self.loop_wb.len(),
                 });
                 self.block(body)?;
                 self.loops.pop();
@@ -2010,6 +2036,7 @@ impl<'a> FnLower<'a> {
                 self.loops.push(LoopCtx {
                     break_to: exit,
                     continue_to: head,
+                    wb_base: self.loop_wb.len(),
                 });
                 self.block(body)?;
                 self.loops.pop();
@@ -2019,20 +2046,22 @@ impl<'a> FnLower<'a> {
             }
             ExprKind::For { pat, iter, body } => self.for_range(pat, iter, body),
             ExprKind::Break => {
-                let to = self
+                let (to, base) = self
                     .loops
                     .last()
-                    .map(|l| l.break_to)
+                    .map(|l| (l.break_to, l.wb_base))
                     .ok_or_else(|| LowerError::MissingFact("loop of `break`".into()))?;
+                self.flush_wb(base)?;
                 self.terminate(Term::Jump(to));
                 Ok(self.unit())
             }
             ExprKind::Continue => {
-                let to = self
+                let (to, base) = self
                     .loops
                     .last()
-                    .map(|l| l.continue_to)
+                    .map(|l| (l.continue_to, l.wb_base))
                     .ok_or_else(|| LowerError::MissingFact("loop of `continue`".into()))?;
+                self.flush_wb(base)?;
                 self.terminate(Term::Jump(to));
                 Ok(self.unit())
             }
@@ -2176,8 +2205,17 @@ impl<'a> FnLower<'a> {
             self.new_local(map_ty(&t)?)
         };
         let st = self.type_of(scrutinee)?;
-        if matches!(st, Type::Ref { .. }) {
-            return unsupported("`match` on a reference");
+        if let Type::Ref { mutable, inner } = &st {
+            return self.match_ref(
+                e,
+                scrutinee,
+                arms,
+                *mutable,
+                (**inner).clone(),
+                result,
+                &t,
+                agg,
+            );
         }
         let place = match self.place(scrutinee)? {
             Place::Reg(l) => Place::Reg(l),
@@ -2204,6 +2242,58 @@ impl<'a> FnLower<'a> {
         }
         // The checker proved exhaustiveness; reaching here is a compiler bug,
         // reported as a fault, never a value.
+        self.set_term(Term::Unreachable);
+        self.switch_to(join);
+        Ok(result)
+    }
+
+    /// OWN-6.8 / P1: `match` on `&T` / `&mut T`. The reference is the
+    /// address of `T` (a handle for a heap object); arms test the value in
+    /// place and bind the addresses of its parts, so writes through a `&mut`
+    /// binding land in the matched value itself (no copy, no write-back).
+    #[allow(clippy::too_many_arguments)]
+    fn match_ref(
+        &mut self,
+        _e: &Expr,
+        scrutinee: &Expr,
+        arms: &[ast::MatchArm],
+        mutable: bool,
+        inner: Type,
+        result: Local,
+        t: &Type,
+        agg: bool,
+    ) -> R<Local> {
+        let heap = map_ty(&Type::Ref {
+            mutable,
+            inner: Box::new(inner.clone()),
+        })? == Ty::Obj;
+        // `&mut v[i]` of an aggregate `Vec` is refused by `expr` itself
+        // (its copy is lent to calls only): limit L-OWN-020-1.
+        let addr = self.expr(scrutinee)?;
+        // A borrow of a heap object (`&String`, `&Vec<T>`) is its handle:
+        // bindings receive the handle itself (see `pat_bind`).
+        let place = if heap {
+            Place::Reg(addr)
+        } else {
+            Place::Mem {
+                addr,
+                off: 0,
+                ty: inner.clone(),
+            }
+        };
+        let join = self.new_block();
+        for arm in arms {
+            let next = self.new_block();
+            self.pat_test(&arm.pat, &place, &inner, next)?;
+            let outer = self.bind_ref.replace(mutable);
+            let bound = self.pat_bind(&arm.pat, &place, &inner);
+            self.bind_ref = outer;
+            bound?;
+            let v = self.expr(&arm.body)?;
+            self.join_value(result, v, t, agg)?;
+            self.set_term(Term::Jump(join));
+            self.switch_to(next);
+        }
         self.set_term(Term::Unreachable);
         self.switch_to(join);
         Ok(result)
@@ -2303,6 +2393,26 @@ impl<'a> FnLower<'a> {
     /// Bind the variables of a pattern that matched the value at `p`.
     fn pat_bind(&mut self, pat: &ast::Pat, p: &Place, t: &Type) -> R<()> {
         match &pat.kind {
+            PatKind::Binding { name, .. } if self.bind_ref.is_some() => {
+                let mutable = self.bind_ref == Some(true);
+                let rt = Type::Ref {
+                    mutable,
+                    inner: Box::new(t.clone()),
+                };
+                let slot = if map_ty(&rt)? == Ty::Obj {
+                    // `&String` / `&Vec`: the handle itself.
+                    self.read_place(p)?
+                } else {
+                    let Place::Mem { addr, off, .. } = p else {
+                        return Err(LowerError::MissingFact(
+                            "bounded borrow of a register".into(),
+                        ));
+                    };
+                    self.offset(*addr, *off)
+                };
+                self.vars.insert((pat.span, name.name.clone()), (slot, rt));
+                Ok(())
+            }
             PatKind::Binding { name, .. } => {
                 let slot = if Layouts::is_agg(t) {
                     let Place::Mem { addr, off, .. } = p else {
@@ -2626,8 +2736,12 @@ impl<'a> FnLower<'a> {
     }
 
     fn for_range(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
-        if matches!(self.type_of(iter)?, Type::Vec(_)) {
-            return self.for_vec(pat, iter, body);
+        match self.type_of(iter)? {
+            Type::Vec(_) => return self.for_vec(pat, iter, body),
+            Type::Ref { mutable, inner } if matches!(*inner, Type::Vec(_)) => {
+                return self.for_vec_ref(pat, iter, body, mutable);
+            }
+            _ => {}
         }
         let ExprKind::Range {
             start: Some(start),
@@ -2687,6 +2801,7 @@ impl<'a> FnLower<'a> {
         self.loops.push(LoopCtx {
             break_to: exit,
             continue_to: step,
+            wb_base: self.loop_wb.len(),
         });
         self.block(body)?;
         self.loops.pop();
@@ -2762,6 +2877,7 @@ impl<'a> FnLower<'a> {
         self.loops.push(LoopCtx {
             break_to: exit,
             continue_to: step,
+            wb_base: self.loop_wb.len(),
         });
         self.block(body)?;
         self.loops.pop();
@@ -2781,6 +2897,356 @@ impl<'a> FnLower<'a> {
         self.set_term(Term::Jump(head));
         self.switch_to(exit);
         Ok(self.unit())
+    }
+
+    /// Store back the pending `for x in &mut v` copies from index `from`
+    /// (innermost first), without forgetting them: the other exits of the
+    /// same iterations still need them.
+    fn flush_wb(&mut self, from: usize) -> R<()> {
+        for k in (from..self.loop_wb.len()).rev() {
+            let (h, i, addr, agg, ty) = {
+                let w = &self.loop_wb[k];
+                (w.h, w.i, w.addr, w.agg, w.ty.clone())
+            };
+            match agg {
+                Some(o) => self.vec_store(o, 0, &ty, addr)?,
+                None => {
+                    let lt = map_ty(&ty)?;
+                    let x = self.new_local(lt);
+                    self.emit(Inst::Load {
+                        dst: x,
+                        ty: lt,
+                        addr,
+                        offset: 0,
+                    });
+                    self.emit(Inst::VecSet { h, i, x });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// OWN-6.8 / P2: `for x in &v` / `for x in &mut v` over a `Vec<T>`.
+    /// `x` is the element's handle for a heap object (writes act on the
+    /// object itself), otherwise the address of a copy of the element; under
+    /// `&mut` that copy is stored back on every exit of the iteration.
+    fn for_vec_ref(
+        &mut self,
+        pat: &ast::Pat,
+        iter: &Expr,
+        body: &AstBlock,
+        mutable: bool,
+    ) -> R<Local> {
+        let name = match &pat.kind {
+            PatKind::Binding { name, .. } => Some(name.name.clone()),
+            PatKind::Wild => None,
+            _ => return unsupported("`for` pattern"),
+        };
+        let Type::Ref { inner, .. } = self.type_of(iter)? else {
+            return Err(LowerError::MissingFact("`for` over a non-reference".into()));
+        };
+        let Type::Vec(et) = *inner else {
+            return Err(LowerError::MissingFact("`for` over a non-vector".into()));
+        };
+        let et = *et;
+        let agg = self.vec_agg_elem(iter)?.is_some();
+        let rt = Type::Ref {
+            mutable,
+            inner: Box::new(et.clone()),
+        };
+        let heap = map_ty(&rt)? == Ty::Obj;
+        let elem = if agg || heap {
+            Ty::Obj
+        } else {
+            self.vec_elem(iter)?
+        };
+        let h = self.expr(iter)?;
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, bodyb, step, exit) = (
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+        );
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: bodyb,
+            else_to: exit,
+        });
+        self.switch_to(bodyb);
+        let raw = self.new_local(elem);
+        self.heap(Some(raw), HeapOp::VecGet, Some(h), Some(i));
+        let base = self.loop_wb.len();
+        let var = if heap {
+            raw
+        } else if agg {
+            let addr = self.vec_materialize(raw, 0, &et)?;
+            if mutable {
+                self.loop_wb.push(LoopWriteBack {
+                    h,
+                    i,
+                    ty: et.clone(),
+                    addr,
+                    agg: Some(raw),
+                });
+            }
+            addr
+        } else {
+            let slot = self.alloc(&et)?;
+            self.emit(Inst::Store {
+                ty: elem,
+                addr: slot,
+                offset: 0,
+                src: raw,
+            });
+            if mutable {
+                self.loop_wb.push(LoopWriteBack {
+                    h,
+                    i,
+                    ty: et.clone(),
+                    addr: slot,
+                    agg: None,
+                });
+            }
+            slot
+        };
+        if let Some(name) = name {
+            self.vars.insert((pat.span, name), (var, rt));
+        }
+        self.loops.push(LoopCtx {
+            break_to: exit,
+            continue_to: step,
+            wb_base: base,
+        });
+        self.block(body)?;
+        self.loops.pop();
+        self.flush_wb(base)?;
+        self.loop_wb.truncate(base);
+        self.set_term(Term::Jump(step));
+        self.switch_to(step);
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+        Ok(self.unit())
+    }
+
+    /// Open a counted loop over the elements of vector `h`: the current
+    /// block becomes the body, `i` the index. Close it with `loop_close`.
+    fn loop_open(&mut self, h: Local) -> (Local, BlockId, BlockId) {
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, body, exit) = (self.new_block(), self.new_block(), self.new_block());
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: body,
+            else_to: exit,
+        });
+        self.switch_to(body);
+        (i, head, exit)
+    }
+
+    fn loop_close(&mut self, i: Local, head: BlockId, exit: BlockId) {
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+    }
+
+    /// Whether a value of type `t` owns a heap object (`String`, `Vec`),
+    /// directly or in a field, payload or element.
+    fn has_heap(&self, t: &Type) -> R<bool> {
+        Ok(match t {
+            Type::String | Type::Vec(_) => true,
+            Type::Array { elem, .. } => self.has_heap(elem)?,
+            _ if Layouts::is_agg(t) => {
+                if let Some(vs) = self.layouts.variants(t)? {
+                    let mut any = false;
+                    for v in vs.iter().flatten() {
+                        any |= self.has_heap(v)?;
+                    }
+                    any
+                } else {
+                    let mut any = false;
+                    for (_, ft) in self.layouts.fields(t)? {
+                        any |= self.has_heap(&ft)?;
+                    }
+                    any
+                }
+            }
+            _ => false,
+        })
+    }
+
+    /// OWN-6.14: deep clone of heap object `h` of type `t` (`String` or
+    /// `Vec<T>`): a fresh object whose own heap parts are cloned too.
+    fn clone_heap(&mut self, h: Local, t: &Type) -> R<Local> {
+        let Type::Vec(e) = t else {
+            let d = self.new_local(Ty::Obj);
+            self.heap(Some(d), HeapOp::StrClone, Some(h), None);
+            return Ok(d);
+        };
+        let e = (**e).clone();
+        if !self.has_heap(&e)? && !Layouts::is_agg(&e) {
+            let d = self.new_local(Ty::Obj);
+            self.heap(Some(d), HeapOp::VecClone, Some(h), None);
+            return Ok(d);
+        }
+        let out = self.new_local(Ty::Obj);
+        self.heap(Some(out), HeapOp::VecNew, None, None);
+        let (i, head, exit) = self.loop_open(h);
+        let elem = self.new_local(Ty::Obj);
+        self.heap(Some(elem), HeapOp::VecGet, Some(h), Some(i));
+        let copy = if Layouts::is_agg(&e) {
+            // One word vector per element: materialize, deep-fix, rebuild.
+            let addr = self.vec_materialize(elem, 0, &e)?;
+            self.deep_fix(addr, 0, &e)?;
+            let o = self.new_local(Ty::Obj);
+            self.heap(Some(o), HeapOp::VecNew, None, None);
+            for (off, lt) in self.vec_leaves(&e)? {
+                let tmp = self.new_local(lt);
+                self.emit(Inst::Load {
+                    dst: tmp,
+                    ty: lt,
+                    addr,
+                    offset: off,
+                });
+                self.heap(None, HeapOp::VecPush, Some(o), Some(tmp));
+            }
+            o
+        } else {
+            self.clone_heap(elem, &e)?
+        };
+        self.heap(None, HeapOp::VecPush, Some(out), Some(copy));
+        self.loop_close(i, head, exit);
+        Ok(out)
+    }
+
+    /// OWN-6.14: after a shallow copy of a `t` at `addr + off`, replace every
+    /// heap handle it holds by a deep clone, so the copy shares nothing. An
+    /// enum (or `Option`, `Result`) is fixed under its current variant.
+    fn deep_fix(&mut self, addr: Local, off: u32, t: &Type) -> R<()> {
+        if !self.has_heap(t)? {
+            return Ok(());
+        }
+        match t {
+            Type::String | Type::Vec(_) => {
+                let h = self.new_local(Ty::Obj);
+                self.emit(Inst::Load {
+                    dst: h,
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                });
+                let c = self.clone_heap(h, t)?;
+                self.emit(Inst::Store {
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                    src: c,
+                });
+                Ok(())
+            }
+            Type::Array { elem, len } => {
+                let el = self.layouts.layout(elem)?;
+                let stride = round_up(el.size, el.align);
+                for k in 0..*len as u32 {
+                    self.deep_fix(addr, off + k * stride, elem)?;
+                }
+                Ok(())
+            }
+            _ => {
+                if let Some(vs) = self.layouts.variants(t)? {
+                    let tag = self.new_local(Ty::U32);
+                    self.emit(Inst::Load {
+                        dst: tag,
+                        ty: Ty::U32,
+                        addr,
+                        offset: off,
+                    });
+                    let join = self.new_block();
+                    for (v, payload) in vs.iter().enumerate() {
+                        let mut heap = false;
+                        for p in payload {
+                            heap |= self.has_heap(p)?;
+                        }
+                        if !heap {
+                            continue;
+                        }
+                        let k = self.tag_const(v);
+                        let is_v = self.new_local(Ty::Bool);
+                        self.emit(Inst::Bin {
+                            dst: is_v,
+                            op: BinOp::Eq,
+                            ty: Ty::U32,
+                            lhs: tag,
+                            rhs: k,
+                        });
+                        let (yes, next) = (self.new_block(), self.new_block());
+                        self.set_term(Term::Branch {
+                            cond: is_v,
+                            then_to: yes,
+                            else_to: next,
+                        });
+                        self.switch_to(yes);
+                        for (fo, ft) in self.layouts.variant_fields(t, v)? {
+                            self.deep_fix(addr, off + fo, &ft)?;
+                        }
+                        self.set_term(Term::Jump(join));
+                        self.switch_to(next);
+                    }
+                    self.set_term(Term::Jump(join));
+                    self.switch_to(join);
+                    Ok(())
+                } else {
+                    for (fo, ft) in self.layouts.fields(t)? {
+                        self.deep_fix(addr, off + fo, &ft)?;
+                    }
+                    Ok(())
+                }
+            }
+        }
     }
 
     /// IR v1.2: the scalar builtin methods whose semantics map exactly onto
@@ -3039,6 +3505,8 @@ impl<'a> FnLower<'a> {
                     | "Vec::is_empty"
                     | "Vec::clone"
                     | "Vec::pop"
+                    | "Clone::clone"
+                    | "Clone::copy"
             );
         if !known {
             return Ok(None);
@@ -3084,6 +3552,41 @@ impl<'a> FnLower<'a> {
             // `clone` of a `Vec` of aggregates: the checker allows it only for
             // `Copy` elements, whose words hold no handle, so cloning each
             // element's word vector is a deep copy.
+            ("Clone::clone" | "Clone::copy", []) => {
+                // OWN-6.14: a shallow copy, then every heap part cloned.
+                let t = match self.type_of(recv)? {
+                    Type::Ref { inner, .. } => *inner,
+                    t => t,
+                };
+                if !Layouts::is_agg(&t) {
+                    return unsupported("structural clone of a non-aggregate");
+                }
+                let dst = self.snapshot(h, &t)?;
+                self.deep_fix(dst, 0, &t)?;
+                dst
+            }
+            ("Vec::clone", [])
+                if {
+                    let e = match self.type_of(recv)? {
+                        Type::Vec(e) => Some(*e),
+                        Type::Ref { inner, .. } => match *inner {
+                            Type::Vec(e) => Some(*e),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    match e {
+                        Some(e) => self.has_heap(&e)?,
+                        None => false,
+                    }
+                } =>
+            {
+                let t = match self.type_of(recv)? {
+                    Type::Ref { inner, .. } => *inner,
+                    t => t,
+                };
+                self.clone_heap(h, &t)?
+            }
             ("Vec::clone", []) if self.vec_agg_elem(recv)?.is_some() => {
                 let out = self.new_local(Ty::Obj);
                 self.heap(Some(out), HeapOp::VecNew, None, None);

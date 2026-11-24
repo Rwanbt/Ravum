@@ -1,0 +1,24 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+struct W {
+    a: N,
+    b: N,
+}
+
+fn f(w: &mut W) -> i64 {
+    match &mut w.a {
+        N::M(v) => {
+            v.push(1);
+            match &w.a {
+                N::L(s) => 1,
+                N::M(u) => 2,
+            }
+        }
+        N::L(s) => 0,
+    }
+}
+
+fn main() {}

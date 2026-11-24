@@ -1,0 +1,17 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+fn g(n: &N) -> i64 {
+    0
+}
+
+fn f(n: &N) -> &String {
+    match n {
+        N::L(s) => s,
+        N::M(v) => panic("no text"),
+    }
+}
+
+fn main() {}

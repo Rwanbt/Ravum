@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-binding-stored",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "OWN-6.8 (MUST): a binding of a match on a reference is a bounded borrow; storing it in a let is E-OWN-REF-ESCAPE."
+}

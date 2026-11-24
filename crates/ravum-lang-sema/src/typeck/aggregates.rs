@@ -289,7 +289,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let ty = match &pat.kind {
             PatKind::Wild => expected.clone(),
             PatKind::Binding { mutable, name } => {
-                self.bind_local(&name.name, expected.clone(), *mutable, false, pat.span);
+                // OWN-6.8 / P1: under a match on a reference, a binding is a
+                // bounded reference to the matched part, not a move of it.
+                let bound = match self.pat_by_ref {
+                    Some(m) if !matches!(expected, Type::Error | Type::Never) => Type::Ref {
+                        mutable: m,
+                        inner: Box::new(expected.clone()),
+                    },
+                    _ => expected.clone(),
+                };
+                self.bind_local(&name.name, bound, *mutable, false, pat.span);
                 expected.clone()
             }
             PatKind::Lit(lit) => self.check_lit_pattern(pat, lit, expected),
@@ -335,7 +344,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.check_variant_pattern(pat, path, fields, expected)
             }
         };
-        self.facts.pat_types.insert(pat.id, ty.clone());
+        // A binding under a match on a reference records its own type, the
+        // bounded reference (OWN-6.8); the pattern still matches `ty`.
+        let recorded = match (&pat.kind, self.pat_by_ref) {
+            (PatKind::Binding { .. }, Some(m)) if !matches!(ty, Type::Error | Type::Never) => {
+                Type::Ref {
+                    mutable: m,
+                    inner: Box::new(ty.clone()),
+                }
+            }
+            _ => ty.clone(),
+        };
+        self.facts.pat_types.insert(pat.id, recorded);
         ty
     }
 

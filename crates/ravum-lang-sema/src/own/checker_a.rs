@@ -752,12 +752,81 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn eval_match(&mut self, scrutinee: &Expr, arms: &[MatchArm]) {
-        self.eval_value(scrutinee);
+        // OWN-6.8 / P1: a match on a reference keeps the borrowed place on
+        // loan for the whole match, so the arms cannot write or move it (nor
+        // use it at all, for `&mut`) except through their bindings.
+        let held = if self.facts.ref_matches.contains(&scrutinee.id) {
+            self.ref_match_loan(scrutinee)
+        } else {
+            self.eval_value(scrutinee);
+            None
+        };
         // The scrutinee is consumed; loans it created expire before the arms so
         // that a subsequent `match v.pop() { ... v.push(..) }` stays accepted.
         // Any reference that could escape from the scrutinee would already be
         // rejected as a ref escape.
         self.loans.truncate(self.loan_floor);
+        let saved_floor = self.loan_floor;
+        if let Some(loan) = held {
+            self.loans.push(loan);
+            self.loan_floor = self.loans.len();
+        }
+        self.eval_match_arms(scrutinee, arms);
+        self.loans.truncate(saved_floor);
+        self.loan_floor = saved_floor;
+    }
+
+    /// Evaluate the scrutinee of a match on a reference and return the loan
+    /// the arms hold: on `x` for `&x` / `&mut x`, on the reference variable
+    /// itself for `n` with `n: &T` / `&mut T`. Other forms (a call returning
+    /// a reference) borrow a temporary, which nothing else can name.
+    pub(super) fn ref_match_loan(&mut self, scrutinee: &Expr) -> Option<Loan> {
+        match &scrutinee.kind {
+            ExprKind::Unary {
+                op: op @ (UnOp::Ref | UnOp::RefMut),
+                expr: inner,
+            } => {
+                let mutable = matches!(op, UnOp::RefMut);
+                match self.eval_place_expr(inner) {
+                    Some(place) => {
+                        self.borrow_place(&place, scrutinee.span, mutable, inner.id);
+                        Some(Loan {
+                            place,
+                            mutable,
+                            span: scrutinee.span,
+                        })
+                    }
+                    None => {
+                        self.eval_value(inner);
+                        None
+                    }
+                }
+            }
+            ExprKind::Path(_) | ExprKind::SelfValue | ExprKind::Field { .. } => {
+                let mutable = matches!(self.expr_type(scrutinee), Type::Ref { mutable: true, .. });
+                match self.eval_place_expr(scrutinee) {
+                    Some(place) => {
+                        self.read_place(&place, scrutinee.span, scrutinee.id);
+                        Some(Loan {
+                            place,
+                            mutable,
+                            span: scrutinee.span,
+                        })
+                    }
+                    None => {
+                        self.eval_value(scrutinee);
+                        None
+                    }
+                }
+            }
+            _ => {
+                self.eval_value(scrutinee);
+                None
+            }
+        }
+    }
+
+    fn eval_match_arms(&mut self, scrutinee: &Expr, arms: &[MatchArm]) {
         let base = self.state.clone();
         let base_diverged = self.diverged;
 
@@ -809,7 +878,10 @@ impl<'a> OwnChecker<'a> {
             // (top-level pattern: its own provenance decides) or reads a
             // payload out of it (nested: static by rule 2).
             let static_ref = is_borrowed_text(&b.ty) && (b.nested || self.is_static_ref(scrutinee));
-            if b.ty.is_reference() && !static_ref {
+            // OWN-6.8: under a match on a reference, a binding is a bounded
+            // borrow of the scrutinee's part, valid for the arm only.
+            let bounded = self.facts.ref_matches.contains(&scrutinee.id);
+            if b.ty.is_reference() && !static_ref && !bounded {
                 self.report_ref_escape(b.span, "stockée");
             }
             let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);

@@ -258,6 +258,25 @@ fn o(v: Vec<String>) {
 | OWN-6.5 | Une référence ne peut pas être placée dans une constante. | MUST |
 | OWN-6.6 | Le diagnostic `E-OWN-REF-ESCAPE` porte sur le **site d'échappement** (la `let`, le `return`, le champ), avec une note sur la création du prêt. | MUST |
 | OWN-6.7 | La coercition `&String → &str` ([`types.md`](types.md) TYP-13.1) crée une **vue** qui expire avec l'instruction : elle ne permet pas de stocker le texte emprunté (`E-OWN-REF-ESCAPE`). `s.as_str()` suit exactement la même règle. | MUST |
+| OWN-6.8 | **Emprunt borné** (RFC-UI-LANG-1, ratification du principe UI-D11) : une référence créée par une construction (un bras de `match` sur une référence, un corps de `for` emprunté, ou une vue d'instruction comme OWN-6.3) expire à la fin de cette construction. Elle n'est jamais stockée (variable, champ, élément, tuple, `Option`/`Result` construits par l'utilisateur), retournée ni capturée : `E-OWN-REF-ESCAPE`. OWN-6.1 reste vrai pour toute autre référence. | MUST |
+| OWN-6.9 | `match` sur `&T` ou `&mut T` (`T` autre que `str`) : les motifs sont confrontés à `T` (paramètres génériques substitués), et chaque liaison est un emprunt borné au bras, de type `&U` (ou `&mut U`) vers la partie correspondante. Le scrutinee n'est **pas** consommé. | MUST |
+| OWN-6.10 | Pendant un `match` sur `&x`, `x` reste emprunté jusqu'à la fin du `match` : l'écrire ou le déplacer dans un bras est `E-OWN-BORROW-CONFLICT`. Pendant un `match` sur `&mut x` (ou sur `n: &mut T`), tout accès à `x` (ou à `n`) autre que par les liaisons est `E-OWN-BORROW-CONFLICT`. Les écritures à travers une liaison `&mut` modifient la valeur matchée elle-même. | MUST |
+| OWN-6.11 | Déplacer une valeur non `Copy` à travers un emprunt borné est `E-OWN-MOVE-OUT-OF-BORROW` ; une partie `Copy` se lit par `*x`. | MUST |
+| OWN-6.12 | Un emprunt borné ne traverse jamais un `.await`. Dans une `async fn`, cette règle est garantie par CONC-6.3 (aucune liaison de type référence, y compris les liaisons d'un `match` sur une référence) : `E-CONC-REF-ACROSS-AWAIT`. | MUST |
+| OWN-6.13 | `for x in &v` / `for x in &mut v` (`v: Vec<T>`, ou une référence à un `Vec<T>`) : `x` est un emprunt borné au corps de boucle, de type `&T` / `&mut T`, vers l'élément courant. `v` reste emprunté pendant toute la boucle : le modifier (`push`, `clear`, affectation), le déplacer, ou l'utiliser autrement que par `x` sous `&mut`, est `E-OWN-BORROW-CONFLICT`. Les écritures à travers `x` modifient l'élément de `v` et sont visibles après **toute** sortie de l'itération (fin du corps, `continue`, `break`, `return`, `?`). | MUST |
+| OWN-6.14 | **Clone structurel** (RFC-UI-LANG-1 P5) : `x.clone()` existe sur toute struct, tout enum, `Option`, `Result`, tuple, tableau, `String` et `Vec<T>` dont **tous** les composants sont clonables, récursivement. Il rend une copie **profonde** : aucun objet du tas n'est partagé. La clonabilité est une propriété de type. Un type de `std` est soit *valeur* (scalaires, `String`, `Error`, `CHandle`), soit *ressource* (`TcpListener`, `TcpStream`, `JoinHandle`, `Channel`, `Sender`, `Receiver`, `HttpRequest`, `HttpResponse`, `Future`), et une ressource n'est jamais clonable. Ne sont pas clonables non plus : une référence, une slice, un paramètre de type `T` (aucune borne). Un type qui contient un composant non clonable n'est pas clonable : `E-RES-UNKNOWN`, avec une note qui nomme le composant. Une méthode `clone` définie par l'utilisateur prime. Le récepteur est lu, jamais déplacé. Effet : `alloc` si le type contient un objet du tas, aucun sinon. | MUST |
+
+> **Périmètre de F-OWN-020 (P1, `experimental`).** Limites délimitées, à
+> lever avant la qualification complète de RFC-UI-LANG-1 :
+> - **L-OWN-020-1** : voie C, un `match` sur `&mut v[i]` quand `v` est un
+>   `Vec` d'agrégats est **refusé** explicitement (`Unsupported`). La copie
+>   prêtée n'est réécrite qu'après un appel, alors qu'un `match` exige une
+>   réécriture sur toutes ses sorties (RFC §2.1). La voie B l'accepte. `&v[i]`
+>   en lecture est accepté par les deux voies.
+> - **L-OWN-020-2** : un texte statique lu dans une liaison (`T::A(x) => *x`,
+>   avec `x: &&'static str`) est refusé à la sortie de la fonction
+>   (`E-OWN-REF-ESCAPE`). C'est plus prudent que nécessaire, sans danger : la
+>   provenance statique n'est pas encore propagée à travers une liaison bornée.
 
 > **Provenance du texte statique (note de vérificateur, RFC-D13).** OWN-6.1
 > interdit de stocker une référence non statique dans un agrégat (tableau,

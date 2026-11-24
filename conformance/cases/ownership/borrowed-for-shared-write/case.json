@@ -1,0 +1,6 @@
+{
+  "id": "ownership/borrowed-for-shared-write",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-IMMUTABLE"],
+  "notes": "OWN-6.13 (MUST): a shared item is read-only."
+}

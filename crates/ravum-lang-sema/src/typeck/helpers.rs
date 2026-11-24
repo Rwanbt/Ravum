@@ -449,3 +449,102 @@ pub(super) fn truncate_int(value: i128, target: &Type) -> i128 {
 // of each arm, so `Some(Some(n))` was taken as covering `Some` (accepting a
 // match that rustc rejects with E0004) while a fully enumerated `(bool, bool)`
 // tuple was rejected (E-TYP-NONEXHAUSTIVE on a program rustc accepts).
+
+/// RFC-UI-LANG-1 P5 (OWN-6.14): structural clonability. `Ok(alloc)` when
+/// every component of `ty` is clonable (`alloc`: the clone may allocate,
+/// effect `alloc`); `Err(why)` names the first component that is not.
+/// Clonability is a property of the type: a *resource* of `std` or of the
+/// runtime is never clonable, and neither is anything that contains one.
+pub(super) fn clonability(
+    world: &World,
+    facts: &Facts,
+    ty: &Type,
+    seen: &mut Vec<NodeId>,
+) -> Result<bool, String> {
+    use crate::builtins as b;
+    match ty {
+        Type::String => Ok(true),
+        Type::Vec(inner) => clonability(world, facts, inner, seen).map(|_| true),
+        Type::Option(inner) | Type::Array { elem: inner, .. } => {
+            clonability(world, facts, inner, seen)
+        }
+        Type::Result(ok, err) => {
+            Ok(clonability(world, facts, ok, seen)? | clonability(world, facts, err, seen)?)
+        }
+        Type::Tuple(items) => {
+            let mut alloc = false;
+            for t in items {
+                alloc |= clonability(world, facts, t, seen)?;
+            }
+            Ok(alloc)
+        }
+        Type::Ref { .. } => Err(format!(
+            "`{ty}` is a reference (clone the value it points to)"
+        )),
+        Type::Param { name, .. } => Err(format!(
+            "`{name}` is a type parameter: its clonability is unknown without trait bounds"
+        )),
+        Type::Slice(_) => Err(format!("`{ty}` is a borrowed view")),
+        Type::Nominal { def, args, name } => {
+            let resources = [
+                b::PRELUDE_TCP_LISTENER_DEF,
+                b::PRELUDE_TCP_STREAM_DEF,
+                b::PRELUDE_JOIN_HANDLE_DEF,
+                b::PRELUDE_CHANNEL_DEF,
+                b::PRELUDE_SENDER_DEF,
+                b::PRELUDE_RECEIVER_DEF,
+                b::PRELUDE_HTTP_REQUEST_DEF,
+                b::PRELUDE_HTTP_RESPONSE_DEF,
+                b::PRELUDE_FUTURE_DEF,
+            ];
+            if resources.contains(def) {
+                return Err(format!("`{name}` is a resource, never clonable"));
+            }
+            if *def == b::PRELUDE_ERROR_DEF {
+                return Ok(true);
+            }
+            if *def == b::PRELUDE_CHANDLE_DEF {
+                return Ok(false);
+            }
+            if seen.contains(def) {
+                // A recursive type: its own clonability is being decided.
+                return Ok(true);
+            }
+            seen.push(*def);
+            let subst = nominal_subst(world, def, args);
+            let mut alloc = false;
+            let fields: Vec<(String, Type)> = if let Some(info) = facts.structs.get(def) {
+                info.fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.ty.clone()))
+                    .collect()
+            } else if let Some(info) = facts.enums.get(def) {
+                info.variants
+                    .iter()
+                    .flat_map(|v| {
+                        v.tuple_types
+                            .iter()
+                            .map(move |t| (v.name.clone(), t.clone()))
+                            .chain(v.fields.iter().map(|f| (f.name.clone(), f.ty.clone())))
+                    })
+                    .collect()
+            } else {
+                seen.pop();
+                return Err(format!("`{name}` has no known layout"));
+            };
+            for (part, t) in fields {
+                match clonability(world, facts, &substitute(&t, &subst), seen) {
+                    Ok(a) => alloc |= a,
+                    Err(why) => {
+                        seen.pop();
+                        return Err(format!("`{name}.{part}`: {why}"));
+                    }
+                }
+            }
+            seen.pop();
+            Ok(alloc)
+        }
+        Type::Error | Type::Never => Ok(false),
+        _ => Ok(false),
+    }
+}

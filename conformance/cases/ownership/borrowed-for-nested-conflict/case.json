@@ -1,0 +1,6 @@
+{
+  "id": "ownership/borrowed-for-nested-conflict",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "OWN-6.13 (MUST): a shared loop over v nested in a &mut loop over v is a conflict."
+}

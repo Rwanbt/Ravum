@@ -1,0 +1,36 @@
+use std::io;
+struct P { x: i64, name: String }
+enum Msg { Rename(String), Inc, Pair(P, Option<i64>) }
+struct C { a: i64, b: bool }
+fn main() {
+    let p = P { x: 1, name: String::from("ab") };
+    let mut q = p.clone();
+    q.name.push_str("!!");
+    let m = Msg::Pair(p.clone(), Some(3));
+    let m2 = m.clone();
+    let k = match m2 {
+        Msg::Pair(pp, o) => pp.x + o.unwrap_or(0) + (pp.name.len() as i64),
+        _ => 0,
+    };
+    let r = Msg::Rename(String::from("xyz"));
+    let r2 = r.clone();
+    let rl = match r2 {
+        Msg::Rename(s) => s.len() as i64,
+        _ => 0,
+    };
+    let mut v: Vec<P> = Vec::new();
+    v.push(p.clone());
+    let mut w = v.clone();
+    w.push(q.clone());
+    let mut names: Vec<String> = Vec::new();
+    names.push(String::from("a"));
+    let mut n2 = names.clone();
+    n2.push(String::from("b"));
+    let c = C { a: 2, b: true };
+    let d = c.clone();
+    let t: (String, i64) = (String::from("t"), 5);
+    let u = t.clone();
+    io::println(&((p.name.len() as i64) * 1000000 + (q.name.len() as i64) * 100000 + k * 1000
+        + rl * 100 + (v.len() as i64) * 10 + (w.len() as i64)
+        + d.a * 10000000 + u.1 * 100000000 + (names.len() as i64) * 1000000000 + (n2.len() as i64) * 10000000000).to_string());
+}

@@ -77,6 +77,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             value_position: 0,
             unsafe_depth: 0,
             in_const: false,
+            pat_by_ref: None,
             variant_pats: BTreeMap::new(),
             unused_candidates: Vec::new(),
             used_locals: BTreeSet::new(),
@@ -188,6 +189,10 @@ struct TypeChecker<'p, 'w, 'f> {
     /// Profondeur d'imbrication des blocs `unsafe` (>= 1 = contexte unsafe).
     unsafe_depth: usize,
     in_const: bool,
+    /// OWN-6.8 / P1: while checking the patterns of a `match` on `&T` or
+    /// `&mut T`, bindings are references to the matched parts (`Some(m)`:
+    /// `m` tells whether they are mutable). `None` outside such a match.
+    pat_by_ref: Option<bool>,
     /// Variante résolue pour chaque pattern (`pat.id -> (enum, index)`), utilisé
     /// par l'analyse d'exhaustivité.
     variant_pats: BTreeMap<NodeId, (NodeId, usize)>,

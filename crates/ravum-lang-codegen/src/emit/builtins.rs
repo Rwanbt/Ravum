@@ -158,6 +158,9 @@ pub(super) fn builtin_const(path: &str) -> Option<String> {
 pub(super) fn builtin_method_special(owner: &str, method: &str, receiver: &str) -> Option<String> {
     let rendered = match (owner, method) {
         (_, "to_string") => format!("format!(\"{{}}\", {receiver})"),
+        // OWN-6.14: a structural clone is Rust's derived `Clone` (every user
+        // type derives it; the checker refused the non-clonable ones).
+        ("Clone", "clone" | "copy") => format!("{receiver}.clone()"),
         // STD-11.2 (MUST): the panic texts are fixed and the `Err` content
         // is not formatted; Rust's own `unwrap` prints neither.
         ("Option", "unwrap") => format!(
