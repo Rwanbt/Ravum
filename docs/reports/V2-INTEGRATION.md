@@ -159,3 +159,62 @@ infinie consomme exactement `RT_FUEL`. Les assertions de temps CPU et de
 temps mural sont **inchangées**. Sur une VM chargée, elles peuvent toujours
 échouer sans que le code soit en cause. La borne par carburant établit, elle,
 le travail du bloc indépendamment de l'hôte.
+
+## `rt_budget` : qualification algorithmique et temporelle séparées (V2-G10, 2026-11-24)
+
+- **Bloquant partout** :
+  - borne par carburant. `RtRunner::last_fuel_used()` compte désormais le
+    travail **total** de l'appel : tentative en trap et réexécution après
+    rollback. Le test `a_rolled_back_call_counts_the_fuel_of_both_attempts`
+    vérifie `RT_FUEL + 1` ;
+  - pile, absence d'allocation, rollback, exactitude.
+- **Runner identifié comme virtuel** (macOS `kern.hv_vmm_present = 1`,
+  drapeau Linux `hypervisor`) :
+  - les temps sont rapportés et le verdict temporel est `INCONCLUSIVE`,
+    jamais `PASS` ;
+  - une garde de régression reste bloquante sur le **p50** du temps CPU
+    (< 1/10 de l'échéance), que le temps volé par l'hyperviseur ne déplace
+    pas.
+- **Machine physique, ou machine non identifiée** (Windows notamment) : les
+  assertions de temps restent bloquantes, avec les seuils inchangés.
+- **Conséquence** : les runners Linux et macOS de la CI sont virtuels. Leurs
+  runs ne qualifient donc plus le temps réel : seule une campagne sur
+  machine physique le fait, avec
+  [`tools/qualification/rt_budget_physical.py`](../../tools/qualification/rt_budget_physical.py).
+- Le carburant compte les retours en arrière de boucle et les entrées de
+  fonction : ce n'est **pas** une preuve de temps d'exécution maximal.
+
+### Révision après revue (2026-11-24)
+
+- **Budgets de carburant explicites.**
+  - Par tentative : `RT_FUEL`.
+  - Réexécution après rollback : un second budget de même taille, et
+    jamais de troisième tentative.
+  - Total par appel : `RT_FUEL_MAX_PER_CALL = 2 × RT_FUEL`.
+  - Par bloc audio : la longueur du bloc multipliée par le total par appel.
+
+  Les additions sont saturantes. `set_fuel_budget` refuse, côté hôte, un
+  budget dont le double ne tiendrait pas dans un `u64`. Tests en `f32`,
+  `f64` et DSP avec état, quand la seconde tentative échoue aussi (état
+  restauré).
+- **Script de qualification physique fail-closed**
+  (`tools/qualification/rt_budget_physical.py`, il remplace l'ancien `.sh`,
+  qui pouvait conclure à un succès sans preuve).
+  - Une exécution n'est comptée `PASS` que si trois conditions sont
+    réunies : le code de sortie de Cargo vaut 0, le test d'échéance a
+    réellement tourné, et une seule ligne de verdict temporel est présente
+    avec ses statistiques (p50, p95, p99, p99.9, max, dépassements).
+  - Verdicts : `PASS` 0, `FAIL` 1, `INCONCLUSIVE` 2 (hôte virtuel), `NOT_RUN`
+    3 (zéro exécution, ou campagne interrompue).
+  - Le rapport JSON contient le SHA, l'état propre ou modifié du dépôt,
+    l'OS, le CPU, `rustc` et le profil ; le journal complet de chaque
+    exécution est conservé.
+  - Neuf tests automatisés couvrent : réussite, erreur de compilation,
+    panic, absence de preuve, interruption, hôte virtuel, zéro exécution,
+    régression, absence de régression.
+- **Régressions** : références versionnées par profil matériel et logiciel
+  (`tools/qualification/rt_budget_baselines.json`, vide tant qu'aucune
+  campagne n'a été mesurée). Une statistique au-delà de 2 fois sa référence
+  donne `FAIL`. La garde absolue sur le p50 reste dans le test.
+- Un succès de Cargo n'est **jamais** une qualification temporelle : sur un
+  hôte virtuel, le verdict reste `INCONCLUSIVE`.

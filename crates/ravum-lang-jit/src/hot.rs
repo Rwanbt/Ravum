@@ -203,15 +203,30 @@ pub struct HotEngine {
     migrating: Option<(Box<Version>, Module, u64)>,
 }
 
-/// Fuel of one real-time call (one sample): each loop back-edge and each
+/// Fuel of one real-time **attempt** (V2-G10): each loop back-edge and each
 /// function entry costs 1. An edit that loops or recurses without end traps
-/// after this budget and the runner rolls back to the previous version, so
-/// one call costs at most `RT_FUEL` units (≈ 0.25 ms for a minimal loop on
-/// the reference machine, below a 64-frame block at 48 kHz; a loop with a
-/// larger body costs proportionally more per unit). Legitimate DSP code
-/// uses far less (a 64-tap filter: 64). Hosts can tune it:
-/// [`RtRunner::set_fuel_budget`].
+/// after this budget and the runner rolls back to the previous version.
+///
+/// Budgets, made explicit:
+/// - **per attempt**: `RT_FUEL` (or the host's [`RtRunner::set_fuel_budget`]);
+/// - **rollback re-run**: the previous version runs the same call once more,
+///   with its own budget of the same size;
+/// - **total per call**: therefore at most twice the budget,
+///   [`RT_FUEL_MAX_PER_CALL`] by default (a call is never retried more
+///   than once);
+/// - **per audio block**: the block length times the total per call.
+///
+/// Fuel is a work bound in the fuel model, **not** a time bound: the time a
+/// unit costs depends on the code and the machine, and is qualified
+/// separately on physical hardware (`tools/qualification/`). At the default,
+/// one attempt of a minimal loop is about 0.25 ms on the reference machine.
+/// Legitimate DSP code uses far less (a 64-tap filter: 64).
 pub const RT_FUEL: u64 = 100_000;
+
+/// V2-G10: bound on the fuel of one call, all attempts included (the
+/// trapping attempt plus the single re-run after rollback), at the default
+/// budget.
+pub const RT_FUEL_MAX_PER_CALL: u64 = 2 * RT_FUEL;
 
 /// Real-time side: calls the entry and switches versions at safepoints.
 pub struct RtRunner {
@@ -221,6 +236,9 @@ pub struct RtRunner {
     ctx: Ctx,
     kind: EntryKind,
     fuel: u64,
+    /// V2-G10: fuel of the last **call**, all attempts included (the trapping
+    /// one and its re-run after rollback), not only the last attempt.
+    call_fuel: u64,
     /// Host-owned state (DSP entry), 8-byte aligned, and the copy taken
     /// before each call so a trapping version cannot leave it half-written.
     state: Box<[u64]>,
@@ -287,6 +305,7 @@ impl HotEngine {
             .active_generation
             .store(version.generation, SeqCst);
         let runner = RtRunner {
+            call_fuel: 0,
             mailbox: engine.mailbox.clone(),
             current: version,
             previous: None,
@@ -799,9 +818,17 @@ impl RtRunner {
         }
     }
 
-    /// Per-call fuel budget (see [`RT_FUEL`]); 0 is refused (no call could run).
+    /// Per-**attempt** fuel budget (see [`RT_FUEL`]); a call costs at most
+    /// twice this (one re-run after rollback). 0 is refused (no call could
+    /// run), and so is a budget whose doubled total would not fit a `u64`:
+    /// the total of a call is then always representable. Called by the host
+    /// outside the audio callback.
     pub fn set_fuel_budget(&mut self, fuel: u64) {
         assert!(fuel > 0, "fuel budget");
+        assert!(
+            fuel <= u64::MAX / 2,
+            "fuel budget: the total of two attempts must fit a u64"
+        );
         self.fuel = fuel;
     }
 
@@ -809,11 +836,13 @@ impl RtRunner {
         self.fuel
     }
 
-    /// Fuel the last call consumed (its re-run when it rolled back): a
-    /// deterministic measure of a call's work, independent of the host's
-    /// clock and load (V2-G9). Reads one field; never allocates.
+    /// Fuel the last call consumed **in total** (V2-G10): a trapping attempt
+    /// plus its re-run after rollback, when there was one. A deterministic
+    /// measure of a call's work in the fuel model (loop back-edges and
+    /// function entries), independent of the host's clock and load; it is
+    /// not a bound on execution time. Reads one field; never allocates.
     pub fn last_fuel_used(&self) -> u64 {
-        self.fuel.saturating_sub(self.ctx.fuel)
+        self.call_fuel
     }
 
     /// Native stack bytes compiled code may use below the host's call
@@ -835,11 +864,15 @@ impl RtRunner {
     pub fn process_f32(&mut self, x: f32) -> f32 {
         assert_eq!(self.kind, EntryKind::F32ToF32);
         let (y, code) = call_f32(&mut self.ctx, self.fuel, &self.current, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         if self.roll_back(code) {
             let (y, code) = call_f32(&mut self.ctx, self.fuel, &self.current, x);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }
@@ -854,12 +887,16 @@ impl RtRunner {
         assert_eq!(self.kind, EntryKind::DspF32);
         self.backup.copy_from_slice(&self.state);
         let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         self.state.copy_from_slice(&self.backup);
         if self.roll_back(code) {
             let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }
@@ -914,11 +951,15 @@ impl RtRunner {
     pub fn process_f64(&mut self, x: f64) -> f64 {
         assert_eq!(self.kind, EntryKind::F64ToF64);
         let (y, code) = call_f64(&mut self.ctx, self.fuel, &self.current, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         if self.roll_back(code) {
             let (y, code) = call_f64(&mut self.ctx, self.fuel, &self.current, x);
+            self.call_fuel = self
+                .call_fuel
+                .saturating_add(self.fuel.saturating_sub(self.ctx.fuel));
             if code == 0 {
                 return y;
             }

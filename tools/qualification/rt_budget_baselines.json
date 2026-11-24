@@ -1,0 +1,5 @@
+{
+  "schema": "ravum.rt_budget.baselines/v1",
+  "note": "V2-G10. Baselines per hardware/software profile, in nanoseconds of thread CPU time per 64-sample block (p50, p99, p999). A profile name identifies the machine, OS, rustc and power settings (for example `laptop-i7-13-rtx4070-ubuntu-rustc1.95`). Entries are added only from a measured campaign on that machine (tools/qualification/rt_budget_physical.py), with its report committed alongside; none is invented. A run whose statistic exceeds 2x its baseline is a regression (FAIL).",
+  "profiles": {}
+}
