@@ -2,5 +2,5 @@
   "id": "types/for-over-ref-fail",
   "mode": "compile-fail",
   "expect_codes": ["E-TYP-MISMATCH"],
-  "notes": "`for x in &v` iterates a reference to an array/`Vec`, which Core 1.0 refuses (E-TYP-MISMATCH); `for` consumes a `Vec<T>` or iterates an integer range."
+  "notes": "EXPR-6.4: `for x in &a` over a reference to an **array** is refused (E-TYP-MISMATCH); only an owned `Vec<T>`, a borrowed `Vec` (OWN-6.13) or an integer range is iterable."
 }

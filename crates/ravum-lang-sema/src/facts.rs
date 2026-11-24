@@ -463,6 +463,9 @@ pub struct Facts {
     /// OWN-6.8 / P1: scrutinees (expression ids) of the `match`es on a
     /// reference, whose bindings are bounded references.
     pub ref_matches: BTreeSet<NodeId>,
+    /// OWN-6.8 / P2: iterables (expression ids) of the `for` loops over a
+    /// borrowed `Vec` (`&v`, `&mut v`), whose items are bounded references.
+    pub ref_fors: BTreeSet<NodeId>,
     /// T13 step 2, set by an incremental driver **before** checking: bodies
     /// not to check again. Their facts are absent from the result, which is
     /// then good for diagnostics only (never for code generation).
@@ -636,6 +639,7 @@ impl Facts {
         }
         let Facts {
             ref_matches,
+            ref_fors,
             reuse_bodies: _,
             direct_effects: _,
             fn_used_imports: _,
@@ -669,6 +673,7 @@ impl Facts {
         copy(methods, &old.methods, &keep);
         copy(spawn_targets, &old.spawn_targets, &keep);
         copy_set(ref_matches, &old.ref_matches, &keep);
+        copy_set(ref_fors, &old.ref_fors, &keep);
         let OwnFacts {
             use_kind,
             place,

@@ -3,18 +3,15 @@ struct Task {
     done: bool,
 }
 
-fn pending(tasks: &Vec<Task>) -> usize {
+fn pending(tasks: &[Task; 2]) -> usize {
     let mut n: usize = 0;
     for t in tasks {
         if !t.done {
             n += 1;
         }
-        let s = t.title.as_str();
+        n += t.title.len();
     }
     n
 }
 
-fn main() {
-    let v: Vec<Task> = Vec::new();
-    let _n = pending(&v);
-}
+fn main() {}

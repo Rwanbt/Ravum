@@ -2,5 +2,5 @@
   "id": "types/no-cascade-on-error-type",
   "mode": "compile-fail",
   "expect_codes": ["E-TYP-MISMATCH"],
-  "notes": "Diagnostics: one error per cause. `for` over `&Vec<T>` is refused (EXPR-6.4); the loop variable then has the error type, and field or method uses on it must not add E-TYP-FIELD / E-RES-UNKNOWN. Found by the trial app apps/todo (V2-G3)."
+  "notes": "Diagnostics: one error per cause. `for` over a reference to an array is refused (EXPR-6.4); the loop variable then has the error type, and field or method uses on it must not add E-TYP-FIELD / E-RES-UNKNOWN. Found by the trial app apps/todo (V2-G3)."
 }

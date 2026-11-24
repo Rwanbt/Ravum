@@ -83,6 +83,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     pub(super) fn check_for(&mut self, pat: &Pat, iter: &Expr, body: &Block) -> Type {
+        let mut by_ref: Option<bool> = None;
         let item_ty = if let ExprKind::Range {
             start,
             end,
@@ -96,6 +97,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             let iter_ty = self.check_expr(iter, None);
             match &iter_ty {
                 Type::Vec(elem) => (**elem).clone(),
+                // OWN-6.8 / P2: `for x in &v` / `&mut v` over a `Vec<T>` binds
+                // bounded references `&T` / `&mut T` to its elements.
+                Type::Ref { mutable, inner } if matches!(**inner, Type::Vec(_)) => {
+                    let Type::Vec(elem) = &**inner else {
+                        unreachable!()
+                    };
+                    self.facts.ref_fors.insert(iter.id);
+                    by_ref = Some(*mutable);
+                    (**elem).clone()
+                }
                 // EXPR-6.4 / TYP-5.8 (MUST): the collection form consumes an
                 // **owned** `Vec<T>`; `&Vec<T>` and `&[T]` are E-TYP-MISMATCH and
                 // are iterated by index (`for i in 0..s.len()`). The checker used
@@ -119,7 +130,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         "E-TYP-MISMATCH",
                         iter.span,
                         format!(
-                            "`for` iterates a range or an owned `Vec<T>`, found `{other}`; a `&Vec<T>` or `&[T]` is iterated by index (EXPR-6.4)"
+                            "`for` iterates a range, a `Vec<T>` or a borrowed `Vec` (`&v`, `&mut v`), found `{other}`; an array or a slice is iterated by index (EXPR-6.4)"
                         ),
                     );
                     Type::Error
@@ -127,7 +138,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         };
         self.push_scope();
+        let outer = std::mem::replace(&mut self.pat_by_ref, by_ref);
         self.check_pattern(pat, &item_ty);
+        self.pat_by_ref = outer;
         self.loop_depth += 1;
         self.check_block(body, None);
         self.loop_depth -= 1;
