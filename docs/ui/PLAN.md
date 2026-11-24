@@ -61,7 +61,12 @@ fn update(model: &mut Model, msg: Msg) -> ui::Command<Msg> { ... }
 fn view(model: &Model) -> ui::Node<Msg> { ... }
 ```
 
-- `view` est pure ; l'arbre porte des **messages** (des valeurs), pas des fonctions.
+- `view` est **déterministe**, sans être `pure` au sens du profil d'effets
+  (UI-D18) : elle peut allouer, avec l'effet `alloc`, pour construire un
+  arbre dynamique, mais n'a aucun autre effet (pas d'`io`, de réseau,
+  d'horloge ni d'aléa). Ce contrat de vue déterministe est à spécifier
+  (`spec/ui/`, U2). Le profil `pure` actuel n'est **pas** affaibli.
+- L'arbre porte des **messages** (des valeurs), pas des fonctions.
 - `update` est la seule à modifier l'état. Les effets (fichiers, réseau,
   minuteries) sont des **commandes** exécutées par le runtime, ce qui les
   rend rejouables et vérifiables.
@@ -103,6 +108,16 @@ Il est mesuré avec Verify désactivé, puis incrémental, puis complet.
 | L0 (style), L1 (structure) | données de l'UI IR, **sans JIT** | idem, sur toutes les plateformes |
 | L2 (comportement) | JIT de la voie C là où l'OS le permet | compilation anticipée ; pas de code généré à l'exécution là où c'est interdit (iOS, magasins d'applications) |
 | Plugins | processus isolé ou runtime sandboxé | selon les capacités de la plateforme |
+
+**Compatibilité de l'état** (UI-D18) : garder l'ancien code vivant ne
+suffit pas, si la structure d'un état partagé change.
+
+| Modification | Activation |
+|---|---|
+| Style | transaction UI (L0) |
+| Structure de composants | remplacement local contrôlé (L1) |
+| Code, état compatible | remplacement par génération |
+| Code, état incompatible | arrêt synchronisé des threads concernés, puis migration contrôlée (mécanisme de migration de disposition existant), puis reprise ; refus fail-closed si la migration n'est pas définie |
 
 Les contrats UI et le modèle de composants sont communs à toutes les
 plateformes ; seul le mécanisme d'activation de L2 varie. Les contraintes

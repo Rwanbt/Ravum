@@ -123,3 +123,23 @@ contredit).
     satisfaites.
 
   Rien sur `main`, aucune release.
+
+## Validation finale (2026-11-24, transmise par le responsable)
+
+- **UI-D18** : RFC-UI-LANG-1 rév. 4 validée en direction. L'implémentation
+  progressive de P1 à P5 est autorisée, avec qualification normative et
+  tests pour chaque extension. Deux exigences futures :
+  1. **Vue déterministe**, distincte du profil `pure` : `view` peut
+     allouer sous contrôle, sans effet externe ; `pure` n'est pas affaibli.
+  2. **État partagé** : un changement de structure incompatible exige une
+     synchronisation et une migration contrôlées ; garder l'ancien code ne
+     suffit pas.
+
+  Autorisations :
+  - fusion de #212 après une CI verte sur le SHA exact, puis de #213
+    actualisée ;
+  - poursuite de U1 (RFC-UI-LANG-1), des bancs, des RFC, ADR et issues
+    suivantes, selon `GOAL.md` ;
+  - n'interroger le responsable que pour les décisions non délégables.
+
+  Rien sur `main`, aucune publication ; Unifia et le Web restent reportés.
