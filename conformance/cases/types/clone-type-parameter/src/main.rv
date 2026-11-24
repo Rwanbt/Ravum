@@ -1,0 +1,10 @@
+struct B<T> {
+    v: T,
+}
+
+fn f<T>(b: &B<T>) -> i64 {
+    let k = b.clone();
+    0
+}
+
+fn main() {}

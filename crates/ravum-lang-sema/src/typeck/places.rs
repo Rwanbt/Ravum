@@ -12,20 +12,42 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let recv_ty = self.check_expr(receiver, None);
         let recv_ty = self.resolve_vars(&recv_ty);
         let base = deref_type(&recv_ty);
-        // `Vec<T>::clone` exists only for `Copy` elements (STD-10.4, F-STD-024).
-        // For a mobile element the method does not exist at all, so the
-        // diagnostic is a resolution failure, not a type mismatch.
-        if name == "clone" {
-            if let Type::Vec(inner) = &base {
-                if !crate::own::is_copy_type(inner, self.facts) {
-                    self.error(
-                        "E-RES-UNKNOWN",
-                        *name_span,
-                        format!(
-                            "`clone` on `Vec<{inner}>` requires a `Copy` element type; \
-                             `{inner}` is mobile"
-                        ),
-                    );
+        // OWN-6.14 / RFC-UI-LANG-1 P5: `clone()` is structural. It exists on
+        // every struct, enum, `Option`, `Result` and tuple whose components
+        // are all clonable, and on `Vec<T>` when `T` is clonable; a resource
+        // (or anything containing one) has no `clone` (E-RES-UNKNOWN, with
+        // the offending component). A user-defined `clone` method wins.
+        if name == "clone" && args.is_empty() {
+            let structural = match &base {
+                Type::Nominal { def, .. } => self.world.method(*def, name, false).is_none(),
+                Type::Vec(_) | Type::Option(_) | Type::Result(..) | Type::Tuple(_) => true,
+                _ => false,
+            };
+            if structural {
+                let mut seen = Vec::new();
+                match clonability(self.world, self.facts, &base, &mut seen) {
+                    Ok(alloc) => {
+                        if !matches!(base, Type::Vec(_)) {
+                            let path = if alloc { "Clone::clone" } else { "Clone::copy" };
+                            self.facts.methods.insert(
+                                expr.id,
+                                MethodTarget::Builtin {
+                                    path: path.to_string(),
+                                    ret: base.clone(),
+                                },
+                            );
+                            return base;
+                        }
+                    }
+                    Err(why) => {
+                        self.error(
+                            "E-RES-UNKNOWN",
+                            *name_span,
+                            format!("no `clone` on `{base}`: {why}"),
+                        );
+                        self.facts.methods.insert(expr.id, MethodTarget::Error);
+                        return Type::Error;
+                    }
                 }
             }
         }

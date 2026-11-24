@@ -3052,6 +3052,203 @@ impl<'a> FnLower<'a> {
         Ok(self.unit())
     }
 
+    /// Open a counted loop over the elements of vector `h`: the current
+    /// block becomes the body, `i` the index. Close it with `loop_close`.
+    fn loop_open(&mut self, h: Local) -> (Local, BlockId, BlockId) {
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, body, exit) = (self.new_block(), self.new_block(), self.new_block());
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: body,
+            else_to: exit,
+        });
+        self.switch_to(body);
+        (i, head, exit)
+    }
+
+    fn loop_close(&mut self, i: Local, head: BlockId, exit: BlockId) {
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+    }
+
+    /// Whether a value of type `t` owns a heap object (`String`, `Vec`),
+    /// directly or in a field, payload or element.
+    fn has_heap(&self, t: &Type) -> R<bool> {
+        Ok(match t {
+            Type::String | Type::Vec(_) => true,
+            Type::Array { elem, .. } => self.has_heap(elem)?,
+            _ if Layouts::is_agg(t) => {
+                if let Some(vs) = self.layouts.variants(t)? {
+                    let mut any = false;
+                    for v in vs.iter().flatten() {
+                        any |= self.has_heap(v)?;
+                    }
+                    any
+                } else {
+                    let mut any = false;
+                    for (_, ft) in self.layouts.fields(t)? {
+                        any |= self.has_heap(&ft)?;
+                    }
+                    any
+                }
+            }
+            _ => false,
+        })
+    }
+
+    /// OWN-6.14: deep clone of heap object `h` of type `t` (`String` or
+    /// `Vec<T>`): a fresh object whose own heap parts are cloned too.
+    fn clone_heap(&mut self, h: Local, t: &Type) -> R<Local> {
+        let Type::Vec(e) = t else {
+            let d = self.new_local(Ty::Obj);
+            self.heap(Some(d), HeapOp::StrClone, Some(h), None);
+            return Ok(d);
+        };
+        let e = (**e).clone();
+        if !self.has_heap(&e)? && !Layouts::is_agg(&e) {
+            let d = self.new_local(Ty::Obj);
+            self.heap(Some(d), HeapOp::VecClone, Some(h), None);
+            return Ok(d);
+        }
+        let out = self.new_local(Ty::Obj);
+        self.heap(Some(out), HeapOp::VecNew, None, None);
+        let (i, head, exit) = self.loop_open(h);
+        let elem = self.new_local(Ty::Obj);
+        self.heap(Some(elem), HeapOp::VecGet, Some(h), Some(i));
+        let copy = if Layouts::is_agg(&e) {
+            // One word vector per element: materialize, deep-fix, rebuild.
+            let addr = self.vec_materialize(elem, 0, &e)?;
+            self.deep_fix(addr, 0, &e)?;
+            let o = self.new_local(Ty::Obj);
+            self.heap(Some(o), HeapOp::VecNew, None, None);
+            for (off, lt) in self.vec_leaves(&e)? {
+                let tmp = self.new_local(lt);
+                self.emit(Inst::Load {
+                    dst: tmp,
+                    ty: lt,
+                    addr,
+                    offset: off,
+                });
+                self.heap(None, HeapOp::VecPush, Some(o), Some(tmp));
+            }
+            o
+        } else {
+            self.clone_heap(elem, &e)?
+        };
+        self.heap(None, HeapOp::VecPush, Some(out), Some(copy));
+        self.loop_close(i, head, exit);
+        Ok(out)
+    }
+
+    /// OWN-6.14: after a shallow copy of a `t` at `addr + off`, replace every
+    /// heap handle it holds by a deep clone, so the copy shares nothing. An
+    /// enum (or `Option`, `Result`) is fixed under its current variant.
+    fn deep_fix(&mut self, addr: Local, off: u32, t: &Type) -> R<()> {
+        if !self.has_heap(t)? {
+            return Ok(());
+        }
+        match t {
+            Type::String | Type::Vec(_) => {
+                let h = self.new_local(Ty::Obj);
+                self.emit(Inst::Load {
+                    dst: h,
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                });
+                let c = self.clone_heap(h, t)?;
+                self.emit(Inst::Store {
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                    src: c,
+                });
+                Ok(())
+            }
+            Type::Array { elem, len } => {
+                let el = self.layouts.layout(elem)?;
+                let stride = round_up(el.size, el.align);
+                for k in 0..*len as u32 {
+                    self.deep_fix(addr, off + k * stride, elem)?;
+                }
+                Ok(())
+            }
+            _ => {
+                if let Some(vs) = self.layouts.variants(t)? {
+                    let tag = self.new_local(Ty::U32);
+                    self.emit(Inst::Load {
+                        dst: tag,
+                        ty: Ty::U32,
+                        addr,
+                        offset: off,
+                    });
+                    let join = self.new_block();
+                    for (v, payload) in vs.iter().enumerate() {
+                        let mut heap = false;
+                        for p in payload {
+                            heap |= self.has_heap(p)?;
+                        }
+                        if !heap {
+                            continue;
+                        }
+                        let k = self.tag_const(v);
+                        let is_v = self.new_local(Ty::Bool);
+                        self.emit(Inst::Bin {
+                            dst: is_v,
+                            op: BinOp::Eq,
+                            ty: Ty::U32,
+                            lhs: tag,
+                            rhs: k,
+                        });
+                        let (yes, next) = (self.new_block(), self.new_block());
+                        self.set_term(Term::Branch {
+                            cond: is_v,
+                            then_to: yes,
+                            else_to: next,
+                        });
+                        self.switch_to(yes);
+                        for (fo, ft) in self.layouts.variant_fields(t, v)? {
+                            self.deep_fix(addr, off + fo, &ft)?;
+                        }
+                        self.set_term(Term::Jump(join));
+                        self.switch_to(next);
+                    }
+                    self.set_term(Term::Jump(join));
+                    self.switch_to(join);
+                    Ok(())
+                } else {
+                    for (fo, ft) in self.layouts.fields(t)? {
+                        self.deep_fix(addr, off + fo, &ft)?;
+                    }
+                    Ok(())
+                }
+            }
+        }
+    }
+
     /// IR v1.2: the scalar builtin methods whose semantics map exactly onto
     /// one IR operation. Anything else (user methods, `checked_*` returning
     /// `Option`, `round`/`min`/`max`/`powf` whose NaN or tie rules would need
@@ -3308,6 +3505,8 @@ impl<'a> FnLower<'a> {
                     | "Vec::is_empty"
                     | "Vec::clone"
                     | "Vec::pop"
+                    | "Clone::clone"
+                    | "Clone::copy"
             );
         if !known {
             return Ok(None);
@@ -3353,6 +3552,41 @@ impl<'a> FnLower<'a> {
             // `clone` of a `Vec` of aggregates: the checker allows it only for
             // `Copy` elements, whose words hold no handle, so cloning each
             // element's word vector is a deep copy.
+            ("Clone::clone" | "Clone::copy", []) => {
+                // OWN-6.14: a shallow copy, then every heap part cloned.
+                let t = match self.type_of(recv)? {
+                    Type::Ref { inner, .. } => *inner,
+                    t => t,
+                };
+                if !Layouts::is_agg(&t) {
+                    return unsupported("structural clone of a non-aggregate");
+                }
+                let dst = self.snapshot(h, &t)?;
+                self.deep_fix(dst, 0, &t)?;
+                dst
+            }
+            ("Vec::clone", [])
+                if {
+                    let e = match self.type_of(recv)? {
+                        Type::Vec(e) => Some(*e),
+                        Type::Ref { inner, .. } => match *inner {
+                            Type::Vec(e) => Some(*e),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    match e {
+                        Some(e) => self.has_heap(&e)?,
+                        None => false,
+                    }
+                } =>
+            {
+                let t = match self.type_of(recv)? {
+                    Type::Ref { inner, .. } => *inner,
+                    t => t,
+                };
+                self.clone_heap(h, &t)?
+            }
             ("Vec::clone", []) if self.vec_agg_elem(recv)?.is_some() => {
                 let out = self.new_local(Ty::Obj);
                 self.heap(Some(out), HeapOp::VecNew, None, None);

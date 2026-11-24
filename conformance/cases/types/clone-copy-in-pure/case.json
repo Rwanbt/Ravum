@@ -1,0 +1,5 @@
+{
+  "id": "types/clone-copy-in-pure",
+  "mode": "compile-pass",
+  "notes": "OWN-6.14 (MUST): the clone of a type without heap component has no effect, so it is accepted in effects()."
+}

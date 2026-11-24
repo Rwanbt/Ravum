@@ -1,0 +1,6 @@
+{
+  "id": "effects/clone-alloc-in-pure",
+  "mode": "compile-fail",
+  "expect_codes": ["E-EFF-UNDECLARED"],
+  "notes": "OWN-6.14 / EFF (MUST): cloning a value with a heap component allocates (effect alloc), refused in a function declared effects()."
+}
