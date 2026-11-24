@@ -1,0 +1,6 @@
+{
+  "id": "types/clone-resource-field",
+  "mode": "compile-fail",
+  "expect_codes": ["E-RES-UNKNOWN"],
+  "notes": "OWN-6.14 (MUST): a struct with a resource field (Sender) has no clone; the note names W.tx."
+}

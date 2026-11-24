@@ -1149,6 +1149,11 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     method!(VEC_KINDS, "pop", "Vec::pop", [], "Option<T>", PURE),
     method!(VEC_KINDS, "clear", "Vec::clear", [], "()", PURE),
     method!(VEC_KINDS, "clone", "Vec::clone", [], "Vec<T>", ALLOC),
+    // OWN-6.14: structural clones, resolved by the checker (no receiver kind:
+    // never found by name lookup). `Clone::copy` is the clone of a type
+    // without heap component, which allocates nothing.
+    method!(&[], "clone", "Clone::clone", [], "Self", ALLOC),
+    method!(&[], "clone", "Clone::copy", [], "Self", &[]),
     method!(VEC_KINDS, "as_slice", "Vec::as_slice", [], "&[T]", PURE),
     // --- Option<T> ---
     method!(OPTION_KINDS, "is_some", "Option::is_some", [], "bool", PURE),

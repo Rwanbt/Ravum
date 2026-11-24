@@ -1,0 +1,11 @@
+struct P {
+    x: i64,
+    name: String,
+}
+
+fn f(p: &P) -> i64 effects() {
+    let q = p.clone();
+    q.x
+}
+
+fn main() {}

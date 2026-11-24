@@ -1,0 +1,11 @@
+struct W {
+    tx: Sender<i64>,
+    n: i64,
+}
+
+fn f(w: &W) -> i64 {
+    let k = w.clone();
+    k.n
+}
+
+fn main() {}

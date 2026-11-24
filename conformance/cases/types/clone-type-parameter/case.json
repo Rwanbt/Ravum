@@ -1,0 +1,6 @@
+{
+  "id": "types/clone-type-parameter",
+  "mode": "compile-fail",
+  "expect_codes": ["E-RES-UNKNOWN"],
+  "notes": "OWN-6.14 (MUST): without trait bounds a type parameter is not known to be clonable."
+}

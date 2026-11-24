@@ -1,4 +1,4 @@
-fn f(v: Vec<String>) -> Vec<String> {
+fn f(v: Vec<Sender<i64>>) -> Vec<Sender<i64>> {
     return v.clone();
 }
 
