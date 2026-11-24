@@ -809,6 +809,13 @@ impl RtRunner {
         self.fuel
     }
 
+    /// Fuel the last call consumed (its re-run when it rolled back): a
+    /// deterministic measure of a call's work, independent of the host's
+    /// clock and load (V2-G9). Reads one field; never allocates.
+    pub fn last_fuel_used(&self) -> u64 {
+        self.fuel.saturating_sub(self.ctx.fuel)
+    }
+
     /// Native stack bytes compiled code may use below the host's call
     /// (default [`crate::STACK_BUDGET`], 1 MiB). A host whose audio thread
     /// has a small stack (an OS audio callback) sets less: deeper code then
