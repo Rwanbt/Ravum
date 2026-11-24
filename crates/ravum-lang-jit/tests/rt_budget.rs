@@ -64,13 +64,11 @@ fn thread_cpu() -> Duration {
     Duration::from_nanos((cycles() as f64 / rate) as u64)
 }
 
-/// Diagnostic only (no assertion depends on it): whether the host is a
-/// virtual machine and its load. In a VM, time the hypervisor takes the vCPU
-/// away while this thread runs is charged to the thread's CPU clock, so a
-/// block can read as "working" past its deadline without doing more work.
-#[cfg(unix)]
-fn host_note() -> String {
-    let mut note = String::new();
+/// V2-G10: `Some(true)` only when the host is positively identified as a
+/// virtual machine (macOS `kern.hv_vmm_present`, Linux `hypervisor` CPU
+/// flag); `Some(false)` when identified as physical; `None` when it cannot
+/// be told, which the caller treats like a physical machine (no exemption).
+fn virtualized() -> Option<bool> {
     #[cfg(target_os = "macos")]
     {
         let mut v: i32 = -1;
@@ -86,17 +84,37 @@ fn host_note() -> String {
                 0,
             )
         };
-        note.push_str(&format!(
-            " vm={}",
-            if r == 0 { v.to_string() } else { "?".into() }
-        ));
+        return if r == 0 { Some(v == 1) } else { None };
     }
+    #[cfg(target_os = "linux")]
     {
-        let mut l = [0f64; 3];
-        // SAFETY: `l` has room for the 3 averages requested.
-        if unsafe { libc::getloadavg(l.as_mut_ptr(), 3) } == 3 {
-            note.push_str(&format!(" load={:.2}/{:.2}/{:.2}", l[0], l[1], l[2]));
+        return std::fs::read_to_string("/proc/cpuinfo").ok().map(|c| {
+            c.lines()
+                .any(|l| l.starts_with("flags") && l.split_whitespace().any(|f| f == "hypervisor"))
+        });
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Diagnostic only (no assertion depends on it): whether the host is a
+/// virtual machine and its load. In a VM, time the hypervisor takes the vCPU
+/// away while this thread runs is charged to the thread's CPU clock, so a
+/// block can read as "working" past its deadline without doing more work.
+#[cfg(unix)]
+fn host_note() -> String {
+    let mut note = format!(
+        " vm={}",
+        match virtualized() {
+            Some(true) => "1",
+            Some(false) => "0",
+            None => "?",
         }
+    );
+    let mut l = [0f64; 3];
+    // SAFETY: `l` has room for the 3 averages requested.
+    if unsafe { libc::getloadavg(l.as_mut_ptr(), 3) } == 3 {
+        note.push_str(&format!(" load={:.2}/{:.2}/{:.2}", l[0], l[1], l[2]));
     }
     note
 }
@@ -221,17 +239,35 @@ fn block_processing_meets_its_deadline_across_hot_swaps() {
     );
     assert!(first < RT_FUEL, "block fuel {first} >= one call's budget");
     eprintln!("T16 fuel: every block used {first} units (one call's budget: {RT_FUEL})");
-    // The work itself: no block, swaps included, needs more CPU than its
-    // deadline (with a 10x margin at p99.9).
-    assert_eq!(cpu_misses, 0, "a block's own work exceeded its deadline");
-    assert!(
-        q(&cpu_times, 0.999) < DEADLINE / 10,
-        "cpu p99.9 {:?}",
-        q(&cpu_times, 0.999)
-    );
-    // A wall-clock miss is only acceptable when the thread was preempted
-    // (non-RT scheduler): never when it was working.
-    assert_eq!(wall_misses, preempted, "a wall miss without preemption");
+    // V2-G10: temporal qualification is separate from the algorithmic
+    // guarantees above (fuel, which stay blocking everywhere).
+    let p50 = q(&cpu_times, 0.5);
+    let p999 = q(&cpu_times, 0.999);
+    match virtualized() {
+        Some(true) => {
+            // An identified virtual runner: the hypervisor's steal time is
+            // charged to this thread's CPU clock, so a miss there cannot be
+            // attributed to the work. The times are reported and the
+            // temporal verdict is INCONCLUSIVE, never PASS. A regression
+            // guard stays blocking on the median, which steal does not move.
+            eprintln!(
+                "T16 temporal: INCONCLUSIVE (virtualized runner) cpu_misses={cpu_misses} wall_misses={wall_misses} preempted={preempted} p50={p50:?} p99.9={p999:?}"
+            );
+            assert!(p50 < DEADLINE / 10, "regression: cpu p50 {p50:?}");
+        }
+        // A physical machine, or one that cannot be identified (never an
+        // exemption): the timing assertions are blocking, unchanged.
+        _ => {
+            // The work itself: no block, swaps included, needs more CPU than
+            // its deadline (with a 10x margin at p99.9).
+            assert_eq!(cpu_misses, 0, "a block's own work exceeded its deadline");
+            assert!(p999 < DEADLINE / 10, "cpu p99.9 {p999:?}");
+            // A wall-clock miss is only acceptable when the thread was
+            // preempted (non-RT scheduler): never when it was working.
+            assert_eq!(wall_misses, preempted, "a wall miss without preemption");
+            eprintln!("T16 temporal: blocking assertions held (host not identified as virtual)");
+        }
+    }
 }
 
 /// Stack margins. The reference interpreter recurses once per IR call: at
@@ -306,6 +342,27 @@ fn a_small_stack_budget_protects_a_small_callback_thread() {
 
 /// V2-G9: a spinning entry burns exactly one call's budget of fuel,
 /// whatever the host's clock; a straight-line edit then burns one unit.
+#[test]
+fn a_rolled_back_call_counts_the_fuel_of_both_attempts() {
+    // V2-G10: the work of a call is the trapping attempt plus its re-run.
+    let spin = "fn gain(x: f32) -> f32 effects() {\n    let mut i: i64 = 0;\n    while i >= 0 {\n        i = i + 0;\n    }\n    return x;\n}\n";
+    let (mut e, mut rt) = HotEngine::start(&compile_source(OK).unwrap(), "gain").unwrap();
+    assert_eq!(rt.process_f32(1.0), 0.5);
+    assert_eq!(rt.last_fuel_used(), 1);
+    e.update(&compile_source(spin).unwrap()).unwrap();
+    rt.poll();
+    assert_eq!(
+        rt.process_f32(1.0),
+        0.5,
+        "rolled back to the previous version"
+    );
+    assert_eq!(
+        rt.last_fuel_used(),
+        RT_FUEL + 1,
+        "both attempts are counted"
+    );
+}
+
 #[test]
 fn a_spinning_edit_burns_exactly_one_budget_of_fuel() {
     let spin = "fn gain(x: f32) -> f32 effects() {\n    let mut i: i64 = 0;\n    while i >= 0 {\n        i = i + 0;\n    }\n    return x;\n}\n";

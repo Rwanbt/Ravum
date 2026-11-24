@@ -159,3 +159,29 @@ infinie consomme exactement `RT_FUEL`. Les assertions de temps CPU et de
 temps mural sont **inchangées**. Sur une VM chargée, elles peuvent toujours
 échouer sans que le code soit en cause. La borne par carburant établit, elle,
 le travail du bloc indépendamment de l'hôte.
+
+## `rt_budget` : qualification algorithmique et temporelle séparées (V2-G10, 2026-11-24)
+
+- **Bloquant partout** :
+  - borne par carburant. `RtRunner::last_fuel_used()` compte désormais le
+    travail **total** de l'appel : tentative en trap et réexécution après
+    rollback. Le test `a_rolled_back_call_counts_the_fuel_of_both_attempts`
+    vérifie `RT_FUEL + 1` ;
+  - pile, absence d'allocation, rollback, exactitude.
+- **Runner identifié comme virtuel** (macOS `kern.hv_vmm_present = 1`,
+  drapeau Linux `hypervisor`) :
+  - les temps sont rapportés et le verdict temporel est `INCONCLUSIVE`,
+    jamais `PASS` ;
+  - une garde de régression reste bloquante sur le **p50** du temps CPU
+    (< 1/10 de l'échéance), que le temps volé par l'hyperviseur ne déplace
+    pas.
+- **Machine physique, ou machine non identifiée** (Windows notamment) : les
+  assertions de temps restent bloquantes, avec les seuils inchangés.
+- **Conséquence** : les runners Linux et macOS de la CI sont virtuels. Leurs
+  runs ne qualifient donc plus le temps réel : seule une campagne sur
+  machine physique le fait, avec
+  [`tools/qualification/rt_budget_physical.sh`](../../tools/qualification/rt_budget_physical.sh)
+  (10 exécutions par défaut, rapport daté, code de sortie non nul au moindre
+  échec).
+- Le carburant compte les retours en arrière de boucle et les entrées de
+  fonction : ce n'est **pas** une preuve de temps d'exécution maximal.

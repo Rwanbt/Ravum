@@ -221,6 +221,9 @@ pub struct RtRunner {
     ctx: Ctx,
     kind: EntryKind,
     fuel: u64,
+    /// V2-G10: fuel of the last **call**, all attempts included (the trapping
+    /// one and its re-run after rollback), not only the last attempt.
+    call_fuel: u64,
     /// Host-owned state (DSP entry), 8-byte aligned, and the copy taken
     /// before each call so a trapping version cannot leave it half-written.
     state: Box<[u64]>,
@@ -287,6 +290,7 @@ impl HotEngine {
             .active_generation
             .store(version.generation, SeqCst);
         let runner = RtRunner {
+            call_fuel: 0,
             mailbox: engine.mailbox.clone(),
             current: version,
             previous: None,
@@ -809,11 +813,13 @@ impl RtRunner {
         self.fuel
     }
 
-    /// Fuel the last call consumed (its re-run when it rolled back): a
-    /// deterministic measure of a call's work, independent of the host's
-    /// clock and load (V2-G9). Reads one field; never allocates.
+    /// Fuel the last call consumed **in total** (V2-G10): a trapping attempt
+    /// plus its re-run after rollback, when there was one. A deterministic
+    /// measure of a call's work in the fuel model (loop back-edges and
+    /// function entries), independent of the host's clock and load; it is
+    /// not a bound on execution time. Reads one field; never allocates.
     pub fn last_fuel_used(&self) -> u64 {
-        self.fuel.saturating_sub(self.ctx.fuel)
+        self.call_fuel
     }
 
     /// Native stack bytes compiled code may use below the host's call
@@ -835,11 +841,13 @@ impl RtRunner {
     pub fn process_f32(&mut self, x: f32) -> f32 {
         assert_eq!(self.kind, EntryKind::F32ToF32);
         let (y, code) = call_f32(&mut self.ctx, self.fuel, &self.current, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         if self.roll_back(code) {
             let (y, code) = call_f32(&mut self.ctx, self.fuel, &self.current, x);
+            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
             if code == 0 {
                 return y;
             }
@@ -854,12 +862,14 @@ impl RtRunner {
         assert_eq!(self.kind, EntryKind::DspF32);
         self.backup.copy_from_slice(&self.state);
         let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         self.state.copy_from_slice(&self.backup);
         if self.roll_back(code) {
             let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
             if code == 0 {
                 return y;
             }
@@ -914,11 +924,13 @@ impl RtRunner {
     pub fn process_f64(&mut self, x: f64) -> f64 {
         assert_eq!(self.kind, EntryKind::F64ToF64);
         let (y, code) = call_f64(&mut self.ctx, self.fuel, &self.current, x);
+        self.call_fuel = self.fuel.saturating_sub(self.ctx.fuel);
         if code == 0 {
             return y;
         }
         if self.roll_back(code) {
             let (y, code) = call_f64(&mut self.ctx, self.fuel, &self.current, x);
+            self.call_fuel += self.fuel.saturating_sub(self.ctx.fuel);
             if code == 0 {
                 return y;
             }
