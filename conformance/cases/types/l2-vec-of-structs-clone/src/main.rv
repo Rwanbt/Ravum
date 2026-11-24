@@ -1,0 +1,17 @@
+use std::io;
+
+struct P { x: i64, y: i64 }
+
+fn main() -> () effects(io, alloc) {
+    let mut a: Vec<P> = Vec::new();
+    a.push(P { x: 1, y: 2 });
+    a.push(P { x: 3, y: 4 });
+    let mut b: Vec<P> = a.clone();
+    b[0].x = 100;
+    b.push(P { x: 5, y: 6 });
+    io::println(&a[0].x.to_string());
+    io::println(&b[0].x.to_string());
+    io::println(&a.len().to_string());
+    io::println(&b.len().to_string());
+    io::println(&b[1].y.to_string());
+}

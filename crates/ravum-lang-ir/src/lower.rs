@@ -143,21 +143,31 @@ impl<'a> Layouts<'a> {
                 let Some(info) = self.checked.facts.enums.get(def) else {
                     return Ok(None);
                 };
-                if !args.is_empty() || !info.generics.is_empty() {
-                    return unsupported("generic enum");
+                if args.len() != info.generics.len() {
+                    return Err(LowerError::MissingFact("generic enum arity".into()));
                 }
-                if !info.is_copy {
-                    return unsupported(format!("non-`Copy` enum `{}`", info.name));
-                }
-                Ok(Some(
-                    info.variants
-                        .iter()
-                        .map(|v| match v.kind {
+                // A generic enum is laid out per instance, like a generic
+                // struct. A non-`Copy` payload (a `String`) is a handle: the
+                // enum is moved word for word and the checker forbids reuse
+                // of a moved value, so the handle has one owner.
+                let subst: crate::mono::Subst = args.iter().cloned().enumerate().collect();
+                let vs: Vec<Vec<Type>> = info
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        let tys: Vec<Type> = match v.kind {
                             VariantKind::Struct => v.fields.iter().map(|f| f.ty.clone()).collect(),
                             _ => v.tuple_types.clone(),
-                        })
-                        .collect(),
-                ))
+                        };
+                        tys.iter()
+                            .map(|t| crate::mono::substitute(t, &subst))
+                            .collect()
+                    })
+                    .collect();
+                if vs.iter().flatten().any(crate::mono::has_param) {
+                    return unsupported("generic enum with an unresolved type argument");
+                }
+                Ok(Some(vs))
             }
             _ => Ok(None),
         }
@@ -223,6 +233,12 @@ impl<'a> Layouts<'a> {
             return Ok((0..l.size / w).map(|i| (i * w, wt.clone())).collect());
         }
         let tys: Vec<Type> = match t {
+            // The builtin `Error` (STD-7.5): `struct Error { message: String }`.
+            Type::Nominal { def, name, .. }
+                if name == "Error" && !self.checked.facts.structs.contains_key(def) =>
+            {
+                vec![Type::String]
+            }
             Type::Nominal { def, args, .. } => {
                 let Some(info) = self.checked.facts.structs.get(def) else {
                     return Err(LowerError::MissingFact("struct info".into()));
@@ -291,7 +307,9 @@ impl<'a> Layouts<'a> {
             });
         }
         match map_ty(t)? {
-            Ty::Unit => unsupported("`()` stored in memory"),
+            // `()` occupies no memory: a `Result<(), E>` payload, a unit
+            // field. Loads and stores of it are elided.
+            Ty::Unit => Ok(Layout { size: 0, align: 1 }),
             Ty::Ptr => unsupported("reference stored in memory"),
             s => Ok(Layout {
                 size: s.size(),
@@ -302,6 +320,11 @@ impl<'a> Layouts<'a> {
 
     /// Offset and type of field `name` of struct type `t`.
     fn named_field(&self, t: &Type, name: &str) -> R<(u32, Type)> {
+        if let Type::Nominal { def, name: n, .. } = t {
+            if n == "Error" && name == "message" && !self.checked.facts.structs.contains_key(def) {
+                return Ok((0, Type::String));
+            }
+        }
         let Type::Nominal { def, .. } = t else {
             return Err(LowerError::MissingFact(format!(
                 "field `{name}` of a non-struct"
@@ -352,9 +375,10 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                 }
             }
             ItemKind::Enum(e) => {
-                let info = checked.facts.enums.get(&item.id);
-                if !info.is_some_and(|i| i.is_copy && i.generics.is_empty()) {
-                    return unsupported(format!("non-`Copy` or generic enum `{}`", e.name.name));
+                // Non-`Copy` and generic enums are laid out per use
+                // (`Layouts::variants`); only the facts must exist.
+                if !checked.facts.enums.contains_key(&item.id) {
+                    return Err(LowerError::MissingFact(format!("enum `{}`", e.name.name)));
                 }
             }
             ItemKind::Const(c) => match checked.facts.consts.get(&item.id) {
@@ -430,6 +454,23 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
         let (item, f) = by_id[&item_id];
         functions.push(FnLower::new(checked, &layouts, &table, item, f, subst)?.run(f)?);
     }
+    // STD (stdlib.md §13 table): `main() -> Result<(), Error>` returning
+    // `Err(e)` prints `error: <message>` on stderr. Its body takes a hidden
+    // result address, so the entry `main` becomes a parameterless wrapper
+    // that calls it (renamed `main$body`) and reports an `Err`.
+    if let Some((item, _)) = plain.iter().find(|(_, f)| f.name.name == "main") {
+        let ret = checked
+            .facts
+            .fn_sigs
+            .get(&item.id)
+            .map(|s| s.ret.clone())
+            .ok_or_else(|| LowerError::MissingFact("signature of `main`".into()))?;
+        if matches!(&ret, Type::Result(ok, err) if **ok == Type::Unit && is_error(err)) {
+            let id = table.borrow().plain[&item.id];
+            functions[id as usize].name = "main$body".into();
+            functions.push(main_wrapper(&layouts, &ret, id)?);
+        }
+    }
     let m = Module {
         version: IR_VERSION.to_string(),
         functions,
@@ -504,6 +545,15 @@ struct FnLower<'a> {
     /// (declaration span, name) → (slot, checker type). Aggregate variables
     /// hold the address of their own storage.
     vars: BTreeMap<(Span, String), (Local, Type)>,
+    /// `let` scalars whose address is taken (`&x`, `&mut x`): they live in a
+    /// stack slot from their declaration on, `mem_vars` holds those slots.
+    borrowed: std::collections::BTreeSet<(Span, String)>,
+    mem_vars: std::collections::BTreeSet<Local>,
+    /// `&mut v[i]` of an aggregate `Vec` element: a private copy is lent to
+    /// the call and stored back after it (Core 1.0 cannot keep a borrow past
+    /// a call). `wb_marks` opens one frame per user call being lowered.
+    writebacks: Vec<(Local, u32, Type, Local)>,
+    wb_marks: Vec<usize>,
     loops: Vec<LoopCtx>,
     ret: Type,
     /// Hidden result address when the function returns an aggregate.
@@ -578,6 +628,10 @@ impl<'a> FnLower<'a> {
             }],
             cur: 0,
             vars: BTreeMap::new(),
+            borrowed: std::collections::BTreeSet::new(),
+            mem_vars: std::collections::BTreeSet::new(),
+            writebacks: Vec::new(),
+            wb_marks: Vec::new(),
             loops: Vec::new(),
             ret: sig.ret.clone(),
             sret: None,
@@ -598,7 +652,9 @@ impl<'a> FnLower<'a> {
             inv_receiver: None,
         };
         map_ty(&sig.ret)?;
-        if matches!(sig.ret, Type::Ref { .. }) {
+        // Core 1.0 returns only `&'static str` (E-OWN-REF-ESCAPE otherwise):
+        // a heap handle. A pointer return stays refused.
+        if matches!(sig.ret, Type::Ref { .. }) && map_ty(&sig.ret)? != Ty::Obj {
             return unsupported("function returning a reference");
         }
         if Layouts::is_agg(&sig.ret) {
@@ -609,7 +665,7 @@ impl<'a> FnLower<'a> {
             if let Type::Ref { inner, .. } = &p.ty {
                 if map_ty(&p.ty)? == Ty::Obj {
                     // `&String`/`&mut Vec<T>`: the handle itself.
-                } else if !Layouts::is_agg(inner) {
+                } else if !Layouts::is_agg(inner) && !plain_scalar(map_ty(inner)?) {
                     return unsupported("reference to a scalar parameter");
                 } else {
                     layouts.layout(inner)?;
@@ -673,6 +729,7 @@ impl<'a> FnLower<'a> {
         for c in &reqs {
             self.contract_check(c)?;
         }
+        self.borrowed = borrowed_locals(self.checked, &f.body);
         let v = self.block(&f.body)?;
         let term = self.return_term(v)?;
         self.terminate(term);
@@ -686,7 +743,7 @@ impl<'a> FnLower<'a> {
             params,
             ret,
             locals: self.locals,
-            blocks: self.blocks,
+            blocks: prune_unreachable(self.blocks),
             stack: self.stack,
         })
     }
@@ -1088,6 +1145,9 @@ impl<'a> FnLower<'a> {
             return Ok(());
         }
         let ty = map_ty(t)?;
+        if ty == Ty::Unit {
+            return Ok(());
+        }
         let tmp = self.new_local(ty);
         self.emit(Inst::Load {
             dst: tmp,
@@ -1208,14 +1268,11 @@ impl<'a> FnLower<'a> {
     }
 
     /// The scalar leaves (offset, IR type) of a `Vec` element type, in the
-    /// order of its word vector. Enums and references are refused.
+    /// order of its word vector. References are refused.
     fn vec_leaves(&self, t: &Type) -> R<Vec<(u32, Ty)>> {
         if Layouts::is_agg(t) {
-            if matches!(t, Type::Option(_) | Type::Result(..))
-                || self.layouts.variants(t)?.is_some()
-            {
-                return unsupported("`Vec` of aggregates holding an enum");
-            }
+            // An enum (`Option` and `Result` included) is stored as the raw
+            // words that cover it, exactly as it is copied (`Layouts::fields`).
             let mut out = Vec::new();
             for (off, ft) in self.layouts.fields(t)? {
                 for (o, l) in self.vec_leaves(&ft)? {
@@ -1285,7 +1342,7 @@ impl<'a> FnLower<'a> {
         match &e.kind {
             ExprKind::Path(p) if self.unit_variant(p).is_none() && self.const_of(p).is_none() => {
                 let (l, t) = self.var_of_path(p)?;
-                if Layouts::is_agg(&t) {
+                if Layouts::is_agg(&t) || self.mem_vars.contains(&l) {
                     Ok(Place::Mem {
                         addr: l,
                         off: 0,
@@ -1382,6 +1439,59 @@ impl<'a> FnLower<'a> {
                     src: iv,
                 });
                 Ok(Place::VecElem { h, i, ty: elem })
+            }
+            ExprKind::Index { base, index } if self.vec_rooted(base)? => {
+                // `v[i].z[j]`: an array of scalars inside a `Vec` element.
+                let (o, b, bt) = self.vec_agg_place(base)?;
+                let Type::Array { elem, len } = &bt else {
+                    return unsupported("indexing something other than a fixed array");
+                };
+                let (elem, len) = ((**elem).clone(), *len);
+                if Layouts::is_agg(&elem) {
+                    return unsupported("an array of aggregates inside a `Vec` element");
+                }
+                let ty = map_ty(&elem)?;
+                if !plain_scalar(ty) && ty != Ty::Obj {
+                    return unsupported("an array of this type inside a `Vec` element");
+                }
+                let it = self.ty_of(index)?;
+                let iv = self.expr(index)?;
+                let j = self.new_local(Ty::U64);
+                self.emit(Inst::Cast {
+                    dst: j,
+                    from: it,
+                    to: Ty::U64,
+                    src: iv,
+                });
+                // Bounds check (EXPR-7.6) against the array, not the vector.
+                let n = self.u64_const(len as u64);
+                let ok = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: ok,
+                    op: BinOp::Lt,
+                    ty: Ty::U64,
+                    lhs: j,
+                    rhs: n,
+                });
+                let (inb, oob) = (self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: ok,
+                    then_to: inb,
+                    else_to: oob,
+                });
+                self.switch_to(oob);
+                self.set_term(Term::Trap("index out of bounds".into()));
+                self.switch_to(inb);
+                let first = self.u64_const(b as u64);
+                let i = self.new_local(Ty::U64);
+                self.emit(Inst::Bin {
+                    dst: i,
+                    op: BinOp::Add,
+                    ty: Ty::U64,
+                    lhs: first,
+                    rhs: j,
+                });
+                Ok(Place::VecElem { h: o, i, ty })
             }
             ExprKind::Index { base, index } => {
                 let (addr, off, bt) = self.base_mem(base)?;
@@ -1488,6 +1598,9 @@ impl<'a> FnLower<'a> {
                     return Ok(self.offset(addr, off));
                 }
                 let t = map_ty(&ty)?;
+                if t == Ty::Unit {
+                    return Ok(self.unit());
+                }
                 let dst = self.new_local(t);
                 self.emit(Inst::Load {
                     dst,
@@ -1514,6 +1627,19 @@ impl<'a> FnLower<'a> {
             }
             Place::VecAgg { o, base, ty } => self.vec_store(o, base, &ty, v),
         }
+    }
+
+    /// A `Vec` aggregate element read as a private copy in memory (an
+    /// `Option` method or `?` only reads it); other places unchanged.
+    fn in_memory(&mut self, p: Place) -> R<Place> {
+        Ok(match p {
+            Place::VecAgg { o, base, ty } => Place::Mem {
+                addr: self.vec_materialize(o, base, &ty)?,
+                off: 0,
+                ty,
+            },
+            p => p,
+        })
     }
 
     /// Whether `e` is a `Vec<T>` or a borrow of one.
@@ -1562,12 +1688,20 @@ impl<'a> FnLower<'a> {
                     let Some(init) = &l.init else {
                         return unsupported("`let` without initializer");
                     };
-                    if matches!(ty, Type::Ref { .. }) {
+                    // Only a text binding (`let s: &str = "…"`) is a reference
+                    // the checker lets a `let` hold: a heap handle.
+                    if matches!(ty, Type::Ref { .. }) && map_ty(&ty)? != Ty::Obj {
                         return unsupported("`let` binding a reference");
                     }
                     let v = self.expr(init)?;
+                    let key = (l.pat.span, name.name.clone());
                     let slot = if Layouts::is_agg(&ty) {
                         self.snapshot(v, &ty)?
+                    } else if self.borrowed.contains(&key) && plain_scalar(map_ty(&ty)?) {
+                        let addr = self.alloc(&ty)?;
+                        self.store_value(addr, 0, v, &ty)?;
+                        self.mem_vars.insert(addr);
+                        addr
                     } else {
                         let slot = self.new_local(map_ty(&ty)?);
                         self.emit(Inst::Copy { dst: slot, src: v });
@@ -1641,9 +1775,7 @@ impl<'a> FnLower<'a> {
                     // `&v[i]` of an aggregate element: a private copy is a
                     // sound shared borrow; `&mut` would need its address.
                     p @ Place::VecAgg { .. } if *op == ast::UnOp::Ref => self.read(p),
-                    Place::VecAgg { .. } => {
-                        unsupported("`&mut` borrow of an aggregate `Vec` element")
-                    }
+                    Place::VecAgg { o, base, ty } => self.lend_mut(o, base, ty),
                     Place::Reg(_) | Place::VecElem { .. } => {
                         unsupported("reference to a scalar local")
                     }
@@ -2494,6 +2626,9 @@ impl<'a> FnLower<'a> {
     }
 
     fn for_range(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
+        if matches!(self.type_of(iter)?, Type::Vec(_)) {
+            return self.for_vec(pat, iter, body);
+        }
         let ExprKind::Range {
             start: Some(start),
             end: Some(end),
@@ -2564,6 +2699,81 @@ impl<'a> FnLower<'a> {
             dst: next,
             op: BinOp::Add,
             ty,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+        Ok(self.unit())
+    }
+
+    /// `for x in v` over an owned `Vec<T>` (EXPR-6.4): the vector is
+    /// consumed, its elements are visited in order by index. The length is
+    /// read once: the body cannot reach `v`, which the loop owns.
+    fn for_vec(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
+        let name = match &pat.kind {
+            PatKind::Binding { name, .. } => Some(name.name.clone()),
+            PatKind::Wild => None,
+            _ => return unsupported("`for` pattern"),
+        };
+        let Type::Vec(et) = self.type_of(iter)? else {
+            return Err(LowerError::MissingFact("`for` over a non-vector".into()));
+        };
+        let et = *et;
+        let agg = self.vec_agg_elem(iter)?.is_some();
+        let elem = if agg { Ty::Obj } else { self.vec_elem(iter)? };
+        let h = self.expr(iter)?;
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, bodyb, step, exit) = (
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+        );
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: bodyb,
+            else_to: exit,
+        });
+        self.switch_to(bodyb);
+        let raw = self.new_local(elem);
+        self.heap(Some(raw), HeapOp::VecGet, Some(h), Some(i));
+        let var = if agg {
+            self.vec_materialize(raw, 0, &et)?
+        } else {
+            raw
+        };
+        if let Some(name) = name {
+            self.vars.insert((pat.span, name), (var, et));
+        }
+        self.loops.push(LoopCtx {
+            break_to: exit,
+            continue_to: step,
+        });
+        self.block(body)?;
+        self.loops.pop();
+        self.set_term(Term::Jump(step));
+        self.switch_to(step);
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
             lhs: i,
             rhs: one,
         });
@@ -2871,8 +3081,50 @@ impl<'a> FnLower<'a> {
                 });
                 d
             }
+            // `clone` of a `Vec` of aggregates: the checker allows it only for
+            // `Copy` elements, whose words hold no handle, so cloning each
+            // element's word vector is a deep copy.
             ("Vec::clone", []) if self.vec_agg_elem(recv)?.is_some() => {
-                return unsupported("`clone` of a `Vec` of aggregates");
+                let out = self.new_local(Ty::Obj);
+                self.heap(Some(out), HeapOp::VecNew, None, None);
+                let len = self.new_local(Ty::U64);
+                self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+                let i = self.u64_const(0);
+                let (head, body, exit) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Jump(head));
+                self.switch_to(head);
+                let c = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: c,
+                    op: BinOp::Lt,
+                    ty: Ty::U64,
+                    lhs: i,
+                    rhs: len,
+                });
+                self.set_term(Term::Branch {
+                    cond: c,
+                    then_to: body,
+                    else_to: exit,
+                });
+                self.switch_to(body);
+                let elem = self.new_local(Ty::Obj);
+                self.heap(Some(elem), HeapOp::VecGet, Some(h), Some(i));
+                let copy = self.new_local(Ty::Obj);
+                self.heap(Some(copy), HeapOp::VecClone, Some(elem), None);
+                self.heap(None, HeapOp::VecPush, Some(out), Some(copy));
+                let one = self.u64_const(1);
+                let next = self.new_local(Ty::U64);
+                self.emit(Inst::Bin {
+                    dst: next,
+                    op: BinOp::Add,
+                    ty: Ty::U64,
+                    lhs: i,
+                    rhs: one,
+                });
+                self.emit(Inst::Copy { dst: i, src: next });
+                self.set_term(Term::Jump(head));
+                self.switch_to(exit);
+                out
             }
             ("String::clone" | "Vec::clone", []) => {
                 let op = if path == "Vec::clone" {
@@ -2974,7 +3226,8 @@ impl<'a> FnLower<'a> {
             Type::Result(..) => (0, 1),
             _ => return Err(LowerError::MissingFact("`?` on a non-Option/Result".into())),
         };
-        let Place::Mem { addr, off, .. } = self.place(inner)? else {
+        let p = self.place(inner)?;
+        let Place::Mem { addr, off, .. } = self.in_memory(p)? else {
             return Err(LowerError::MissingFact("`?` operand in a register".into()));
         };
         let tag = self.new_local(Ty::U32);
@@ -3031,8 +3284,8 @@ impl<'a> FnLower<'a> {
         })
     }
 
-    /// `Option::{is_some, is_none, unwrap_or}`. `unwrap` stays `Unsupported`:
-    /// its panic text differs between the spec machine and the rustc path.
+    /// `Option::{is_some, is_none, unwrap, unwrap_or}` (and the `Result`
+    /// forms); `unwrap` panics with the STD-11.2 text, as every engine does.
     fn option_method(&mut self, e: &Expr, recv: &Expr, m: &str, args: &[Expr]) -> R<Local> {
         let ot = self.type_of(recv)?;
         // The "present" variant: `Some` (1) for `Option`, `Ok` (0) for
@@ -3043,6 +3296,7 @@ impl<'a> FnLower<'a> {
             _ => return unsupported(format!("`{m}` on `{ot}`")),
         };
         let p = self.place(recv)?;
+        let p = self.in_memory(p)?;
         let Place::Mem { addr, off, .. } = p else {
             return Err(LowerError::MissingFact("option in a register".into()));
         };
@@ -3106,6 +3360,29 @@ impl<'a> FnLower<'a> {
                 self.switch_to(join);
                 Ok(result)
             }
+            ("unwrap", []) => {
+                // STD-11.2 (MUST): fixed texts, `Err` content not formatted.
+                let text = if good == 1 {
+                    "called Option::unwrap on None"
+                } else {
+                    "called Result::unwrap on an Err value"
+                };
+                let (sb, nb) = (self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: some,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(nb);
+                self.set_term(Term::Trap(text.into()));
+                self.switch_to(sb);
+                let (foff, ft) = self.layouts.variant_fields(&ot, good)?[0].clone();
+                self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft,
+                })
+            }
             _ => unsupported(format!("`Option::{m}`")),
         }
     }
@@ -3138,6 +3415,7 @@ impl<'a> FnLower<'a> {
             .ok_or_else(|| LowerError::MissingFact("method signature".into()))?;
         let by_ref = !matches!(sig.receiver, Some(ast::Receiver::ByValue));
         let rt = self.type_of(recv)?;
+        self.wb_marks.push(self.writebacks.len());
         let first = if by_ref {
             if matches!(rt, Type::Ref { .. }) {
                 self.expr(recv)?
@@ -3149,9 +3427,7 @@ impl<'a> FnLower<'a> {
                     {
                         self.vec_materialize(o, base, &ty)?
                     }
-                    Place::VecAgg { .. } => {
-                        return unsupported("`&mut self` method on an aggregate `Vec` element")
-                    }
+                    Place::VecAgg { o, base, ty } => self.lend_mut(o, base, ty)?,
                     Place::Reg(_) | Place::VecElem { .. } => {
                         return unsupported("method on a scalar receiver")
                     }
@@ -3172,7 +3448,34 @@ impl<'a> FnLower<'a> {
         };
         let mut vals = vec![first];
         vals.extend(self.eval_args(args)?);
-        self.call_func(e, func, vals)
+        let r = self.call_func(e, func, vals)?;
+        self.store_back()?;
+        Ok(r)
+    }
+
+    /// Lend a private copy of a `Vec` aggregate element as `&mut`; it is
+    /// stored back once the enclosing user call returns.
+    fn lend_mut(&mut self, o: Local, base: u32, ty: Type) -> R<Local> {
+        if self.wb_marks.is_empty() {
+            return unsupported("`&mut` borrow of an aggregate `Vec` element outside a call");
+        }
+        let addr = self.vec_materialize(o, base, &ty)?;
+        self.writebacks.push((o, base, ty, addr));
+        Ok(addr)
+    }
+
+    /// Close the innermost call frame: store every copy it lent back into
+    /// its vector, in lending order.
+    fn store_back(&mut self) -> R<()> {
+        let mark = self
+            .wb_marks
+            .pop()
+            .ok_or_else(|| LowerError::MissingFact("write-back frame".into()))?;
+        let lent: Vec<_> = self.writebacks.drain(mark..).collect();
+        for (o, base, ty, addr) in lent {
+            self.vec_store(o, base, &ty, addr)?;
+        }
+        Ok(())
     }
 
     /// Emit a call to `func` with already-evaluated `vals`, adding the hidden
@@ -3219,6 +3522,7 @@ impl<'a> FnLower<'a> {
                 // MACH O1: arguments are evaluated left to right; a by-value
                 // aggregate is copied at once, so later arguments cannot
                 // change it.
+                self.wb_marks.push(self.writebacks.len());
                 for a in args {
                     let at = self.type_of(a)?;
                     let v = self.expr(a)?;
@@ -3234,6 +3538,7 @@ impl<'a> FnLower<'a> {
                         func,
                         args: vals,
                     });
+                    self.store_back()?;
                     return Ok(out);
                 }
                 let dst = self.new_local(map_ty(&rt)?);
@@ -3242,6 +3547,7 @@ impl<'a> FnLower<'a> {
                     func,
                     args: vals,
                 });
+                self.store_back()?;
                 Ok(dst)
             }
             Some(CallTarget::BuiltinFn { path }) if path.ends_with("panic") => match args {
@@ -3358,6 +3664,16 @@ impl<'a> FnLower<'a> {
                 }
                 Ok(dst)
             }
+            // `Error::new(text)`: an `Error` holding a copy of the text.
+            Some(CallTarget::BuiltinFn { path }) if path == "Error::new" && args.len() == 1 => {
+                let t = self.type_of(e)?;
+                let text = self.expr(&args[0])?;
+                let msg = self.new_local(Ty::Obj);
+                self.heap(Some(msg), HeapOp::StrClone, Some(text), None);
+                let dst = self.alloc(&t)?;
+                self.store_value(dst, 0, msg, &Type::String)?;
+                Ok(dst)
+            }
             // `drop(x)`: the run heap is freed when the run ends (IR v1.3),
             // so dropping is evaluating the argument (O1).
             Some(CallTarget::BuiltinFn { path }) if path.ends_with("drop") && args.len() == 1 => {
@@ -3382,4 +3698,256 @@ impl<'a> FnLower<'a> {
             None => Err(LowerError::MissingFact("call target".into())),
         }
     }
+}
+
+/// An integer, a float or a `bool`: a value with an address of its own.
+fn plain_scalar(t: Ty) -> bool {
+    t.is_int() || t.is_float() || t == Ty::Bool
+}
+
+/// The `let` variables of `body` whose address is taken by `&x`/`&mut x`
+/// (declaration span, name). A form the walk does not visit only leaves its
+/// borrow refused later (fail-closed), never mis-lowered.
+fn borrowed_locals(
+    checked: &CheckedProgram,
+    body: &AstBlock,
+) -> std::collections::BTreeSet<(Span, String)> {
+    fn block(
+        c: &CheckedProgram,
+        b: &AstBlock,
+        out: &mut std::collections::BTreeSet<(Span, String)>,
+    ) {
+        for s in &b.stmts {
+            match &s.kind {
+                StmtKind::Let(l) => {
+                    if let Some(i) = &l.init {
+                        expr(c, i, out);
+                    }
+                }
+                StmtKind::Expr { expr: e, .. } => expr(c, e, out),
+            }
+        }
+        if let Some(t) = &b.tail {
+            expr(c, t, out);
+        }
+    }
+    fn expr(c: &CheckedProgram, e: &Expr, out: &mut std::collections::BTreeSet<(Span, String)>) {
+        match &e.kind {
+            ExprKind::Unary { op, expr: inner } => {
+                if matches!(op, ast::UnOp::Ref | ast::UnOp::RefMut) {
+                    if let ExprKind::Path(p) = &inner.kind {
+                        if let Some(Resolution::Local { name, decl, .. }) =
+                            c.facts.resolutions.get(&p.id)
+                        {
+                            out.insert((*decl, name.clone()));
+                        }
+                    }
+                }
+                expr(c, inner, out);
+            }
+            ExprKind::Await(x) | ExprKind::Try(x) => expr(c, x, out),
+            ExprKind::Return(x) => {
+                if let Some(x) = x {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Call { callee, args } => {
+                expr(c, callee, out);
+                args.iter().for_each(|a| expr(c, a, out));
+            }
+            ExprKind::MethodCall { receiver, args, .. } => {
+                expr(c, receiver, out);
+                args.iter().for_each(|a| expr(c, a, out));
+            }
+            ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => expr(c, base, out),
+            ExprKind::Index { base, index } => {
+                expr(c, base, out);
+                expr(c, index, out);
+            }
+            ExprKind::Binary { lhs, rhs, .. } => {
+                expr(c, lhs, out);
+                expr(c, rhs, out);
+            }
+            ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+                expr(c, target, out);
+                expr(c, value, out);
+            }
+            ExprKind::Cast { expr: x, .. } => expr(c, x, out),
+            ExprKind::If {
+                cond,
+                then_block,
+                else_branch,
+            } => {
+                expr(c, cond, out);
+                block(c, then_block, out);
+                if let Some(x) = else_branch {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Match { scrutinee, arms } => {
+                expr(c, scrutinee, out);
+                arms.iter().for_each(|a| expr(c, &a.body, out));
+            }
+            ExprKind::While { cond, body } => {
+                expr(c, cond, out);
+                block(c, body, out);
+            }
+            ExprKind::Loop { body } | ExprKind::Block(body) | ExprKind::Unsafe(body) => {
+                block(c, body, out)
+            }
+            ExprKind::For { iter, body, .. } => {
+                expr(c, iter, out);
+                block(c, body, out);
+            }
+            ExprKind::Tuple(xs) | ExprKind::Array(xs) => xs.iter().for_each(|x| expr(c, x, out)),
+            ExprKind::ArrayRepeat { value, len } => {
+                expr(c, value, out);
+                expr(c, len, out);
+            }
+            ExprKind::StructLit { fields, .. } => {
+                fields.iter().for_each(|f| expr(c, &f.value, out))
+            }
+            ExprKind::Range { start, end, .. } => {
+                for x in [start, end].into_iter().flatten() {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Unit
+            | ExprKind::Int { .. }
+            | ExprKind::Float { .. }
+            | ExprKind::Bool(_)
+            | ExprKind::Char(_)
+            | ExprKind::Str(_)
+            | ExprKind::SelfValue
+            | ExprKind::Path(_)
+            | ExprKind::Break
+            | ExprKind::Continue => {}
+        }
+    }
+    let mut out = std::collections::BTreeSet::new();
+    block(checked, body, &mut out);
+    out
+}
+
+fn is_error(t: &Type) -> bool {
+    matches!(t, Type::Nominal { name, .. } if name == "Error")
+}
+
+/// The entry wrapper of a `main() -> Result<(), Error>` whose body is the
+/// function `body`: call it with a result slot; on `Err` print
+/// `error: <message>` and a newline on stderr, as the rustc path does.
+fn main_wrapper(layouts: &Layouts, ret: &Type, body: FuncId) -> R<Function> {
+    let l = layouts.layout(ret)?;
+    let (err_off, _) = layouts
+        .variant_fields(ret, 1)?
+        .first()
+        .cloned()
+        .ok_or_else(|| LowerError::MissingFact("`Err` payload".into()))?;
+    // Locals: 0 slot address, 1 tag, 2 const 1, 3 is_err, 4 message.
+    let locals = vec![Ty::Ptr, Ty::U32, Ty::U32, Ty::Bool, Ty::Obj];
+    let entry = Block {
+        insts: vec![
+            Inst::StackAddr { dst: 0, slot: 0 },
+            Inst::Call {
+                dst: None,
+                func: body,
+                args: vec![0],
+            },
+            Inst::Load {
+                dst: 1,
+                ty: Ty::U32,
+                addr: 0,
+                offset: 0,
+            },
+            Inst::Const {
+                dst: 2,
+                value: Const::Int {
+                    ty: Ty::U32,
+                    value: 1,
+                },
+            },
+            Inst::Bin {
+                dst: 3,
+                op: BinOp::Eq,
+                ty: Ty::U32,
+                lhs: 1,
+                rhs: 2,
+            },
+        ],
+        term: Term::Branch {
+            cond: 3,
+            then_to: 1,
+            else_to: 2,
+        },
+    };
+    let report = Block {
+        insts: vec![
+            Inst::Load {
+                dst: 4,
+                ty: Ty::Obj,
+                addr: 0,
+                offset: err_off,
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Text("error: ".into()),
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Obj(4),
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Text("\n".into()),
+            },
+        ],
+        term: Term::Return(None),
+    };
+    let done = Block {
+        insts: Vec::new(),
+        term: Term::Return(None),
+    };
+    Ok(Function {
+        name: "main".into(),
+        params: 0,
+        ret: Ty::Unit,
+        locals,
+        blocks: vec![entry, report, done],
+        stack: vec![StackSlot {
+            size: l.size.max(1),
+            align: l.align.max(1),
+        }],
+    })
+}
+
+/// Empty every block no path from the entry reaches, ending it with
+/// `Unreachable`. Such a block is never executed, but it may hold a
+/// placeholder of the wrong type (the join after an `if` whose branches all
+/// `return`), which a native backend's verifier rejects.
+fn prune_unreachable(mut blocks: Vec<Block>) -> Vec<Block> {
+    let mut seen = vec![false; blocks.len()];
+    let mut stack = vec![0usize];
+    while let Some(b) = stack.pop() {
+        if b >= blocks.len() || seen[b] {
+            continue;
+        }
+        seen[b] = true;
+        match &blocks[b].term {
+            Term::Jump(t) => stack.push(*t as usize),
+            Term::Branch {
+                then_to, else_to, ..
+            } => {
+                stack.push(*then_to as usize);
+                stack.push(*else_to as usize);
+            }
+            Term::Return(_) | Term::Trap(_) | Term::Unreachable => {}
+        }
+    }
+    for (b, reached) in blocks.iter_mut().zip(seen) {
+        if !reached {
+            b.insts.clear();
+            b.term = Term::Unreachable;
+        }
+    }
+    blocks
 }

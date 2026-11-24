@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-for-over-vec",
+  "mode": "run-pass",
+  "stdout_contains": "80\nravum\n3\n37\nend\n",
+  "notes": "EXPR-6.4: `for x in v` over an owned `Vec` of scalars, `String`s and structs, with `continue`, `break` and an empty vector. Same program and output as the IR/JIT test `for_over_an_owned_vec_agrees_with_the_interpreter`, here by the rustc path."
+}

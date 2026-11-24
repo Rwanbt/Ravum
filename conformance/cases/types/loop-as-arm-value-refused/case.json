@@ -1,0 +1,8 @@
+{
+  "id": "types/loop-as-arm-value-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-STATEMENT-VALUE"
+  ],
+  "notes": "EXPR-5.11/G-6.19: a loop used directly as a `match` arm value stays refused after the fix for loops inside an arm block."
+}

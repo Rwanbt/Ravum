@@ -1,0 +1,6 @@
+{
+  "id": "run/l7b-async-http-limits-are-err",
+  "mode": "run-pass",
+  "stdout_contains": "small request accepted\nline over 8 KiB is Err\n101 headers is Err\nbody over 16 MiB is Err\n",
+  "notes": "RFC-ASYNC-NET-1 ANET-T4 / ANET-2 (MUST): STD-19.3 limits (line > 8 KiB, more than 100 headers, body > 16 MiB) make `read_request_async` return `Err`, like the blocking form; a small request in the same run is accepted (control)."
+}

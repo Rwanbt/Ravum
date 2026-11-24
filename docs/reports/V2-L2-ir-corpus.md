@@ -229,3 +229,55 @@ cargo run -p ravum-conformance --release -- run
   763 PASS, 0 FAIL, 2 SKIP (Windows), `features_coverage.py --strict`
   248/248.
 - **État.** `TESTED`.
+
+## Suite (2026-11-23, après la fusion de la PR #203) : couverture IR/JIT
+
+Mesure de départ et d'arrivée : `ir_refusal_census` (banc lancé à la main)
+sur les programmes `run-pass` de la conformance contenus dans un seul
+fichier. L'IR en abaissait **86 sur 143** avant ce lot. Elle en abaisse
+**105 sur 148** après tout le lot (le corpus a gagné 5 cas entre-temps).
+
+- **Ajouts** (tous dans `lower.rs` ; format de l'IR, interpréteur et JIT
+  inchangés sauf mention) :
+  - `for x in v` sur un `Vec` possédé ;
+  - `()` en mémoire, donc `Result<(), E>` ;
+  - le type `Error` (`message`, `Error::new`) ;
+  - `unwrap` avec les textes de STD-11.2 ;
+  - `main() -> Result<(), Error>` : une enveloppe affiche
+    `error: <message>` sur stderr, comme la voie `rustc` ;
+  - `&x`/`&mut x` sur un scalaire, et les paramètres `&T`/`&mut T`
+    scalaires ;
+  - les enums non `Copy` et génériques ;
+  - les `Vec` d'enums ;
+  - `&mut v[i]` et les méthodes `&mut self` sur un élément struct
+    (copie prêtée à l'appel puis réécrite, indiscernable d'un emprunt
+    puisque Core 1.0 ne garde aucune référence au-delà d'un appel) ;
+  - `clone` d'un `Vec` de structs `Copy` (copie profonde) ;
+  - les tableaux de scalaires dans un élément de `Vec`.
+- **Correctif** : les blocs inatteignables sont vidés et terminés par
+  `Unreachable`. L'un d'eux contenait un `return` mal typé que le
+  vérificateur de Cranelift rejetait (`run/array-move-branch-descents`).
+- **Oracle nouveau** : `ir_corpus_oracle`. Chaque programme `run-pass`
+  qu'accepte l'IR doit afficher, dans l'interpréteur **et** le JIT, la
+  sortie attendue par son cas de conformance (celle de la voie `rustc`).
+  Il a trouvé les deux bogues corrigés ci-dessus (le `main` à `Result` et
+  le bloc mal typé).
+- **Écarts de spécification trouvés et corrigés** (toutes voies) :
+  - STD-11.2 : textes de panique d'`unwrap` ;
+  - STD-13.1 : champ public `Error.message`.
+- **Refus conservés** :
+  - les E/S hôte (`fs`, `net`, `env`, `thread`, `extern`), car l'IR ne
+    fait pas d'E/S ;
+  - `char`, `i128`/`u128`, libm (`powf`, trigonométrie), `round`/`min`/
+    `max`, certaines méthodes de chaîne, les modules ;
+  - les tableaux d'agrégats dans un élément de `Vec`.
+- **Décision demandée** (EXPR-7.6) : pour un tableau fixe, l'IR garde le
+  message court `index out of bounds`. Y joindre la longueur et l'index
+  demande soit une écriture `Note` que le validateur temps réel refuse
+  (INV-05, assouplissement non fait sans accord), soit un terminateur
+  dédié dans l'IR (passage à IR 1.5). La voie `rustc` et les vecteurs du
+  tas donnent déjà le message complet.
+- **Tests** : `vec_aggregates.rs` (interpréteur = JIT) et les cas
+  `types/l2-*` (voie `rustc`, même sortie). Conformance : 782 cas,
+  780 réussis, 0 échec, 2 ignorés (Windows). `ir_corpus_oracle` est vert.
+- **État** : `TESTED`.

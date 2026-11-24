@@ -1,0 +1,6 @@
+{
+  "id": "run/error-message-field",
+  "mode": "run-pass",
+  "stdout_contains": "3\nodd\n",
+  "notes": "STD-13.1 (MUST): `Error` has a public field `message: String`; the checker used to refuse `e.message` (E-TYP-FIELD). Same program as the IR/JIT test `results_with_the_builtin_error_agree`, here by the rustc path."
+}

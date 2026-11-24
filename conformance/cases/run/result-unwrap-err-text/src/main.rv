@@ -1,0 +1,5 @@
+fn main() -> () effects(panic, alloc) {
+    let a: Result<i64, Error> = Err(Error::new("secret detail"));
+    let b: i64 = a.unwrap();
+    drop(b);
+}

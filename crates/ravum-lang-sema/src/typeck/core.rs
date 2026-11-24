@@ -929,9 +929,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_block(&mut self, block: &Block, expected: Option<&Type>) -> Type {
         self.push_scope();
         let mut last_type: Option<Type> = None;
+        // A statement of a block is never in value position, even when the
+        // block itself is (a `match` arm, an argument): `for` there is a
+        // direct statement (EXPR-5.11). Only the tail keeps the context.
+        let outer = std::mem::take(&mut self.value_position);
         for stmt in &block.stmts {
             last_type = Some(self.check_stmt(stmt));
         }
+        self.value_position = outer;
         let ty = match &block.tail {
             Some(tail) => self.check_expr(tail, expected),
             None => match &last_type {

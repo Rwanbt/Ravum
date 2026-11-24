@@ -1,0 +1,6 @@
+{
+  "id": "run/result-unwrap-err-text",
+  "mode": "run-fail",
+  "stderr_contains": "panic: called Result::unwrap on an Err value\n",
+  "notes": "STD-11.2 (MUST): the exact panic text of `Result::unwrap` on `Err`, with the error content not formatted. The rustc path used to print Rust's default text followed by the `Error` debug form."
+}

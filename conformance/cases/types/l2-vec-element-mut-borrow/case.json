@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-vec-element-mut-borrow",
+  "mode": "run-pass",
+  "stdout_contains": "12\n1\n100\n8\n",
+  "notes": "T14: `&mut self` methods and a `&mut` argument on struct elements of a `Vec`. Same program and output as the IR/JIT test `mutable_borrows_of_vec_struct_elements_write_back`, here by the rustc path."
+}

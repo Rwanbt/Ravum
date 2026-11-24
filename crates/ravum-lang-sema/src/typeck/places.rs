@@ -274,6 +274,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_field(&mut self, base: &Expr, name: &str, span: Span) -> Type {
         let base_ty = self.check_expr(base, None);
         let ty = deref_type(&base_ty);
+        // STD-13.1 (MUST): the prelude `Error` is an ordinary struct with one
+        // public field, `message: String`. It has no item, so no struct facts.
+        if crate::builtins::is_error_type(&ty) && name == "message" {
+            return Type::String;
+        }
         match ty {
             Type::Nominal { def, ref args, .. } => {
                 let Some(field) = self

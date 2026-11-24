@@ -273,3 +273,41 @@ fn watch_jit_migrates_a_wider_state_with_migrate() {
     );
     assert!(child.wait().unwrap().success());
 }
+
+/// A rewrite with identical contents (a touch, or a duplicate file-system
+/// notification as seen on macOS) is not a change: it must not use up a
+/// rebuild. With `--max-rebuilds 1`, the real edit after the touch is still
+/// compiled; before the fix the touch consumed the only rebuild and the
+/// watcher exited first.
+#[test]
+fn watch_jit_ignores_a_rewrite_with_the_same_contents() {
+    let dir = package("touch", PROGRAM);
+    let file = dir.join("src/main.rv");
+    let (mut child, rx) = spawn(&[
+        "watch",
+        "--backend",
+        "jit",
+        "--entry",
+        "check",
+        "--max-rebuilds",
+        "1",
+        dir.to_str().unwrap(),
+    ]);
+    until(&rx, "check() -> value i64 37");
+    std::thread::sleep(Duration::from_millis(30));
+    let same = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, same.as_bytes()).unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    edit(&file, "return 1;", "return 2;");
+    let lines = until(&rx, "check() -> ");
+    assert!(lines.last().unwrap().ends_with("value i64 38"), "{lines:?}");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| *l == "[ravum] change detected")
+            .count(),
+        1,
+        "{lines:?}"
+    );
+    assert!(child.wait().unwrap().success());
+}

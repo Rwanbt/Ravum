@@ -1,0 +1,7 @@
+fn main() {
+    let r: Option<i64> = Some(3);
+    match r {
+        Some(n) => for i in 0..n {},
+        None => {}
+    }
+}

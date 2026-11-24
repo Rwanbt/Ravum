@@ -88,3 +88,55 @@ pics isolés de quelques millisecondes, jamais aux blocs de swap. La cause
 n'est pas identifiée : soit des pics de l'hôte virtualisé, soit un vrai
 coût dans `poll`/`process_sample` sur macOS. Seul un Mac physique peut
 trancher (ADR : seuil inchangé, décision V2-J2).
+
+## `rt_budget` sur macOS : analyse des échecs de la PR #209 (2026-11-23)
+
+Le test en échec est `block_processing_meets_its_deadline_across_hot_swaps`.
+Il traite 20 000 blocs de 64 échantillons, avec 50 remplacements à chaud,
+et vérifie deux choses :
+- aucun bloc ne dépasse en temps CPU l'échéance de 1,333 ms ;
+- le p99,9 du CPU reste sous 133 µs (un dixième de l'échéance).
+
+| Commit | Bloc fautif | CPU du bloc | CPU = mural ? | p99,9 CPU | Assertion |
+|---|---|---|---|---|---|
+| bfc17da | 10 884 (hors remplacement) | 2,036 ms | oui | 70 µs | 1 bloc au-delà de l'échéance |
+| 2ed017a | 6 011 (hors remplacement) | 2,093 ms | oui | 197 µs | 1 bloc au-delà de l'échéance |
+| acf02b5 | — | max 344 µs | — | 137 µs | p99,9 > 133 µs |
+
+La médiane reste à environ 13 µs par bloc. Les trois jobs tournaient en même
+temps (vers 15 h 42), sur des runners `macos-latest` partagés.
+
+**Les changements de la PR sont hors de cause (vérifié).** Entre 1e0b841
+(vert sur macOS) et bfc17da (rouge), seul `ravum-lang-ir/src/lower.rs` a
+changé, pas le JIT. L'IR JSON des 9 versions du programme mesuré est
+**identique octet pour octet** aux deux commits (comparaison faite dans un
+arbre de travail séparé). Le code natif exécuté est donc le même.
+
+**Cause probable.** Le test mesure le travail d'un bloc avec
+`CLOCK_THREAD_CPUTIME_ID`. Dans une machine virtuelle, le temps pendant
+lequel l'hyperviseur retire le vCPU alors que le thread tourne est compté
+dans le temps CPU du thread : le noyau invité ne voit pas ce retrait.
+D'où un bloc à « CPU = mural ≈ 2 ms » sans travail supplémentaire, et un
+compteur de préemption à 0, puisque le test ne reconnaît une préemption que
+si le CPU reste bas. C'est une hypothèse étayée, pas une preuve. La sortie
+du test affiche désormais `vm=` (`kern.hv_vmm_present`) et la charge de
+l'hôte, à titre de diagnostic, sans changer aucune assertion.
+
+**Proposition au responsable** (aucun seuil ni aucune assertion modifiés) :
+1. faire porter « aucun bloc ne dépasse l'échéance » par une mesure
+   déterministe du travail, le carburant consommé par bloc, que le JIT
+   compte déjà ; garder la mesure horaire sur matériel réel et sur les
+   runners Linux non virtualisés au sens de l'invité ;
+2. ou, sur un runner où `vm=1`, rejouer un bloc fautif à l'identique sur
+   une copie de son état. Un travail réellement trop long dépasse
+   l'échéance à chaque fois ; un retrait de l'hyperviseur, non.
+3. Seule une machine Apple physique peut trancher définitivement.
+
+**Confirmation (job macOS de a4d40ba, 18 h 32).** Le diagnostic affiche
+`vm=1` (le runner est une machine virtuelle) et une charge moyenne de
+`1,97 / 5,17 / 9,03` sur 1, 5 et 15 minutes. Deux blocs à 3,46 ms et
+3,11 ms, avec CPU = mural et 0 préemption détectée. La médiane reste à
+13,5 µs et le p99,9 à 71 µs. Le même code passe quand l'hôte est peu
+chargé. L'hypothèse du temps volé par l'hyperviseur, compté comme
+travail du thread, est étayée par une mesure directe. La décision sur la
+mesure (proposition ci-dessus) reste au responsable.

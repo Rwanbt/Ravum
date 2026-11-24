@@ -252,7 +252,7 @@ fn h(p: &str) -> Result<(), String> { let s = fs::read_to_string(p)?; return Res
 | EXPR-9.1 | `place = e;` exige une place **mutable**, un type identique (aucune conversion, `E-TYP-MISMATCH`), et évalue `e` **avant** d'écrire la place. | MUST |
 | EXPR-9.2 | L'assignation **remplace** la valeur : l'ancienne valeur est détruite selon l'ordre de drop, **immédiatement** (pas à la fin du bloc), si elle est mobile et non `Copy`. | MUST |
 | EXPR-9.3 | Assigner à une place **non initialisée** l'initialise (OWN-4.4) ; assigner à une place **déplacée** la **ré-initialise** (ce n'est pas une utilisation : voir OWN-4.4). Lire une place déplacée reste `E-OWN-USE-AFTER-MOVE`. | MUST |
-| EXPR-9.4 | La **famille complète** des opérateurs composés est acceptée : `+= -= *= /= %= &= |= ^= <<= >>=`. Chacun suit `place = place op e` avec **une seule** évaluation de `place` (pas de double évaluation d'un index ou d'un champ). | MUST |
+| EXPR-9.4 | La **famille complète** des opérateurs composés est acceptée : `+= -= *= /= %= &= \|= ^= <<= >>=`. Chacun suit `place = place op e` avec **une seule** évaluation de `place` (pas de double évaluation d'un index ou d'un champ). | MUST |
 | EXPR-9.5 | Une forme non reconnue (`**=`, `//=`, `&&=`) est `E-PARSE-UNEXPECTED`. La famille ci-dessus est fermée : aucune autre n'est acceptée. | MUST |
 | EXPR-9.6 | L'assignation d'un agrégat entier (`p = Point { .. }`) est valide si le type correspond ; l'assignation **partielle** d'un struct (`p.x = 1.0`) est valide si `p` est mutable et si `p` n'est pas emprunté. | MUST |
 | EXPR-9.7 | Une assignation ne peut pas cibler un *place* emprunté par un emprunt actif : conflit `E-OWN-BORROW-CONFLICT` (OWN-6). | MUST |

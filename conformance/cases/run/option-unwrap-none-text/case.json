@@ -1,0 +1,6 @@
+{
+  "id": "run/option-unwrap-none-text",
+  "mode": "run-fail",
+  "stderr_contains": "panic: called Option::unwrap on None\n",
+  "notes": "STD-11.2 (MUST): the exact panic text of `Option::unwrap` on `None`. The rustc path used to print Rust's default text instead."
+}

@@ -126,13 +126,17 @@ fn json_round_trip_is_lossless_and_versioned() {
 #[test]
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
-        // IR v1.2 covers `Copy` enums without generics; a generic one is not.
-        "enum E<T> {\n    A(T),\n    B,\n}\nfn check() -> i32 effects() {\n    let e: E<i32> = E::A(1);\n    return 0;\n}\n",
+        // Generic enums, `Vec`s of enums and `&mut v[i]` are lowered since
+        // 2026-11-23 (tests in ravum-lang-jit/tests/vec_aggregates.rs);
+        // `char` is not.
+        "fn check() -> i32 effects() {\n    let c: char = 'a';\n    return 0;\n}\n",
         // IR v1.2 covers `wrapping_*`/`abs`; `round` (ties away from zero)
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",
         "fn check() -> f64 effects() {\n    let a: f64 = -5.0;\n    return a.min(1.0);\n}\n",
-        "fn f(r: &mut i32) -> i32 effects() {\n    return 0;\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
+        // `&mut i32` parameters are lowered since 2026-11-23 (positive test
+        // `references_to_scalars_agree_with_the_interpreter`); `i128` is not.
+        "fn check() -> i32 effects() {\n    let x: i128 = 1;\n    return 0;\n}\n",
     ] {
         match compile_source(src) {
             Err(CompileError::Lower(LowerError::Unsupported(_))) => {}

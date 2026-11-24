@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-vec-of-structs-clone",
+  "mode": "run-pass",
+  "stdout_contains": "1\n100\n2\n3\n4\n",
+  "notes": "T14: `clone` of a `Vec` of `Copy` structs is a deep copy (a write to the clone leaves the original unchanged). Same program and output as the IR/JIT test `cloning_a_vec_of_copy_structs_is_deep`, here by the rustc path."
+}

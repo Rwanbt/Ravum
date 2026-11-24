@@ -1,0 +1,12 @@
+{
+  "id": "effects/connect-async-refused-under-pure",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "RFC-ASYNC-NET-1 ANET-6 / ANET-T6 (MUST): `net`, `async` and `alloc` are refused at the entry point of the `pure` profile, `connect_async` included."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "types/l2-array-in-vec-element",
+  "mode": "run-fail",
+  "stdout_contains": "3\n1\n",
+  "stderr_contains": "panic: index out of bounds: the len is 3 but the index is 3",
+  "notes": "T14 / EXPR-7.6 (MUST): a `[f32; 3]` inside `Vec` struct elements, read and written by index, then indexed out of bounds: the panic names the array's length and the index. Same program as the IR/JIT test `arrays_inside_vec_elements_agree`, here by the rustc path."
+}

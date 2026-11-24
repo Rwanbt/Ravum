@@ -158,6 +158,14 @@ pub(super) fn builtin_const(path: &str) -> Option<String> {
 pub(super) fn builtin_method_special(owner: &str, method: &str, receiver: &str) -> Option<String> {
     let rendered = match (owner, method) {
         (_, "to_string") => format!("format!(\"{{}}\", {receiver})"),
+        // STD-11.2 (MUST): the panic texts are fixed and the `Err` content
+        // is not formatted; Rust's own `unwrap` prints neither.
+        ("Option", "unwrap") => format!(
+            "match {receiver} {{ Some(rv_v) => rv_v, None => panic!(\"called Option::unwrap on None\") }}"
+        ),
+        ("Result", "unwrap") => format!(
+            "match {receiver} {{ Ok(rv_v) => rv_v, Err(_) => panic!(\"called Result::unwrap on an Err value\") }}"
+        ),
         // `str::as_str` (STD-11.4) is the identity on a text reference: the
         // receiver is already a `&str`, and Rust's `str` has no such method.
         ("str", "as_str") => format!("({receiver})"),

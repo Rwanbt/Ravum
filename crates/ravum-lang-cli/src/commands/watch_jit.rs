@@ -330,6 +330,10 @@ pub fn run(path: &Path, entry: Option<&str>, max_rebuilds: Option<u64>) -> i32 {
     // T13: the incremental check state, kept across edits.
     let mut incr: Option<ravum_lang_incr::package::PackageState> = None;
     let mut last = stamp(&file);
+    // The bytes last checked: a new stamp with the same contents (a
+    // duplicate file-system notification, a touch) is not a change and does
+    // not count against `--max-rebuilds`.
+    let mut seen = std::fs::read(&file).ok();
     attempt(&file, entry, &mut session, &mut incr);
     if max_rebuilds == Some(0) {
         return util::EXIT_OK;
@@ -342,6 +346,11 @@ pub fn run(path: &Path, entry: Option<&str>, max_rebuilds: Option<u64>) -> i32 {
             continue;
         }
         last = now;
+        let bytes = std::fs::read(&file).ok();
+        if bytes.is_some() && bytes == seen {
+            continue;
+        }
+        seen = bytes;
         say("[ravum] change detected");
         attempt(&file, entry, &mut session, &mut incr);
         changes += 1;

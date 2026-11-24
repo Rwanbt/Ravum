@@ -1,0 +1,40 @@
+use std::io;
+
+struct Point { x: i32, y: i64 }
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..6 {
+        v.push((i * 10) as i64);
+    }
+    let mut sum = 0i64;
+    for x in v {
+        if x == 20 {
+            continue;
+        }
+        if x == 50 {
+            break;
+        }
+        sum = sum + x;
+    }
+    io::println(&sum.to_string());
+    let mut words: Vec<String> = Vec::new();
+    words.push(String::from("ra"));
+    words.push(String::from("vum"));
+    let mut all = String::new();
+    for w in words {
+        all.push_str(&w);
+    }
+    io::println(&all);
+    let mut ps: Vec<Point> = Vec::new();
+    ps.push(Point { x: 1, y: 2 });
+    ps.push(Point { x: -3, y: 40 });
+    for p in ps {
+        io::println(&((p.x as i64) + p.y).to_string());
+    }
+    let empty: Vec<i64> = Vec::new();
+    for x in empty {
+        io::println("never");
+    }
+    io::println("end");
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-non-copy-generic-enums",
+  "mode": "run-pass",
+  "stdout_contains": "add milk\na -> b\n-7\nquit\n42\nravum\n-\n",
+  "notes": "T14: a non-`Copy` enum with `String` payloads (tuple and struct variants) and a generic enum at `i64` and `String`. Same program and output as the IR/JIT test `non_copy_and_generic_enums_agree_with_the_interpreter`, here by the rustc path."
+}
