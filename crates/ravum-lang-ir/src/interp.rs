@@ -510,6 +510,13 @@ impl<'m> Machine<'m> {
                 Term::Return(Some(x)) => return Ok(slots[*x as usize]),
                 Term::Return(None) => return Ok(Val::Unit),
                 Term::Trap(m) => return Err(self.trap(m)),
+                Term::TrapBounds { len, index } => {
+                    let w = |l: &Local| to_word(slots[*l as usize]);
+                    return Err(heap_stop(crate::heap::HeapStop::IndexOutOfBounds {
+                        len: w(len),
+                        index: w(index),
+                    }));
+                }
                 Term::Unreachable => return Err(Stop::Fault("reached unreachable block".into())),
             }
         }

@@ -1,4 +1,4 @@
-// oracle: panic: index out of bounds
+// oracle: panic: index out of bounds: the len is 3 but the index is 3
 fn f(i: usize) -> i32 effects() {
     let a: [i32; 3] = [1, 2, 3];
     return a[i];

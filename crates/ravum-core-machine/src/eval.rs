@@ -335,9 +335,10 @@ impl Machine {
                 match b {
                     Value::Array(vs) => {
                         let i = as_i128(&i).ok_or(Stop::Fault("index".into()))?;
+                        let len = vs.len();
                         vs.get(i as usize)
                             .cloned()
-                            .map_or_else(|| panic("index out of bounds"), Ok)
+                            .map_or_else(|| panic(oob(len, i)), Ok)
                     }
                     _ => fault("index of a non-array"),
                 }
@@ -512,7 +513,7 @@ impl Machine {
                 (PlaceStep::Index(_), Value::Array(vs)) => {
                     let i = idx.next().unwrap();
                     if i < 0 || i as usize >= vs.len() {
-                        return panic("index out of bounds");
+                        return panic(oob(vs.len(), i));
                     }
                     &mut vs[i as usize]
                 }
@@ -1141,4 +1142,9 @@ pub fn cast(v: Value, ty: &Ty) -> Eval<Value> {
         (Value::Char(c), Ty::Int(t)) => Ok(wrap(*t, c as u128)),
         (v, _) => fault(format!("invalid cast of {} to {ty:?}", type_name(&v))),
     }
+}
+
+/// The EXPR-7.6 out-of-bounds message.
+fn oob(len: usize, index: i128) -> String {
+    format!("index out of bounds: the len is {len} but the index is {index}")
 }

@@ -113,7 +113,13 @@ hors zone est une faute, jamais une valeur).
 | tous les tests v1 (1 805 générés, corpus, hot swap) | inchangés |
 
 Écart de spec relevé : EXPR-7.6 demande `index out of bounds: the len is N but
-the index is i` ; la machine de référence et l'IR donnent la forme courte.
+the index is i` ; la machine de référence et l'IR donnaient la forme courte.
+**Résorbé le 2026-11-24 (V2-G8)** : `ravum-ir-1.5` ajoute le terminateur
+`Term::TrapBounds { len, index }`. Il produit le texte de la spec dans
+l'interpréteur et dans le JIT (via `ctx.scratch`/`scratch2`, comme les
+vecteurs), n'imprime rien et reste donc admis par le validateur temps réel
+(INV-05), qui n'a pas été modifié. La machine de référence donne le même
+texte, et le corpus `o3-index-out-of-bounds` l'exige désormais en entier.
 
 ## IR v1.2 (ajout du 2026-11-19) — méthodes scalaires
 

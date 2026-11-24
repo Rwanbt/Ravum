@@ -441,9 +441,11 @@ fn main() -> () effects(io, alloc, panic) {
 "#;
     let (render, out) = agree(src);
     assert_eq!(out, "3\n1\n");
-    // The rustc path names length and index (EXPR-7.6, case
-    // types/l2-array-in-vec-element); the IR gives the short form for fixed
-    // arrays, a documented T14 gap: its note would be a write the real-time
-    // validator refuses (INV-05).
-    assert!(render.contains("index out of bounds"), "{render}");
+    // Same text as the rustc path (EXPR-7.6, case
+    // types/l2-array-in-vec-element), through `Term::TrapBounds` (IR 1.5),
+    // which prints nothing and so stays valid in real-time modules (INV-05).
+    assert!(
+        render.contains("index out of bounds: the len is 3 but the index is 3"),
+        "{render}"
+    );
 }
