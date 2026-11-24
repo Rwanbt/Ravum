@@ -21,3 +21,39 @@ sans interprétation ajoutée.
 Source de l'analyse discutée : un échange externe (plan « GOAL Ravum UI »),
 dont seules les parties compatibles avec ces décisions sont reprises dans
 [`docs/ui/PLAN.md`](../ui/PLAN.md).
+
+## Compléments — revue externe transmise par le responsable (2026-11-24)
+
+Le responsable a transmis une revue externe de la PR #210 avec un mandat
+révisé. Ce mandat est enregistré ici ; tout point qui contredirait une
+décision antérieure est signalé, et non appliqué en silence (aucun ne la
+contredit).
+
+- **UI-D6 — Ambition préservée** : on réduit le périmètre de chaque
+  livraison, jamais l'ambition finale. Ces capacités restent toutes dans le
+  plan, avec leur jalon :
+  - styles riches au niveau CSS, Design Contract, scores déterministes ;
+  - responsive sur les tailles intermédiaires, Motion Contracts ;
+  - surfaces spécialisées (DAW, vidéo, 3D), mobile, closures et traits.
+- **UI-D7 — Verify conjoint** (précise UI-D5) : le moteur expose dès le
+  premier rendu les données dont Verify a besoin, et un Verify minimal
+  (débordement, sortie de conteneur, chevauchement) accompagne le hot reload.
+- **UI-D8 — Banc d'essai graphique autorisé** dès maintenant, en
+  parallèle de la RFC. Il porte sur egui avec wgpu, Taffy, Vello, wgpu,
+  winit, Slint, Blitz, Parley, AccessKit et Skia si c'est justifié. Aucune
+  adoption définitive avant le rapport et votre décision (UI-D4).
+- **UI-D9 — Mesures matérielles** sur les machines du responsable :
+  - portable i7 13e génération, RTX 4070 8 Go, 16 Go, Windows et Ubuntu ;
+  - fixe RTX 3060 12 Go, 32 Go ;
+  - Xiaomi 14 Ultra.
+
+  L'agent fournit les scripts et le protocole, et n'invente aucun résultat.
+- **UI-D10 — Feuille de route** U0 à U10, avec le Web (W0 à W2) et Unifia
+  différés : [`docs/ui/PLAN.md`](../ui/PLAN.md), révision 2. Les scores de
+  qualité sont **maintenus** sous forme de sous-scores déterministes, et une
+  erreur critique bloque quel que soit le score.
+- **RFC-UI-LANG-1** : pas encore ratifiée. La révision 2 corrige la
+  contradiction entre `Option<&V>` et OWN-6.1 en introduisant OWN-6.8
+  (emprunts bornés), qui est à ratifier.
+- **PR #210** : pas de fusion ni de ratification sans votre accord explicite
+  et une CI verte sur le SHA exact.
