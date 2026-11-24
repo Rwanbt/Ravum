@@ -209,12 +209,25 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         arms: &[MatchArm],
         expected: Option<&Type>,
     ) -> Type {
-        let scrutinee_ty = self.check_value_expr(scrutinee, None);
+        let scrutinee_ref_ty = self.check_value_expr(scrutinee, None);
+        // OWN-6.8 / P1: a match on `&T` / `&mut T` (T not text: `&str` keeps
+        // its text patterns) matches `T`, binding references.
+        let (scrutinee_ty, by_ref) = match &scrutinee_ref_ty {
+            Type::Ref { mutable, inner } if !matches!(**inner, Type::Str) => {
+                ((**inner).clone(), Some(*mutable))
+            }
+            other => (other.clone(), None),
+        };
+        if by_ref.is_some() {
+            self.facts.ref_matches.insert(scrutinee.id);
+        }
         let mut result: Option<Type> = None;
         let mut patterns: Vec<Option<&Pat>> = Vec::with_capacity(arms.len());
         for arm in arms {
             self.push_scope();
+            let outer = std::mem::replace(&mut self.pat_by_ref, by_ref);
             self.check_pattern(&arm.pat, &scrutinee_ty);
+            self.pat_by_ref = outer;
             let body_expected: Option<&Type> = result.as_ref().or(expected);
             let body_ty = self.check_value_expr(&arm.body, body_expected);
             self.pop_scope();

@@ -1,0 +1,20 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+fn g(n: &N) -> i64 {
+    0
+}
+
+fn f(n: &N) -> i64 {
+    match n {
+        N::L(s) => {
+            let keep = s;
+            0
+        }
+        N::M(v) => 1,
+    }
+}
+
+fn main() {}

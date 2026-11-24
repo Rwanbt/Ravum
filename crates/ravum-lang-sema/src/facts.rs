@@ -460,6 +460,9 @@ pub struct ReusedBody {
 
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
+    /// OWN-6.8 / P1: scrutinees (expression ids) of the `match`es on a
+    /// reference, whose bindings are bounded references.
+    pub ref_matches: BTreeSet<NodeId>,
     /// T13 step 2, set by an incremental driver **before** checking: bodies
     /// not to check again. Their facts are absent from the result, which is
     /// then good for diagnostics only (never for code generation).
@@ -632,6 +635,7 @@ impl Facts {
             new.extend(old.iter().copied().filter(|k| keep(*k)));
         }
         let Facts {
+            ref_matches,
             reuse_bodies: _,
             direct_effects: _,
             fn_used_imports: _,
@@ -664,6 +668,7 @@ impl Facts {
         copy(calls, &old.calls, &keep);
         copy(methods, &old.methods, &keep);
         copy(spawn_targets, &old.spawn_targets, &keep);
+        copy_set(ref_matches, &old.ref_matches, &keep);
         let OwnFacts {
             use_kind,
             place,

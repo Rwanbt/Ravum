@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-binding-returned",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "OWN-6.8 (MUST): a bounded borrow cannot be returned."
+}

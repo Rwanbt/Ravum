@@ -1,0 +1,22 @@
+use std::io;
+
+fn first(v: &Vec<i64>) -> i64 {
+    match v {
+        all => all[0] + (all.len() as i64),
+    }
+}
+
+fn size(s: &String) -> usize {
+    match s {
+        t => t.len(),
+    }
+}
+
+fn main() {
+    let mut v: Vec<i64> = Vec::new();
+    v.push(40);
+    v.push(9);
+    let s = String::from("abc");
+    let total = first(&v) + (size(&s) as i64) + first(&v);
+    io::println(&total.to_string());
+}

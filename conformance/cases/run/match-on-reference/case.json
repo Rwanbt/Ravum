@@ -1,0 +1,6 @@
+{
+  "id": "run/match-on-reference",
+  "mode": "run-pass",
+  "stdout_contains": "2291\n",
+  "notes": "OWN-6.8 / P1 (RFC-UI-LANG-1): a match on `&T` binds bounded references to the parts (generic payloads substituted), without consuming the scrutinee (the tree is counted twice); a match on `&mut T` writes through its bindings into the value itself. Same program run through the IR interpreter and the JIT by ir_corpus_oracle."
+}

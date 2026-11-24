@@ -1,0 +1,20 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+fn g(n: &N) -> i64 {
+    0
+}
+
+fn f(n: &mut N) -> i64 {
+    match n {
+        N::M(v) => {
+            v.push(1);
+            g(&*n)
+        }
+        N::L(s) => 1,
+    }
+}
+
+fn main() {}

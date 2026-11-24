@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-owner-written",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "OWN-6.8 rule 1 (MUST): the matched place stays borrowed for the whole match; writing it in an arm is a conflict."
+}

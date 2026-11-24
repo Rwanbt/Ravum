@@ -545,6 +545,10 @@ struct FnLower<'a> {
     /// (declaration span, name) → (slot, checker type). Aggregate variables
     /// hold the address of their own storage.
     vars: BTreeMap<(Span, String), (Local, Type)>,
+    /// OWN-6.8 / P1: `Some(mutable)` while binding the patterns of a match on
+    /// a reference: bindings are the addresses (or handles) of the matched
+    /// parts, never copies.
+    bind_ref: Option<bool>,
     /// `let` scalars whose address is taken (`&x`, `&mut x`): they live in a
     /// stack slot from their declaration on, `mem_vars` holds those slots.
     borrowed: std::collections::BTreeSet<(Span, String)>,
@@ -628,6 +632,7 @@ impl<'a> FnLower<'a> {
             }],
             cur: 0,
             vars: BTreeMap::new(),
+            bind_ref: None,
             borrowed: std::collections::BTreeSet::new(),
             mem_vars: std::collections::BTreeSet::new(),
             writebacks: Vec::new(),
@@ -2176,8 +2181,17 @@ impl<'a> FnLower<'a> {
             self.new_local(map_ty(&t)?)
         };
         let st = self.type_of(scrutinee)?;
-        if matches!(st, Type::Ref { .. }) {
-            return unsupported("`match` on a reference");
+        if let Type::Ref { mutable, inner } = &st {
+            return self.match_ref(
+                e,
+                scrutinee,
+                arms,
+                *mutable,
+                (**inner).clone(),
+                result,
+                &t,
+                agg,
+            );
         }
         let place = match self.place(scrutinee)? {
             Place::Reg(l) => Place::Reg(l),
@@ -2204,6 +2218,58 @@ impl<'a> FnLower<'a> {
         }
         // The checker proved exhaustiveness; reaching here is a compiler bug,
         // reported as a fault, never a value.
+        self.set_term(Term::Unreachable);
+        self.switch_to(join);
+        Ok(result)
+    }
+
+    /// OWN-6.8 / P1: `match` on `&T` / `&mut T`. The reference is the
+    /// address of `T` (a handle for a heap object); arms test the value in
+    /// place and bind the addresses of its parts, so writes through a `&mut`
+    /// binding land in the matched value itself (no copy, no write-back).
+    #[allow(clippy::too_many_arguments)]
+    fn match_ref(
+        &mut self,
+        _e: &Expr,
+        scrutinee: &Expr,
+        arms: &[ast::MatchArm],
+        mutable: bool,
+        inner: Type,
+        result: Local,
+        t: &Type,
+        agg: bool,
+    ) -> R<Local> {
+        let heap = map_ty(&Type::Ref {
+            mutable,
+            inner: Box::new(inner.clone()),
+        })? == Ty::Obj;
+        // `&mut v[i]` of an aggregate `Vec` is refused by `expr` itself
+        // (its copy is lent to calls only): limit L-OWN-020-1.
+        let addr = self.expr(scrutinee)?;
+        // A borrow of a heap object (`&String`, `&Vec<T>`) is its handle:
+        // bindings receive the handle itself (see `pat_bind`).
+        let place = if heap {
+            Place::Reg(addr)
+        } else {
+            Place::Mem {
+                addr,
+                off: 0,
+                ty: inner.clone(),
+            }
+        };
+        let join = self.new_block();
+        for arm in arms {
+            let next = self.new_block();
+            self.pat_test(&arm.pat, &place, &inner, next)?;
+            let outer = self.bind_ref.replace(mutable);
+            let bound = self.pat_bind(&arm.pat, &place, &inner);
+            self.bind_ref = outer;
+            bound?;
+            let v = self.expr(&arm.body)?;
+            self.join_value(result, v, t, agg)?;
+            self.set_term(Term::Jump(join));
+            self.switch_to(next);
+        }
         self.set_term(Term::Unreachable);
         self.switch_to(join);
         Ok(result)
@@ -2303,6 +2369,26 @@ impl<'a> FnLower<'a> {
     /// Bind the variables of a pattern that matched the value at `p`.
     fn pat_bind(&mut self, pat: &ast::Pat, p: &Place, t: &Type) -> R<()> {
         match &pat.kind {
+            PatKind::Binding { name, .. } if self.bind_ref.is_some() => {
+                let mutable = self.bind_ref == Some(true);
+                let rt = Type::Ref {
+                    mutable,
+                    inner: Box::new(t.clone()),
+                };
+                let slot = if map_ty(&rt)? == Ty::Obj {
+                    // `&String` / `&Vec`: the handle itself.
+                    self.read_place(p)?
+                } else {
+                    let Place::Mem { addr, off, .. } = p else {
+                        return Err(LowerError::MissingFact(
+                            "bounded borrow of a register".into(),
+                        ));
+                    };
+                    self.offset(*addr, *off)
+                };
+                self.vars.insert((pat.span, name.name.clone()), (slot, rt));
+                Ok(())
+            }
             PatKind::Binding { name, .. } => {
                 let slot = if Layouts::is_agg(t) {
                     let Place::Mem { addr, off, .. } = p else {

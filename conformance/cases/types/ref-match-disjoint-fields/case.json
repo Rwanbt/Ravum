@@ -1,0 +1,5 @@
+{
+  "id": "types/ref-match-disjoint-fields",
+  "mode": "compile-pass",
+  "notes": "OWN-6.10 (MUST): bounded borrows of disjoint places (w.a mutably, w.b shared) do not conflict; the place analysis of the ownership checker applies."
+}

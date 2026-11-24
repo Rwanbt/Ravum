@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-same-field-conflict",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "OWN-6.10 (MUST): a shared borrow of the place already mutably borrowed by an enclosing match on a reference is a conflict (nested bounded borrows)."
+}
