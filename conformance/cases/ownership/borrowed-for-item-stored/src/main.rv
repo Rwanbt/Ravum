@@ -1,0 +1,10 @@
+fn f(v: &Vec<i64>) -> i64 {
+    let mut keep: i64 = 0;
+    for x in v {
+        let r = x;
+        keep = *r;
+    }
+    keep
+}
+
+fn main() {}

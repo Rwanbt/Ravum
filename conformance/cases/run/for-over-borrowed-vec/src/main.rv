@@ -1,0 +1,55 @@
+use std::io;
+struct P { x: i64, name: String }
+fn total(v: &Vec<P>) -> i64 {
+    let mut s: i64 = 0;
+    for p in v {
+        s += p.x + (p.name.len() as i64);
+    }
+    s
+}
+fn bump(v: &mut Vec<P>) {
+    for p in v {
+        p.x += 100;
+        p.name.push_str("!");
+    }
+}
+fn sum(v: &Vec<i64>) -> i64 {
+    let mut s: i64 = 0;
+    for x in v {
+        if *x < 0 {
+            continue;
+        }
+        s += *x;
+    }
+    s
+}
+fn double_until(v: &mut Vec<i64>, stop: i64) -> i64 {
+    for x in v {
+        if *x == stop {
+            *x = 0;
+            return 1;
+        }
+        *x *= 2;
+        if *x > 100 {
+            break;
+        }
+    }
+    0
+}
+fn main() {
+    let mut v: Vec<P> = Vec::new();
+    v.push(P { x: 1, name: String::from("ab") });
+    v.push(P { x: 2, name: String::from("c") });
+    let a = total(&v);
+    bump(&mut v);
+    let b = total(&v);
+    let mut n: Vec<i64> = Vec::new();
+    n.push(5);
+    n.push(-3);
+    n.push(7);
+    n.push(60);
+    n.push(9);
+    let r = double_until(&mut n, 7);
+    let r2 = double_until(&mut n, 1000);
+    io::println(&(a * 1000000 + b * 1000 + sum(&n) + r * 100000000 + r2 * 10000000000 + n[2] * 100000000000).to_string());
+}

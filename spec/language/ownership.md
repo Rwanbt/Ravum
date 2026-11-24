@@ -263,6 +263,7 @@ fn o(v: Vec<String>) {
 | OWN-6.10 | Pendant un `match` sur `&x`, `x` reste emprunté jusqu'à la fin du `match` : l'écrire ou le déplacer dans un bras est `E-OWN-BORROW-CONFLICT`. Pendant un `match` sur `&mut x` (ou sur `n: &mut T`), tout accès à `x` (ou à `n`) autre que par les liaisons est `E-OWN-BORROW-CONFLICT`. Les écritures à travers une liaison `&mut` modifient la valeur matchée elle-même. | MUST |
 | OWN-6.11 | Déplacer une valeur non `Copy` à travers un emprunt borné est `E-OWN-MOVE-OUT-OF-BORROW` ; une partie `Copy` se lit par `*x`. | MUST |
 | OWN-6.12 | Un emprunt borné ne traverse jamais un `.await`. Dans une `async fn`, cette règle est garantie par CONC-6.3 (aucune liaison de type référence, y compris les liaisons d'un `match` sur une référence) : `E-CONC-REF-ACROSS-AWAIT`. | MUST |
+| OWN-6.13 | `for x in &v` / `for x in &mut v` (`v: Vec<T>`, ou une référence à un `Vec<T>`) : `x` est un emprunt borné au corps de boucle, de type `&T` / `&mut T`, vers l'élément courant. `v` reste emprunté pendant toute la boucle : le modifier (`push`, `clear`, affectation), le déplacer, ou l'utiliser autrement que par `x` sous `&mut`, est `E-OWN-BORROW-CONFLICT`. Les écritures à travers `x` modifient l'élément de `v` et sont visibles après **toute** sortie de l'itération (fin du corps, `continue`, `break`, `return`, `?`). | MUST |
 
 > **Périmètre de F-OWN-020 (P1, `experimental`).** Limites délimitées, à
 > lever avant la qualification complète de RFC-UI-LANG-1 :

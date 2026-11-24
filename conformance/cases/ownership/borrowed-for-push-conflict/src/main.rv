@@ -1,0 +1,7 @@
+fn f(mut v: Vec<i64>) {
+    for x in &v {
+        v.push(*x);
+    }
+}
+
+fn main() {}

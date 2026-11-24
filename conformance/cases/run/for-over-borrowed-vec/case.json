@@ -1,0 +1,6 @@
+{
+  "id": "run/for-over-borrowed-vec",
+  "mode": "run-pass",
+  "stdout_contains": "106208149\n",
+  "notes": "OWN-6.13 / P2: `for x in &v` reads a Vec without consuming it; `for x in &mut v` writes through the item (struct fields, a String in place, scalars), and the writes stay visible after `continue`, `break` and `return` inside the body. Run through rustc, the IR interpreter and the JIT (ir_corpus_oracle)."
+}

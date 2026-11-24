@@ -1,0 +1,6 @@
+{
+  "id": "ownership/borrowed-for-item-stored",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "OWN-6.8 / OWN-6.13 (MUST): the item is a bounded borrow; storing it in a let is E-OWN-REF-ESCAPE."
+}

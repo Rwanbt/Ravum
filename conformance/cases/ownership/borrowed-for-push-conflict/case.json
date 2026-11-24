@@ -1,0 +1,6 @@
+{
+  "id": "ownership/borrowed-for-push-conflict",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "OWN-6.13 (MUST): the Vec stays borrowed for the whole loop; pushing to it in the body is a conflict (no invalidated element)."
+}

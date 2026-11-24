@@ -1,0 +1,7 @@
+fn f(v: &Vec<i64>) {
+    for x in v {
+        *x = 1;
+    }
+}
+
+fn main() {}

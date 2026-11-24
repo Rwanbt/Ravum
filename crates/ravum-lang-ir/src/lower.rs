@@ -516,6 +516,21 @@ impl FnTable {
 struct LoopCtx {
     break_to: BlockId,
     continue_to: BlockId,
+    /// OWN-6.8 / P2: length of `loop_wb` when this loop was entered; a
+    /// `break` or `continue` of this loop writes back the entries from here.
+    wb_base: usize,
+}
+
+/// OWN-6.8 / P2: a `&mut` item of `for x in &mut v` lent as a private copy
+/// for one iteration: scalar slot or materialized aggregate, stored back
+/// into `v[i]` on **every** exit of the iteration (end of body, `continue`,
+/// `break`, `return`, `?`), so the copy is never observable (RFC §2.1).
+struct LoopWriteBack {
+    h: Local,
+    i: Local,
+    ty: Type,
+    addr: Local,
+    agg: Option<Local>,
 }
 
 /// Where a value lives.
@@ -545,6 +560,8 @@ struct FnLower<'a> {
     /// (declaration span, name) → (slot, checker type). Aggregate variables
     /// hold the address of their own storage.
     vars: BTreeMap<(Span, String), (Local, Type)>,
+    /// Pending per-iteration write-backs of `for x in &mut v` (OWN-6.8 / P2).
+    loop_wb: Vec<LoopWriteBack>,
     /// OWN-6.8 / P1: `Some(mutable)` while binding the patterns of a match on
     /// a reference: bindings are the addresses (or handles) of the matched
     /// parts, never copies.
@@ -632,6 +649,7 @@ impl<'a> FnLower<'a> {
             }],
             cur: 0,
             vars: BTreeMap::new(),
+            loop_wb: Vec::new(),
             bind_ref: None,
             borrowed: std::collections::BTreeSet::new(),
             mem_vars: std::collections::BTreeSet::new(),
@@ -984,6 +1002,8 @@ impl<'a> FnLower<'a> {
     }
 
     fn return_term(&mut self, v: Local) -> R<Term> {
+        // Every pending `for x in &mut v` copy is stored back first.
+        self.flush_wb(0)?;
         self.check_ensures(v)?;
         if let Some((def, recv)) = self.inv_receiver {
             if !self.dead {
@@ -1998,6 +2018,7 @@ impl<'a> FnLower<'a> {
                 self.loops.push(LoopCtx {
                     break_to: exit,
                     continue_to: head,
+                    wb_base: self.loop_wb.len(),
                 });
                 self.block(body)?;
                 self.loops.pop();
@@ -2015,6 +2036,7 @@ impl<'a> FnLower<'a> {
                 self.loops.push(LoopCtx {
                     break_to: exit,
                     continue_to: head,
+                    wb_base: self.loop_wb.len(),
                 });
                 self.block(body)?;
                 self.loops.pop();
@@ -2024,20 +2046,22 @@ impl<'a> FnLower<'a> {
             }
             ExprKind::For { pat, iter, body } => self.for_range(pat, iter, body),
             ExprKind::Break => {
-                let to = self
+                let (to, base) = self
                     .loops
                     .last()
-                    .map(|l| l.break_to)
+                    .map(|l| (l.break_to, l.wb_base))
                     .ok_or_else(|| LowerError::MissingFact("loop of `break`".into()))?;
+                self.flush_wb(base)?;
                 self.terminate(Term::Jump(to));
                 Ok(self.unit())
             }
             ExprKind::Continue => {
-                let to = self
+                let (to, base) = self
                     .loops
                     .last()
-                    .map(|l| l.continue_to)
+                    .map(|l| (l.continue_to, l.wb_base))
                     .ok_or_else(|| LowerError::MissingFact("loop of `continue`".into()))?;
+                self.flush_wb(base)?;
                 self.terminate(Term::Jump(to));
                 Ok(self.unit())
             }
@@ -2712,8 +2736,12 @@ impl<'a> FnLower<'a> {
     }
 
     fn for_range(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
-        if matches!(self.type_of(iter)?, Type::Vec(_)) {
-            return self.for_vec(pat, iter, body);
+        match self.type_of(iter)? {
+            Type::Vec(_) => return self.for_vec(pat, iter, body),
+            Type::Ref { mutable, inner } if matches!(*inner, Type::Vec(_)) => {
+                return self.for_vec_ref(pat, iter, body, mutable);
+            }
+            _ => {}
         }
         let ExprKind::Range {
             start: Some(start),
@@ -2773,6 +2801,7 @@ impl<'a> FnLower<'a> {
         self.loops.push(LoopCtx {
             break_to: exit,
             continue_to: step,
+            wb_base: self.loop_wb.len(),
         });
         self.block(body)?;
         self.loops.pop();
@@ -2848,9 +2877,163 @@ impl<'a> FnLower<'a> {
         self.loops.push(LoopCtx {
             break_to: exit,
             continue_to: step,
+            wb_base: self.loop_wb.len(),
         });
         self.block(body)?;
         self.loops.pop();
+        self.set_term(Term::Jump(step));
+        self.switch_to(step);
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+        Ok(self.unit())
+    }
+
+    /// Store back the pending `for x in &mut v` copies from index `from`
+    /// (innermost first), without forgetting them: the other exits of the
+    /// same iterations still need them.
+    fn flush_wb(&mut self, from: usize) -> R<()> {
+        for k in (from..self.loop_wb.len()).rev() {
+            let (h, i, addr, agg, ty) = {
+                let w = &self.loop_wb[k];
+                (w.h, w.i, w.addr, w.agg, w.ty.clone())
+            };
+            match agg {
+                Some(o) => self.vec_store(o, 0, &ty, addr)?,
+                None => {
+                    let lt = map_ty(&ty)?;
+                    let x = self.new_local(lt);
+                    self.emit(Inst::Load {
+                        dst: x,
+                        ty: lt,
+                        addr,
+                        offset: 0,
+                    });
+                    self.emit(Inst::VecSet { h, i, x });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// OWN-6.8 / P2: `for x in &v` / `for x in &mut v` over a `Vec<T>`.
+    /// `x` is the element's handle for a heap object (writes act on the
+    /// object itself), otherwise the address of a copy of the element; under
+    /// `&mut` that copy is stored back on every exit of the iteration.
+    fn for_vec_ref(
+        &mut self,
+        pat: &ast::Pat,
+        iter: &Expr,
+        body: &AstBlock,
+        mutable: bool,
+    ) -> R<Local> {
+        let name = match &pat.kind {
+            PatKind::Binding { name, .. } => Some(name.name.clone()),
+            PatKind::Wild => None,
+            _ => return unsupported("`for` pattern"),
+        };
+        let Type::Ref { inner, .. } = self.type_of(iter)? else {
+            return Err(LowerError::MissingFact("`for` over a non-reference".into()));
+        };
+        let Type::Vec(et) = *inner else {
+            return Err(LowerError::MissingFact("`for` over a non-vector".into()));
+        };
+        let et = *et;
+        let agg = self.vec_agg_elem(iter)?.is_some();
+        let rt = Type::Ref {
+            mutable,
+            inner: Box::new(et.clone()),
+        };
+        let heap = map_ty(&rt)? == Ty::Obj;
+        let elem = if agg || heap {
+            Ty::Obj
+        } else {
+            self.vec_elem(iter)?
+        };
+        let h = self.expr(iter)?;
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, bodyb, step, exit) = (
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+        );
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: bodyb,
+            else_to: exit,
+        });
+        self.switch_to(bodyb);
+        let raw = self.new_local(elem);
+        self.heap(Some(raw), HeapOp::VecGet, Some(h), Some(i));
+        let base = self.loop_wb.len();
+        let var = if heap {
+            raw
+        } else if agg {
+            let addr = self.vec_materialize(raw, 0, &et)?;
+            if mutable {
+                self.loop_wb.push(LoopWriteBack {
+                    h,
+                    i,
+                    ty: et.clone(),
+                    addr,
+                    agg: Some(raw),
+                });
+            }
+            addr
+        } else {
+            let slot = self.alloc(&et)?;
+            self.emit(Inst::Store {
+                ty: elem,
+                addr: slot,
+                offset: 0,
+                src: raw,
+            });
+            if mutable {
+                self.loop_wb.push(LoopWriteBack {
+                    h,
+                    i,
+                    ty: et.clone(),
+                    addr: slot,
+                    agg: None,
+                });
+            }
+            slot
+        };
+        if let Some(name) = name {
+            self.vars.insert((pat.span, name), (var, rt));
+        }
+        self.loops.push(LoopCtx {
+            break_to: exit,
+            continue_to: step,
+            wb_base: base,
+        });
+        self.block(body)?;
+        self.loops.pop();
+        self.flush_wb(base)?;
+        self.loop_wb.truncate(base);
         self.set_term(Term::Jump(step));
         self.switch_to(step);
         // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.

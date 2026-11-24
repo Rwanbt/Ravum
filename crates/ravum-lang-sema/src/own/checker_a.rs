@@ -780,7 +780,7 @@ impl<'a> OwnChecker<'a> {
     /// the arms hold: on `x` for `&x` / `&mut x`, on the reference variable
     /// itself for `n` with `n: &T` / `&mut T`. Other forms (a call returning
     /// a reference) borrow a temporary, which nothing else can name.
-    fn ref_match_loan(&mut self, scrutinee: &Expr) -> Option<Loan> {
+    pub(super) fn ref_match_loan(&mut self, scrutinee: &Expr) -> Option<Loan> {
         match &scrutinee.kind {
             ExprKind::Unary {
                 op: op @ (UnOp::Ref | UnOp::RefMut),

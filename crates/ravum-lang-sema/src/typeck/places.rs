@@ -948,7 +948,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let target_ty = self.check_expr(target, None);
         self.guard_invariant_write(target);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
+        // DIAG-4.2: an operand already in error is not reported again
+        // through the compound operator (same rule as `binary_result_type`).
+        let already_failed = target_ty == Type::Error || value_ty == Type::Error;
         match op {
+            _ if already_failed => {}
             B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
                 // TYP-13.2 : aucune conversion implicite, pas même entre deux
                 // entiers (`i32` vs `i64`) ni entre `f32` et `f64` (EXPR-4.8).

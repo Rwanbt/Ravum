@@ -2,8 +2,27 @@ use super::*;
 
 impl<'a> OwnChecker<'a> {
     pub(super) fn eval_for(&mut self, pat: &Pat, iter_expr: &Expr, body: &Block) {
-        self.eval_value(iter_expr);
+        // OWN-6.8 / P2: `for x in &v` / `&mut v` keeps `v` on loan for the
+        // whole loop; the items are bounded borrows of its elements.
+        let bounded = self.facts.ref_fors.contains(&iter_expr.id);
+        let held = if bounded {
+            self.ref_match_loan(iter_expr)
+        } else {
+            self.eval_value(iter_expr);
+            None
+        };
         self.loans.truncate(self.loan_floor);
+        let saved_floor = self.loan_floor;
+        if let Some(loan) = held {
+            self.loans.push(loan);
+            self.loan_floor = self.loans.len();
+        }
+        self.eval_for_body(pat, body, bounded);
+        self.loans.truncate(saved_floor);
+        self.loan_floor = saved_floor;
+    }
+
+    fn eval_for_body(&mut self, pat: &Pat, body: &Block, bounded: bool) {
         let after_iter = self.state.clone();
         let iter_diverged = self.diverged;
 
@@ -14,8 +33,8 @@ impl<'a> OwnChecker<'a> {
         for b in &bindings {
             // A `for` item of type `&str` comes out of the iterable (a range or
             // a container of static texts): static by rule 2.
-            let static_ref = is_borrowed_text(&b.ty);
-            if b.ty.is_reference() && !static_ref {
+            let static_ref = is_borrowed_text(&b.ty) && !bounded;
+            if b.ty.is_reference() && !static_ref && !bounded {
                 self.report_ref_escape(b.span, "stockée");
             }
             let slot = self.declare_slot(&b.name, b.ty.clone(), static_ref, b.span);
