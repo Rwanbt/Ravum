@@ -16,3 +16,21 @@
   - décider de la licence de Slint (écarter ou non) ;
   - autoriser la fusion de la PR #210.
 - Prochaine action : tour 2 du banc U1-B (même scène dans chaque pile, rendu CPU, mémoire, compilation), et scripts du tour 3 pour vos machines.
+
+## Session 2026-11-24 (suite)
+
+- Branche `claude/ravum-ui`, PR #211 (UI séparée de la V2, UI-D15). La PR #210 annule les commits UI par un revert.
+- Fait :
+  - décisions UI-D11 à UI-D16 ;
+  - RFC-UI-LANG-1 rév. 3 (règles normatives : vues bornées, déréférencement explicite, points sûrs de hot reload, `.await`, représentation dans l'IR) ;
+  - justification sur Slint corrigée ;
+  - plan : réactivité A/B et portabilité du hot reload ;
+  - tour 2, partie 1, du banc.
+- Commande : `cargo run --release -p ui-bench-reactivity` (code de sortie 0).
+- Résultats clés :
+  - B granulaire à 0,5 µs par changement, contre 1,8 ms pour A sur 10 000 lignes ;
+  - Taffy à environ 1,1 ms par changement local sur 10 000 nœuds, même avec des lignes de hauteur fixe.
+- Décisions attendues :
+  - ratifier les règles normatives de RFC-UI-LANG-1 ;
+  - autoriser la fusion de #210 et de #211.
+- Prochaine action : tour 2, parties 2 et 3.
