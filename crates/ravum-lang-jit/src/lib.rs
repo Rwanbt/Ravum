@@ -405,6 +405,12 @@ pub(crate) fn compile_funcs(
                         let code = g.msg(m);
                         g.set_code_and_return(code);
                     }
+                    Term::TrapBounds { len, index } => {
+                        let (l, i) = (g.get(*len), g.get(*index));
+                        g.b.ins().store(MemFlags::trusted(), l, g.ctxp, 32);
+                        g.b.ins().store(MemFlags::trusted(), i, g.ctxp, 40);
+                        g.set_code_and_return(CODE_VEC_OOB);
+                    }
                     Term::Unreachable => {
                         // Dead blocks the lowering left behind; behave like a
                         // fault rather than executing anything.

@@ -165,6 +165,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.facts.methods.insert(expr.id, MethodTarget::Error);
                 Type::Error
             }
+            // The receiver already failed and was reported: check the
+            // arguments, add no second error.
+            Type::Error => {
+                for arg in args {
+                    self.check_expr(arg, None);
+                }
+                self.facts.methods.insert(expr.id, MethodTarget::Error);
+                Type::Error
+            }
             _ => {
                 self.error(
                     "E-RES-UNKNOWN",
@@ -325,6 +334,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
+            // The base already failed and was reported: no second error.
+            Type::Error => Type::Error,
             _ => {
                 // A method name used without a call is not a field and not a
                 // value: `s.parse_i64` is a resolution failure (STD-9.10,

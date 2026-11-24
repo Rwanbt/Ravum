@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.4";
+pub const IR_VERSION: &str = "ravum-ir-1.5";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -358,6 +358,14 @@ pub enum Term {
     Return(Option<Local>),
     /// Controlled stop with a message (`panic` or a language trap).
     Trap(String),
+    /// IR v1.5: out-of-bounds stop of a fixed array (EXPR-7.6), with the
+    /// spec message `index out of bounds: the len is {len} but the index is
+    /// {index}` built from two `u64` locals at stop time. It prints nothing
+    /// and allocates nothing, so real-time modules may use it (INV-05).
+    TrapBounds {
+        len: Local,
+        index: Local,
+    },
     /// Never reached when the program was accepted by the checker.
     Unreachable,
 }
@@ -556,7 +564,20 @@ impl Module {
                         b(*else_to)?
                     }
                     Term::Return(Some(x)) => l(*x)?,
-                    _ => {}
+                    Term::TrapBounds { len, index } => {
+                        for x in [*len, *index] {
+                            l(x)?;
+                            if f.locals[x as usize] != Ty::U64 {
+                                return Err(format!(
+                                    "{}: bounds trap operand {x} is not u64",
+                                    f.name
+                                ));
+                            }
+                        }
+                    }
+                    // Exhaustive on purpose: a new terminator must state
+                    // what it validates (fail-closed).
+                    Term::Return(None) | Term::Trap(_) | Term::Unreachable => {}
                 }
             }
         }

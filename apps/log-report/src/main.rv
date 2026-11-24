@@ -1,0 +1,110 @@
+// Application d'essai (V2-G3) : rapport sur un journal applicatif.
+//
+//   log-report <fichier>
+//
+// Chaque ligne commence par un niveau (`ERROR`, `WARN`, `INFO`, `DEBUG`).
+// Le rapport compte les lignes par niveau, puis liste les erreurs.
+// Les lignes vides sont ignorées ; une ligne sans niveau connu est comptée
+// à part (`other`).
+use std::env;
+use std::fs;
+use std::io;
+use std::process;
+
+enum Level {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Other,
+}
+
+fn level_of(line: &str) -> Level {
+    if line.starts_with("ERROR") {
+        Level::Error
+    } else if line.starts_with("WARN") {
+        Level::Warn
+    } else if line.starts_with("INFO") {
+        Level::Info
+    } else if line.starts_with("DEBUG") {
+        Level::Debug
+    } else {
+        Level::Other
+    }
+}
+
+struct Counts {
+    error: u64,
+    warn: u64,
+    info: u64,
+    debug: u64,
+    other: u64,
+}
+
+fn count(text: &str) -> Counts {
+    let mut c = Counts {
+        error: 0,
+        warn: 0,
+        info: 0,
+        debug: 0,
+        other: 0
+    };
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match level_of(line.as_str()) {
+            Level::Error => c.error += 1,
+            Level::Warn => c.warn += 1,
+            Level::Info => c.info += 1,
+            Level::Debug => c.debug += 1,
+            Level::Other => c.other += 1,
+        }
+    }
+    c
+}
+
+fn row(name: &str, n: u64) -> String {
+    let mut s = String::from(name);
+    s.push_str(": ");
+    s.push_str(&n.to_string());
+    s
+}
+
+fn main() -> Result<(), Error> {
+    let args = env::args();
+    if args.len() != 2 {
+        io::eprintln("usage: log-report <file>");
+        process::exit(2);
+    }
+    let text = fs::read_to_string(&args[1])?;
+    let c = count(text.as_str());
+    io::println(&row("error", c.error));
+    io::println(&row("warn", c.warn));
+    io::println(&row("info", c.info));
+    io::println(&row("debug", c.debug));
+    io::println(&row("other", c.other));
+    for line in text.lines() {
+        if line.starts_with("ERROR") {
+            io::println(&line);
+        }
+    }
+    if c.error > 0 {
+        process::exit(1);
+    }
+    Ok(())
+}
+
+test fn levels_are_counted() {
+    let c = count("INFO up\nERROR disk full\n\nWARN slow\nERROR again\nnoise\n");
+    assert_eq(c.error, 2);
+    assert_eq(c.warn, 1);
+    assert_eq(c.info, 1);
+    assert_eq(c.debug, 0);
+    assert_eq(c.other, 1);
+}
+
+test fn an_empty_log_counts_nothing() {
+    let c = count("");
+    assert_eq(c.error + c.warn + c.info + c.debug + c.other, 0);
+}
