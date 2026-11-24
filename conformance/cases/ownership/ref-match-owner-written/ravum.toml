@@ -1,0 +1,4 @@
+[package]
+name = "ownership-ref-match-owner-written"
+version = "0.1.0"
+edition = "core-1.0"

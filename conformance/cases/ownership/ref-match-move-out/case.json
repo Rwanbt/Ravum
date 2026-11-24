@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-move-out",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-MOVE-OUT-OF-BORROW"],
+  "notes": "OWN-6.8 rule 5 (MUST): moving a non-Copy value out through a bounded borrow is refused."
+}

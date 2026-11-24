@@ -1,0 +1,17 @@
+enum N {
+    L(String),
+    M(Vec<i64>),
+}
+
+fn g(n: &N) -> i64 {
+    0
+}
+
+fn f(n: &N) -> Option<&String> {
+    match n {
+        N::L(s) => Some(s),
+        N::M(v) => None,
+    }
+}
+
+fn main() {}

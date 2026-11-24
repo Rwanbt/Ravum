@@ -1,0 +1,44 @@
+use std::io;
+enum Node<M> { Leaf(M), Many(Vec<Node<M>>) }
+struct P { x: i64, y: i64 }
+enum S { One(P), Two(P, P) }
+fn count(n: &Node<i64>) -> i64 {
+    match n {
+        Node::Leaf(x) => *x,
+        Node::Many(kids) => {
+            let mut s: i64 = 0;
+            let mut i: usize = 0;
+            while i < kids.len() {
+                s += count(&kids[i]);
+                i += 1;
+            }
+            s
+        }
+    }
+}
+fn bump(s: &mut S) {
+    match s {
+        S::One(p) => p.x += 1,
+        S::Two(a, b) => {
+            a.y += 10;
+            b.x = 7;
+        }
+    }
+}
+fn main() {
+    let mut v: Vec<Node<i64>> = Vec::new();
+    v.push(Node::Leaf(2));
+    let mut w: Vec<Node<i64>> = Vec::new();
+    w.push(Node::Leaf(30));
+    w.push(Node::Leaf(10));
+    v.push(Node::Many(w));
+    let t = Node::Many(v);
+    let mut s = S::Two(P { x: 1, y: 2 }, P { x: 3, y: 4 });
+    bump(&mut s);
+    bump(&mut s);
+    let extra = match &s {
+        S::Two(a, b) => a.y * 100 + b.x,
+        S::One(p) => p.x,
+    };
+    io::println(&(count(&t) + count(&t) + extra).to_string());
+}

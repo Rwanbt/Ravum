@@ -1,0 +1,6 @@
+{
+  "id": "ownership/ref-match-mut-scrutinee-used",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "OWN-6.8 rule 2 (MUST): during a match on &mut, the scrutinee may only be used through the bindings."
+}

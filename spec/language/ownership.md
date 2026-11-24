@@ -258,6 +258,10 @@ fn o(v: Vec<String>) {
 | OWN-6.5 | Une référence ne peut pas être placée dans une constante. | MUST |
 | OWN-6.6 | Le diagnostic `E-OWN-REF-ESCAPE` porte sur le **site d'échappement** (la `let`, le `return`, le champ), avec une note sur la création du prêt. | MUST |
 | OWN-6.7 | La coercition `&String → &str` ([`types.md`](types.md) TYP-13.1) crée une **vue** qui expire avec l'instruction : elle ne permet pas de stocker le texte emprunté (`E-OWN-REF-ESCAPE`). `s.as_str()` suit exactement la même règle. | MUST |
+| OWN-6.8 | **Emprunt borné** (RFC-UI-LANG-1, ratification du principe UI-D11) : une référence créée par une construction (un bras de `match` sur une référence, un corps de `for` emprunté, ou une vue d'instruction comme OWN-6.3) expire à la fin de cette construction. Elle n'est jamais stockée (variable, champ, élément, tuple, `Option`/`Result` construits par l'utilisateur), retournée ni capturée : `E-OWN-REF-ESCAPE`. OWN-6.1 reste vrai pour toute autre référence. | MUST |
+| OWN-6.9 | `match` sur `&T` ou `&mut T` (`T` autre que `str`) : les motifs sont confrontés à `T` (paramètres génériques substitués), et chaque liaison est un emprunt borné au bras, de type `&U` (ou `&mut U`) vers la partie correspondante. Le scrutinee n'est **pas** consommé. | MUST |
+| OWN-6.10 | Pendant un `match` sur `&x`, `x` reste emprunté jusqu'à la fin du `match` : l'écrire ou le déplacer dans un bras est `E-OWN-BORROW-CONFLICT`. Pendant un `match` sur `&mut x` (ou sur `n: &mut T`), tout accès à `x` (ou à `n`) autre que par les liaisons est `E-OWN-BORROW-CONFLICT`. Les écritures à travers une liaison `&mut` modifient la valeur matchée elle-même. | MUST |
+| OWN-6.11 | Déplacer une valeur non `Copy` à travers un emprunt borné est `E-OWN-MOVE-OUT-OF-BORROW` ; une partie `Copy` se lit par `*x`. | MUST |
 
 > **Provenance du texte statique (note de vérificateur, RFC-D13).** OWN-6.1
 > interdit de stocker une référence non statique dans un agrégat (tableau,
