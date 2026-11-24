@@ -95,3 +95,31 @@ contredit).
   la candidate privilégiée, sans adoption ratifiée. La méthode est améliorée
   selon la revue (piles complètes, vrais changements de propriétés, scènes
   virtualisées et non virtualisées, mesures brutes publiées).
+
+## Revue finale indépendante (2026-11-24, transmise par le responsable)
+
+- **UI-D17** : l'architecture, le plan U0 à U10 et le principe de P1 à P5
+  sont validés.
+
+  Corrections demandées avant ratification et fusion :
+  - **V2 (PR #212)** : valider les opérandes de `Term::TrapBounds`.
+    **Fait** dans `f02d5ad` : indices et type `u64`, `match` exhaustif sur
+    les terminateurs, validation par l'interpréteur avant exécution ; tests
+    négatifs pour le validateur, `from_json`, l'interpréteur, le JIT et le
+    moteur à chaud.
+  - **RFC-UI-LANG-1 (révision 4)** :
+    - provenance transitive ;
+    - accès par l'emprunt mutable ;
+    - propagation des vues limitée aux valeurs contenant une référence ;
+    - points sûrs par thread et globaux ;
+    - sémantique normative de `&mut` et conditions d'équivalence de la copie
+      en entrée avec écriture en retour ;
+    - effet `alloc` du clone ;
+    - écart volontaire de `split("")` avec Rust.
+- **Autorisation de fusion**, conditionnelle :
+  - #212 vers `dev` une fois les corrections faites et la CI verte sur le
+    SHA exact ;
+  - puis #213 actualisée par rapport à `dev`, CI verte et conditions de revue
+    satisfaites.
+
+  Rien sur `main`, aucune release.

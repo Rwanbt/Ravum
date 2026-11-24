@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-UI-LANG-1` |
-| Statut | **PROPOSED** (révision 3). Le **principe** d'OWN-6.8 et de P1 à P5 est validé par le responsable (UI-D11) ; les règles normatives de §2.1 restent à ratifier avant l'implémentation définitive |
+| Statut | **PROPOSED** (révision 4). Le **principe** d'OWN-6.8 et de P1 à P5 est validé par le responsable (UI-D11) ; les règles normatives de §2.1 restent à ratifier avant l'implémentation définitive |
 | Date | 2026-11-24 |
 | Auteur | agent de développement |
 | Cadre | [`DECISIONS-2026-11-24-UI.md`](../decision/DECISIONS-2026-11-24-UI.md), étape U1 de [`docs/ui/PLAN.md`](../ui/PLAN.md) |
@@ -66,26 +66,44 @@ Règles communes, MUST, numérotées OWN-6.8.x dans la spec à venir :
    s'empilent ; l'emprunt intérieur expire avant l'extérieur.
 5. Déplacer une valeur à travers un emprunt borné est refusé
    (`E-OWN-MOVE-OUT-OF-BORROW`) ; seul un champ `Copy` peut être lu par `*x`.
-6. **Remplacement à chaud.** Le moteur n'installe une nouvelle version
-   qu'à un **point sûr** : aucune activation de l'ancienne version sur la
-   pile, c'est-à-dire entre deux appels d'entrée de l'hôte (T16, profondeur
-   d'appel 0). Un emprunt borné ne vit que dans une instruction ou une
-   construction, donc dans une activation : à un point sûr, **aucun**
-   emprunt, direct ou transitif (via des appels imbriqués), n'est vivant.
-   Le moteur doit l'**affirmer** (refus d'activation hors profondeur 0), et
-   des tests doivent remplacer une fonction pendant que des appels
-   imbriqués l'utilisent, pour vérifier que l'activation est différée.
+6. **Remplacement à chaud, y compris en multithread.** Un emprunt borné
+   ne vit que dans une activation, et il ne passe jamais d'un thread à
+   l'autre : une référence n'est ni stockable ni envoyable par un canal
+   (OWN-6.1). La règle comporte deux points sûrs distincts :
+   - **par thread** : un thread n'adopte une nouvelle version qu'à profondeur
+     d'appel 0 de **son** exécution, entre deux appels d'entrée (T16) ;
+   - **global** : le code et les données d'une version retirée ne sont
+     libérés qu'une fois que **tous** les threads qui l'exécutaient sont
+     passés par leur point sûr (récupération par génération, existante).
+     Tant qu'un thread est dans l'ancienne version, elle reste valide.
+
+   Il n'existe donc, à aucun instant, d'emprunt vivant vers une version
+   libérée, ni direct ni transitif à travers des appels imbriqués. Le moteur
+   doit le vérifier : refus d'adoption hors profondeur 0, et refus de
+   libération tant qu'un thread n'a pas acquitté. Tests exigés :
+   - remplacement pendant des appels imbriqués ;
+   - plusieurs threads, dont un bloqué dans l'ancienne version ;
+   - libération différée observée.
 7. **Suspension asynchrone.** Un emprunt borné vivant à un `.await` est
    refusé (nouveau code `E-OWN-BORROW-ACROSS-AWAIT`), tant qu'aucune
    sémantique de suspension n'aura été qualifiée.
 
 ### 2.1 Typage et propagation des vues (règles à ratifier)
 
-- **Marque « bornée ».** Le checker attache à toute valeur qui contient une
-  référence issue d'un emprunt borné une portée : l'instruction, le bras ou
-  le corps de boucle. Un type n'est jamais « stockable » parce qu'il est
-  enveloppé : `Option<&V>` rendu par `get` est borné, et `.unwrap()`, `.is_some()`,
-  un `match` ou un champ lu dessus le restent.
+- **Provenance.** Le checker associe à chaque référence bornée sa
+  **provenance** : la place empruntée (racine et chemin de champs) et la
+  portée qui la borne. La provenance se **transmet** à travers les
+  réemprunts (`&*x`, `&x.champ`), les liaisons de motif, les méthodes qui
+  rendent une référence, et les appels dont le résultat est une référence
+  issue d'un argument. La portée d'un résultat est la plus courte des
+  portées de ses sources. Les conflits (règles 1 et 2) se calculent sur
+  la provenance, et non sur le nom local.
+- **Propagation des vues.** Seule une valeur qui **contient** une référence
+  est bornée. `Option<&V>` rendu par `get` est borné, et `.unwrap()`, un
+  `match` ou une liaison le restent. Une opération qui produit une valeur
+  **sans** référence n'est pas bornée : `.is_some()` rend un `bool`, `*x`
+  une copie `Copy`, `x.clone()` une valeur possédée, `x.len()` un entier.
+  Le résultat est alors une valeur ordinaire, stockable.
 - **Usages admis** : passage en argument (le paramètre de l'appelé est une
   référence ordinaire, qui ne peut déjà pas s'échapper au titre d'OWN-6.1),
   réemprunt (`&*x`, `&x.champ`), lecture de champ, comparaison, `match`
@@ -93,22 +111,43 @@ Règles communes, MUST, numérotées OWN-6.8.x dans la spec à venir :
 - **Usages refusés** (`E-OWN-REF-ESCAPE`) : `let`, champ, élément de `Vec`
   ou de `Map`, tuple, `Option` ou `Result` **construits par l'utilisateur**,
   `return`, valeur d'un bloc qui sort de la portée.
+- **Accès par l'emprunt lui-même.** Pendant un emprunt mutable `x` de la
+  place `p`, les lectures et écritures **à travers `x`** (`*x = ..`,
+  `x.champ = ..`, méthodes mutantes sur `x`) sont permises. Seuls les accès
+  à `p` par un **autre** chemin sont refusés (règle 2). Pendant un emprunt
+  partagé, les lectures de `p` par tout chemin sont permises.
 - **Accès disjoints** : deux emprunts de places disjointes (champs
   différents) suivent l'analyse de places existante du vérificateur
   d'ownership. Deux emprunts du même élément indexé `v[i]` et `v[j]` sont
   traités comme conflictuels (indices non comparés statiquement).
 - **Sorties anticipées** : `break`, `continue`, `return` et `?` ferment
   toutes les portées traversées (règle 3).
+- **Sémantique de `&mut` (normative, indépendante de l'implémentation).**
+  Une écriture à travers un emprunt mutable est **immédiatement** celle de
+  la place empruntée. Comme aucun autre chemin ne peut observer la place
+  pendant l'emprunt (règle 2), seul l'état **à la fin** de l'emprunt est
+  observable. Deux cas de sortie anormale :
+  - un **panic** termine le programme (Core) : rien n'est observé ensuite ;
+  - un **trap en temps réel** restaure tout l'état d'entrée avant le
+    rollback (HR-1.5).
+
+  Une implémentation par copie en entrée et écriture en retour est donc
+  **admise si et seulement si** elle écrit en retour sur **toute** sortie
+  normale, y compris `break`, `continue`, `return` et `?`. Cette équivalence
+  doit être **testée** sur ces sorties, sur des emprunts imbriqués et sur
+  les champs d'éléments de `Vec`, avec accord des voies B et C. Elle n'est
+  pas supposée.
 - **Représentation dans l'IR et le JIT.** Les emprunts bornés n'ont
   **aucun objet à l'exécution**. Ils se réduisent aux places déjà
   existantes de l'IR :
   - adresse (`Ptr`) pour la pile ;
   - élément de vecteur (handle et indice) ;
-  - copie en entrée et écriture en retour pour `&mut` (mécanisme existant) ;
+  - copie en entrée et écriture en retour pour `&mut`, sous la condition
+    ci-dessus ;
   - pour `Map` : handle et position, à spécifier en IR 1.6.
 
   Les règles de conflit garantissent qu'aucune mutation n'invalide une place
-  pendant sa portée. La voie C ne vérifie rien de plus à l'exécution.
+  pendant sa portée.
 
 ## 3. Propositions
 
@@ -202,7 +241,7 @@ La spec ne mentionne aucune bibliothèque.
 | Opération | Règle |
 |---|---|
 | `find(s) -> Option<usize>` | première occurrence ; `s` vide rend `Some(0)` |
-| `split(sep) -> Vec<String>` | comme Rust : `"a,,b"` donne `["a","","b"]`, `""` donne `[""]` ; `sep` vide fait paniquer |
+| `split(sep) -> Vec<String>` | `"a,,b"` donne `["a","","b"]`, `""` donne `[""]` (comme Rust). **Écart volontaire avec Rust** : un `sep` vide **panique** (`panic: empty separator`). Rust coupe alors entre chaque caractère et ajoute deux chaînes vides aux bords, ce qui est une source d'erreurs ; `chars()` couvre ce besoin |
 | `join(parts: &Vec<String>, sep: &str) -> String` | fonction de `std::string` |
 | `strip_prefix(s)`, `strip_suffix(s) -> Option<String>` | `None` si absent |
 | `substring(start, end) -> String` | panique si `start > end`, `end > len()` ou si une borne n'est pas une frontière de caractère |
@@ -235,6 +274,11 @@ ressource. `.clone()` sur une ressource donne `E-RES-UNKNOWN`, avec une note
 qui nomme le champ fautif. En Core, un utilisateur ne peut pas déclarer un
 type *ressource* ; la question sera rouverte avec les handles
 (RFC-UI-LANG-2).
+
+**Effets** : un `clone()` qui peut allouer (`String`, `Vec`, `Map`, ou un
+type qui en contient) porte l'effet `alloc` (EFF-2.5, granularité
+fonction). Il est donc refusé dans les profils `pure` et `rt`, comme toute
+allocation. Un `clone()` de type entièrement `Copy` n'a aucun effet.
 
 Le clone n'est **jamais implicite**, et le runtime UI ne clone pas l'arbre à
 chaque événement : il route une **copie du seul message** concerné.
@@ -271,6 +315,14 @@ chaque événement : il route une **copie du seul message** concerné.
    bloquant** pour Ravum UI, qui s'exécute à chaud par la voie C. Elle n'est
    pas une limite acceptable.
 5. Des mesures si un chemin chaud est touché (`Map`, `split`).
+6. Les tests spécifiques de la révision 4 :
+   - provenance transmise par réemprunt, motif, méthode et appel ;
+   - accès à travers l'emprunt mutable permis, accès concurrent refusé ;
+   - `bool`, `Copy` et clone issus d'une vue, qui sont stockables ;
+   - équivalence de `&mut` sur `break`, `continue`, `return`, `?` et les emprunts imbriqués, pour les voies B et C ;
+   - points sûrs multithreads et libération différée ;
+   - `clone()` allouant refusé en `rt` et en `pure` ;
+   - `split("")` qui panique.
 6. Aucun test existant affaibli ; clippy, fmt et toute la conformance au vert.
 
 ## 7. Ordre de réalisation
