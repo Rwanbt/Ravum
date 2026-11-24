@@ -1,0 +1,13 @@
+[package]
+name = "fp-modular"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+winit = "=0.31.0-beta.4"
+wgpu = "=30.0.2"
+vello = "=0.12.0"
+taffy = "=0.16.0"
+parley = "=0.13.0"
+accesskit = "=0.25.2"
