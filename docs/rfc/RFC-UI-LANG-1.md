@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-UI-LANG-1` |
-| Statut | **PROPOSED** (révision 2), à décider par le responsable |
+| Statut | **PROPOSED** (révision 3). Le **principe** d'OWN-6.8 et de P1 à P5 est validé par le responsable (UI-D11) ; les règles normatives de §2.1 restent à ratifier avant l'implémentation définitive |
 | Date | 2026-11-24 |
 | Auteur | agent de développement |
 | Cadre | [`DECISIONS-2026-11-24-UI.md`](../decision/DECISIONS-2026-11-24-UI.md), étape U1 de [`docs/ui/PLAN.md`](../ui/PLAN.md) |
@@ -66,10 +66,49 @@ Règles communes, MUST, numérotées OWN-6.8.x dans la spec à venir :
    s'empilent ; l'emprunt intérieur expire avant l'extérieur.
 5. Déplacer une valeur à travers un emprunt borné est refusé
    (`E-OWN-MOVE-OUT-OF-BORROW`) ; seul un champ `Copy` peut être lu par `*x`.
-6. Un emprunt borné ne traverse jamais un point de remplacement à chaud.
-   Le moteur ne remplace une fonction qu'entre deux appels (T16), donc
-   aucune référence ne pointe vers une version retirée. Cette garantie doit
-   être testée, et non supposée.
+6. **Remplacement à chaud.** Le moteur n'installe une nouvelle version
+   qu'à un **point sûr** : aucune activation de l'ancienne version sur la
+   pile, c'est-à-dire entre deux appels d'entrée de l'hôte (T16, profondeur
+   d'appel 0). Un emprunt borné ne vit que dans une instruction ou une
+   construction, donc dans une activation : à un point sûr, **aucun**
+   emprunt, direct ou transitif (via des appels imbriqués), n'est vivant.
+   Le moteur doit l'**affirmer** (refus d'activation hors profondeur 0), et
+   des tests doivent remplacer une fonction pendant que des appels
+   imbriqués l'utilisent, pour vérifier que l'activation est différée.
+7. **Suspension asynchrone.** Un emprunt borné vivant à un `.await` est
+   refusé (nouveau code `E-OWN-BORROW-ACROSS-AWAIT`), tant qu'aucune
+   sémantique de suspension n'aura été qualifiée.
+
+### 2.1 Typage et propagation des vues (règles à ratifier)
+
+- **Marque « bornée ».** Le checker attache à toute valeur qui contient une
+  référence issue d'un emprunt borné une portée : l'instruction, le bras ou
+  le corps de boucle. Un type n'est jamais « stockable » parce qu'il est
+  enveloppé : `Option<&V>` rendu par `get` est borné, et `.unwrap()`, `.is_some()`,
+  un `match` ou un champ lu dessus le restent.
+- **Usages admis** : passage en argument (le paramètre de l'appelé est une
+  référence ordinaire, qui ne peut déjà pas s'échapper au titre d'OWN-6.1),
+  réemprunt (`&*x`, `&x.champ`), lecture de champ, comparaison, `match`
+  (les liaisons héritent de la portée), et appel de méthode.
+- **Usages refusés** (`E-OWN-REF-ESCAPE`) : `let`, champ, élément de `Vec`
+  ou de `Map`, tuple, `Option` ou `Result` **construits par l'utilisateur**,
+  `return`, valeur d'un bloc qui sort de la portée.
+- **Accès disjoints** : deux emprunts de places disjointes (champs
+  différents) suivent l'analyse de places existante du vérificateur
+  d'ownership. Deux emprunts du même élément indexé `v[i]` et `v[j]` sont
+  traités comme conflictuels (indices non comparés statiquement).
+- **Sorties anticipées** : `break`, `continue`, `return` et `?` ferment
+  toutes les portées traversées (règle 3).
+- **Représentation dans l'IR et le JIT.** Les emprunts bornés n'ont
+  **aucun objet à l'exécution**. Ils se réduisent aux places déjà
+  existantes de l'IR :
+  - adresse (`Ptr`) pour la pile ;
+  - élément de vecteur (handle et indice) ;
+  - copie en entrée et écriture en retour pour `&mut` (mécanisme existant) ;
+  - pour `Map` : handle et position, à spécifier en IR 1.6.
+
+  Les règles de conflit garantissent qu'aucune mutation n'invalide une place
+  pendant sa portée. La voie C ne vérifie rien de plus à l'exécution.
 
 ## 3. Propositions
 
@@ -139,7 +178,7 @@ clés est fixé par la spec, et non par une bibliothèque :
 `as_str()` (OWN-6.3). Elle peut être :
 - l'objet d'un `match`, dont les liaisons deviennent des emprunts bornés au bras (P1) ;
 - testée (`.is_some()`) ;
-- lue jusqu'à un `Copy` (`m.get(&k).unwrap_or(&0)` donne une copie si `V` est `Copy`).
+- lue par **déréférencement explicite** quand `V` est `Copy` : `m.get(&k).unwrap_or(&0)` reste une référence bornée `&V` ; `*m.get(&k).unwrap_or(&0)` donne la valeur. Aucune copie implicite n'est faite.
 
 Elle ne peut pas être stockée (`let o = m.get(&k);` donne
 `E-OWN-REF-ESCAPE`, au titre d'OWN-6.1). OWN-6.1 reste donc vrai pour tout
@@ -186,10 +225,16 @@ destinées à l'éditeur.
 tout `Option` et tout `Result` dont tous les composants sont clonables,
 récursivement. `String` et tous les types `Copy` sont clonables.
 
-**Non clonables** : tout type que `std` ou le runtime déclare *ressource*,
-c'est-à-dire les handles de service, de fenêtre ou de surface GPU, les
-verrous et les sockets. Un type qui en contient un n'est pas clonable, et
-`.clone()` donne `E-RES-UNKNOWN` avec une note qui nomme le champ fautif.
+**Non clonables, par classification normative** : la clonabilité est une
+**propriété de type**, et non une liste de noms. Chaque type de `std` ou du
+runtime est déclaré dans sa spécification soit *valeur* (clonable si ses
+composants le sont), soit *ressource* (jamais clonable) : handles de service,
+de fenêtre ou de surface GPU, verrous, sockets, `Future`. La propriété se
+propage structurellement : un type qui contient une ressource est une
+ressource. `.clone()` sur une ressource donne `E-RES-UNKNOWN`, avec une note
+qui nomme le champ fautif. En Core, un utilisateur ne peut pas déclarer un
+type *ressource* ; la question sera rouverte avec les handles
+(RFC-UI-LANG-2).
 
 Le clone n'est **jamais implicite**, et le runtime UI ne clone pas l'arbre à
 chaque événement : il route une **copie du seul message** concerné.
@@ -235,6 +280,9 @@ Viennent ensuite P5, puis P3 (qui dépend de P1 pour `get`), puis P4. Une PR
 par étape, vers `dev`.
 
 ## 8. Décisions demandées au responsable
+
+Le principe de 1 à 4 a été validé le 2026-11-24 (UI-D11). Restent à ratifier les **règles normatives** rédigées dans la spec à l'implémentation : §2, §2.1, l'ordre des clés, la sémantique de `split` et de `substring`, et la classification valeur ou ressource.
+
 
 1. **Ratifier OWN-6.8 (emprunts bornés)** comme amendement normatif
    d'OWN-6 (§2). C'est la décision de sémantique principale.

@@ -3,7 +3,7 @@
 Statut : **PROPOSED** (révision 2, 2026-11-24). Ce plan n'accepte aucune RFC
 ni aucun ADR et n'adopte aucune dépendance. Décisions de cadrage :
 [`DECISIONS-2026-11-24-UI.md`](../decision/DECISIONS-2026-11-24-UI.md)
-(UI-D1 à UI-D10).
+(UI-D1 à UI-D14).
 
 > **Règle directrice** : on réduit le périmètre de chaque livraison, jamais
 > l'ambition finale. Une fonctionnalité **reportée** reste dans ce plan avec
@@ -71,6 +71,42 @@ fn view(model: &Model) -> ui::Node<Msg> { ... }
   reconstruction complète à chaque frame.
 - Le modèle à messages est le **premier** modèle, pas une limite : les
   closures, les traits et les handles ont leurs jalons (RFC-UI-LANG-2 à 5).
+
+### 3.1 Réactivité : deux modèles mesurés avant de choisir (UI-D13)
+
+- **A** : `view` reconstruit l'arbre, puis un diff avec l'arbre persistant.
+- **B** : réactivité granulaire. Les nœuds déclarent leurs dépendances
+  envers l'état, et un changement ne réévalue que les nœuds dépendants.
+
+Les deux sont prototypés et mesurés au banc (tour 2) sur les mêmes scènes :
+- mise à jour d'un paramètre à haute fréquence ;
+- liste de 10 000 éléments ;
+- formulaire.
+
+On mesure le coût du suivi des dépendances, la mémoire et le déterminisme.
+Le choix revient au responsable. Dans les deux cas, l'arbre n'est **jamais**
+reconstruit en entier à chaque événement sur un chemin chaud.
+
+Dans les deux cas, le moteur prévoit :
+- des frontières de layout ;
+- des caches de shaping ;
+- des invalidations séparées (structure, layout, peinture, composition, sémantique) ;
+- la virtualisation, le rendu à la demande, des files d'événements bornées ;
+- la gestion de la pression mémoire.
+
+Il est mesuré avec Verify désactivé, puis incrémental, puis complet.
+
+### 3.2 Portabilité du hot reload (UI-D14)
+
+| Niveau | Développement | Distribution |
+|---|---|---|
+| L0 (style), L1 (structure) | données de l'UI IR, **sans JIT** | idem, sur toutes les plateformes |
+| L2 (comportement) | JIT de la voie C là où l'OS le permet | compilation anticipée ; pas de code généré à l'exécution là où c'est interdit (iOS, magasins d'applications) |
+| Plugins | processus isolé ou runtime sandboxé | selon les capacités de la plateforme |
+
+Les contrats UI et le modèle de composants sont communs à toutes les
+plateformes ; seul le mécanisme d'activation de L2 varie. Les contraintes
+Android et iOS sont évaluées explicitement au tour 4 du banc.
 
 ## 4. Verify grandit avec le moteur (UI-D7)
 

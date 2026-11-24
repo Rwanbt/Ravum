@@ -57,3 +57,41 @@ contredit).
   (emprunts bornés), qui est à ratifier.
 - **PR #210** : pas de fusion ni de ratification sans votre accord explicite
   et une CI verte sur le SHA exact.
+
+## Décisions de cadrage finales (2026-11-24, transmises par le responsable)
+
+- **UI-D11 — RFC-UI-LANG-1** : le **principe** d'OWN-6.8 (emprunts bornés)
+  et de P1 à P5 est validé, ainsi que :
+  - l'ordre déterministe des clés de `Map` ;
+  - les opérations de texte ;
+  - le clone structurel explicite et l'exclusion des ressources, par
+    classification de type plutôt que par liste de noms.
+
+  Conditions avant l'implémentation définitive :
+  - les règles normatives sont rédigées (typage et propagation des vues,
+    réemprunts, gardes, accès disjoints, sorties anticipées, emprunts
+    transitifs et points sûrs de remplacement à chaud, interdiction à
+    travers `.await`, représentation dans l'IR et le JIT, OWN-6.1 maintenu) ;
+  - elles sont qualifiées, avec accord des voies B et C sur le périmètre
+    revendiqué.
+
+  La révision 3 de la RFC les rédige ; elles seront intégrées à la spec avec
+  l'implémentation.
+- **UI-D12 — Slint** : écarté comme dépendance principale. La politique est
+  celle de dépendances permissives compatibles `MIT OR Apache-2.0`. La
+  justification est corrigée : Slint offre la GPLv3, une licence gratuite
+  avec conditions et une licence commerciale. Ce n'est donc pas une
+  impossibilité juridique, mais un choix d'indépendance. Slint reste une
+  référence comparative.
+- **UI-D13 — Réactivité** : deux modèles, la reconstruction suivie d'un diff
+  (A) et la réactivité granulaire (B), sont mesurés au banc avant de choisir.
+- **UI-D14 — Portabilité** : L0 et L1 ne dépendent pas du JIT. L2 utilise le
+  JIT en développement là où l'OS le permet, et la compilation anticipée en
+  distribution. Les plugins sont isolés selon la plateforme.
+- **UI-D15 — Git** : le chantier UI est séparé de la V2. Une PR dédiée part de
+  la branche `claude/ravum-ui` (créée depuis `dev`) ; les commits sont
+  conservés, rien n'est réécrit.
+- **UI-D16 — Banc** : les tours 2, 3 et 4 sont autorisés. La pile modulaire est
+  la candidate privilégiée, sans adoption ratifiée. La méthode est améliorée
+  selon la revue (piles complètes, vrais changements de propriétés, scènes
+  virtualisées et non virtualisées, mesures brutes publiées).

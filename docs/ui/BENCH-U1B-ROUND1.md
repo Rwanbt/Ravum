@@ -33,7 +33,7 @@ distinctes.
 | Modulaire : winit, wgpu, Vello, Taffy, Parley, AccessKit | 177 | aucune | compatible avec la licence de Ravum |
 | egui et eframe (wgpu, AccessKit) | 214 | `self_cell` : `Apache-2.0 OR GPL-2.0-only`, l'option Apache suffit | compatible |
 | Blitz (`blitz-dom`) | 198 | aucune | compatible ; **version bêta** |
-| **Slint** | 335 | le cœur `i-slint-*` est sous `GPL-3.0-only OR` licence commerciale Slint | **bloquant** sans décision du responsable : Ravum est `MIT OR Apache-2.0`, et un framework construit sur Slint imposerait la GPL ou une licence Slint à ses utilisateurs |
+| **Slint** | 335 | le cœur `i-slint-*` est sous `GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0` | **écarté comme fondation (UI-D12)**. Ce n'est pas une impossibilité juridique : les trois options sont la GPLv3, une licence gratuite avec conditions (dont l'attribution) et une licence commerciale. La raison est qu'un framework universel ne doit imposer à ses utilisateurs aucune condition d'un fournisseur au-delà de `MIT OR Apache-2.0`. Slint reste une référence de comparaison |
 
 ## 2. Coûts CPU headless (N = 30 exécutions après un échauffement)
 
@@ -82,7 +82,18 @@ AccessKit) est la meilleure candidate :
 - chaque brique est remplaçable, ce qui sert l'indépendance du renderer.
 
 **egui** reste la référence de mesure. **Blitz** (bêta) est à suivre pour les
-styles de type CSS. **Slint** est écarté sauf décision contraire de votre
-part sur la licence.
+styles de type CSS. **Slint** est écarté comme fondation (UI-D12) et reste un point de comparaison.
 
 Le choix définitif attend les tours 2 et 3 et votre décision.
+
+## 5. Limites de méthode de ce tour (relevées en revue, corrigées au tour 2)
+
+- Le banc Taffy invalide les caches sans **changer** de propriété. Le tour 2
+  mesure de vrais changements de taille, de texte, de style et de structure.
+- `blitz-dom` seul n'est pas comparable à `eframe` complet. Le tour 2
+  compare des piles **applicatives complètes**.
+- Le nombre de crates ne dit rien de la RAM ni de la vitesse. Les
+  dépendances seront séparées en normales, de compilation, optionnelles et
+  par plateforme, avec un audit des licences sur toutes les cibles.
+- Versions bêta (`winit 0.31.0-beta.4`, Blitz) : le risque de maintenance
+  sera évalué, et la dernière version stable de winit comparée.
