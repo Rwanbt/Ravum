@@ -1306,7 +1306,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "pollster",
+ "pollster 1.0.3",
  "profiling",
  "raw-window-handle",
  "send_wrapper",
@@ -4234,6 +4234,12 @@ dependencies = [
 
 [[package]]
 name = "pollster"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
+
+[[package]]
+name = "pollster"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e9b9cf600136f5b976fbc5727d58c26e1ecab8ee23088d44ef1c7af793550ab"
@@ -4368,6 +4374,38 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "r3-common"
+version = "0.0.0"
+
+[[package]]
+name = "r3-egui"
+version = "0.0.0"
+dependencies = [
+ "eframe",
+ "r3-common",
+]
+
+[[package]]
+name = "r3-modular"
+version = "0.0.0"
+dependencies = [
+ "parley 0.13.0",
+ "pollster 0.4.0",
+ "r3-common",
+ "vello",
+ "wgpu",
+ "winit 0.31.0-beta.4",
+]
+
+[[package]]
+name = "r3-slint"
+version = "0.0.0"
+dependencies = [
+ "r3-common",
+ "slint",
+]
 
 [[package]]
 name = "range-alloc"

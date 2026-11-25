@@ -1,0 +1,9 @@
+[package]
+name = "r3-egui"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+r3-common = { path = "../common" }
+eframe = { version = "=0.37.0", default-features = false, features = ["wgpu", "accesskit", "default_fonts", "wayland", "x11"] }

@@ -258,7 +258,8 @@ de `MIT OR Apache-2.0`. À peser pour UI-D12.
 
 ## 5. Reste
 
-- Tour 3, sur vos machines (UI-D9) : la même scène dans les piles complètes
+- Tour 3, sur vos machines (UI-D9), scripts prêts dans
+  [`BENCH-U1B-ROUND3-PROTOCOL.md`](BENCH-U1B-ROUND3-PROTOCOL.md) : la même scène dans les piles complètes
   (fenêtre, GPU) ; temps de frame CPU et GPU, latence d'entrée, repos, VRAM,
   démarrage ; applications minimales réelles pour la taille des binaires ;
   `vello_cpu` multi-thread ; texte (shaping, rastérisation des glyphes).
