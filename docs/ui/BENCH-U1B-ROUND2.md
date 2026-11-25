@@ -134,6 +134,40 @@ Taffy calcule chaque sous-arbre. Limite : seules les lignes de **hauteur
 fixe** sont des frontières sûres ; une ligne de hauteur automatique dont la
 hauteur change doit propager au parent (non mesuré ici).
 
+### 3.4 Complément : les deux réserves de §3.2 et §3.3
+
+Code : [`reactivity/src/bin/part2b.rs`](../../bench/ui-candidates/reactivity/src/bin/part2b.rs)
+(`cargo run --release -p ui-bench-reactivity --bin part2b`).
+
+**Diff par clé incrémental** : préfixe et suffixe communs comparés par clé
+(des entiers), table seulement pour le milieu. Contrôle à chaque mise à
+jour : ordre et contenu égaux à la nouvelle liste.
+
+| Lignes | Diff par position (§3.2) : p50 | Diff par clé incrémental : p50 / p99 | Nœuds écrits |
+|---|---|---|---|
+| 1 000 | 8,7 µs | 0,82 µs / 1,7 µs | 1 |
+| 10 000 | 90,6 µs | 8,1 µs / 23,4 µs | 1 |
+
+Le chiffre naïf de §3.2 est donc levé : le diff par clé est **plus rapide**
+que le diff par position (environ 10 fois) **et** n'écrit qu'un nœud. Il
+reste en O(n) comparaisons d'entiers pour une insertion au milieu.
+
+**Lignes à hauteur automatique** derrière une frontière : un arbre Taffy
+par ligne ; quand la hauteur d'une ligne change, les `y` des lignes
+suivantes viennent d'un arbre de Fenwick (sommes préfixes en O(log n)).
+Contrôle : `y` et hauteur égaux au layout global (échantillon à chaque mise
+à jour, toutes les lignes à la fin).
+
+| 2 000 lignes (10 001 nœuds), hauteur d'une ligne changée | p50 | p99 |
+|---|---|---|
+| Arbre global | 3 478 µs | 4 258 µs |
+| Un arbre par ligne + décalages de Fenwick | 9,8 µs | 48,2 µs |
+
+La frontière tient aussi quand la hauteur change : le coût passe de 3,5 ms à
+10 µs. Limite : un empilement vertical simple ; un parent `flex` avec
+`grow`/`shrink` dont la place dépend de toutes les lignes ne se réduit pas à
+des sommes préfixes (non mesuré).
+
 ## 4. Partie 3 (2026-11-25) : rendu CPU, compilation, dépendances, licences
 
 Même machine (Linux x86_64, 4 CPU, sans GPU, `rustc 1.95.0`, `release`).
@@ -228,4 +262,4 @@ de `MIT OR Apache-2.0`. À peser pour UI-D12.
   (fenêtre, GPU) ; temps de frame CPU et GPU, latence d'entrée, repos, VRAM,
   démarrage ; applications minimales réelles pour la taille des binaires ;
   `vello_cpu` multi-thread ; texte (shaping, rastérisation des glyphes).
-- Diff par clé incrémental (§3.2) et lignes à hauteur automatique (§3.3).
+- Parent `flex` avec `grow`/`shrink` derrière une frontière (§3.4).
