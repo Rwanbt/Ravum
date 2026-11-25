@@ -52,7 +52,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
         match &base {
-            Type::Nominal { def, .. } => {
+            // `Map<K, V>` is a prelude type with builtin methods (STD-20).
+            Type::Nominal { def, .. } if *def != crate::builtins::PRELUDE_MAP_DEF => {
                 let entry = self.world.method(*def, name, false).cloned();
                 match entry {
                     Some(entry) => {
@@ -80,6 +81,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             Type::String
             | Type::Vec(_)
+            | Type::Nominal { .. }
             | Type::Option(_)
             | Type::Result(_, _)
             | Type::Slice(_)

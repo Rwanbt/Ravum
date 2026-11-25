@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-view-binding-stored",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "STD-20.3 (MUST): the binding of a match on the view is a bounded borrow; storing it is refused."
+}

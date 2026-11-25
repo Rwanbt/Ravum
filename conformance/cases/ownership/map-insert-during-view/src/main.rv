@@ -1,0 +1,11 @@
+fn f(mut m: Map<i64, i64>) -> i64 {
+    match m.get(&1i64) {
+        Some(v) => {
+            let _x = m.insert(2, 3);
+            *v
+        }
+        None => 0,
+    }
+}
+
+fn main() {}

@@ -1,0 +1,54 @@
+use std::io;
+struct P { x: i64, tag: String }
+fn main() {
+    let mut m: Map<i64, i64> = Map::new();
+    let _a = m.insert(30, 3);
+    let _b = m.insert(-10, 1);
+    let _c = m.insert(20, 2);
+    let old = m.insert(20, 22).unwrap_or(0);
+    let mut order: i64 = 0;
+    for (k, v) in &m {
+        order = order.wrapping_mul(31).wrapping_add(*k * 7 + *v);
+    }
+    for (k, v) in &mut m {
+        *v += 1000;
+        if *k > 25 {
+            break;
+        }
+    }
+    let g = match m.get_mut(&20i64) {
+        Some(v) => {
+            *v += 5;
+            *v
+        }
+        None => 0,
+    };
+    let mut s: Map<String, P> = Map::new();
+    let _d = s.insert(String::from("b"), P { x: 2, tag: String::from("bb") });
+    let _e = s.insert(String::from("a"), P { x: 1, tag: String::from("a") });
+    let mut s2 = s.clone();
+    for (k, p) in &mut s2 {
+        p.x += 100;
+        p.tag.push_str("!");
+    }
+    let mut t: i64 = 0;
+    for (k, p) in &s {
+        t = t.wrapping_mul(31).wrapping_add(p.x * 10 + (p.tag.len() as i64) + (k.len() as i64));
+    }
+    for (k, p) in &s2 {
+        t = t.wrapping_mul(31).wrapping_add(p.x * 10 + (p.tag.len() as i64));
+    }
+    let r = m.remove(&-10i64).unwrap_or(0);
+    let has = m.contains_key(&-10i64);
+    let n = m.len() as i64;
+    let in20 = match m.get(&20i64) { Some(v) => *v, None => -1 };
+    let mut h: i64 = order;
+    let hv: i64 = if has { 1 } else { 0 };
+    let parts: [i64; 7] = [old, g, r, hv, n, in20, t];
+    let mut j: usize = 0;
+    while j < 7 {
+        h = h.wrapping_mul(1000003).wrapping_add(parts[j]);
+        j += 1;
+    }
+    io::println(&h.to_string());
+}

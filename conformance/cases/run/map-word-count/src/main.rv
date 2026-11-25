@@ -1,0 +1,20 @@
+use std::io;
+fn count(words: &Vec<String>) -> Map<String, i64> effects(alloc) {
+    let mut m: Map<String, i64> = Map::new();
+    for w in words {
+        let n = match m.get(w) { Some(c) => *c, None => 0 };
+        let _old = m.insert(w.clone(), n + 1);
+    }
+    m
+}
+fn main() {
+    let mut ws: Vec<String> = Vec::new();
+    ws.push(String::from("b"));
+    ws.push(String::from("a"));
+    ws.push(String::from("b"));
+    let m = count(&ws);
+    for (k, v) in &m {
+        io::print(k.as_str());
+        io::println(&v.to_string());
+    }
+}

@@ -1,0 +1,5 @@
+fn f(a: Map<i64, i64>, b: Map<i64, i64>) -> bool {
+    a == b
+}
+
+fn main() {}

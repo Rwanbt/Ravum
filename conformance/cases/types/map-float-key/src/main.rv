@@ -1,0 +1,5 @@
+fn f() {
+    let m: Map<f64, i64> = Map::new();
+}
+
+fn main() {}

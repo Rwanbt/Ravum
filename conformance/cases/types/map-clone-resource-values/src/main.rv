@@ -1,0 +1,5 @@
+fn f(m: &Map<i64, Sender<i64>>) {
+    let c = m.clone();
+}
+
+fn main() {}

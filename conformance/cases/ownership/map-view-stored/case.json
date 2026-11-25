@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-view-stored",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "STD-20.3 / OWN-6.8 (MUST): the get view Option<&V> cannot be stored."
+}

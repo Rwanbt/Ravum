@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-key-not-writable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-IMMUTABLE"],
+  "notes": "STD-20.4 (MUST): keys are never mutable during iteration (k: &K)."
+}

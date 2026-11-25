@@ -552,6 +552,20 @@ impl Gen<'_, '_> {
         self.b.ins().store(MemFlags::trusted(), d1, self.ctxp, 4);
     }
 
+    /// IR v1.6: the two results of a map operation, the presence flag from
+    /// `ctx.scratch` and the value word `w`.
+    fn map_results(&mut self, present: u32, out: u32, w: Value) {
+        let p = self
+            .b
+            .ins()
+            .load(types::I64, MemFlags::trusted(), self.ctxp, 32);
+        let p = self.b.ins().ireduce(types::I8, p);
+        self.set(present, p);
+        let t = self.local_ty(out);
+        let v = self.emit_unword(t, w);
+        self.set(out, v);
+    }
+
     /// Store `code` and return a dummy value of the function's type.
     fn set_code_and_return(&mut self, code: u32) {
         let c = self.b.ins().iconst(types::I32, code as i64);
@@ -671,6 +685,47 @@ impl Gen<'_, '_> {
                 let t = self.local_ty(*value);
                 let v = self.emit_unword(t, w);
                 self.set(*value, v);
+            }
+            Inst::MapGet {
+                h,
+                key,
+                present,
+                value: out,
+            }
+            | Inst::MapRemove {
+                h,
+                key,
+                present,
+                old: out,
+            } => {
+                let code = if matches!(inst, Inst::MapGet { .. }) {
+                    exec::OP_MAP_GET
+                } else {
+                    exec::OP_MAP_REMOVE
+                };
+                let hv = self.get(*h);
+                let kt = self.local_ty(*key);
+                let kv = self.get(*key);
+                let kw = self.emit_word(kt, kv);
+                let w = self.host_heap(heap, code as i64, hv, kw, None);
+                self.map_results(*present, *out, w);
+            }
+            Inst::MapInsert {
+                h,
+                key,
+                val,
+                present,
+                old,
+            } => {
+                let hv = self.get(*h);
+                let kt = self.local_ty(*key);
+                let kv = self.get(*key);
+                let kw = self.emit_word(kt, kv);
+                let vt = self.local_ty(*val);
+                let vv = self.get(*val);
+                let vw = self.emit_word(vt, vv);
+                let w = self.host_heap(heap, exec::OP_MAP_INSERT as i64, hv, kw, Some(vw));
+                self.map_results(*present, *old, w);
             }
             Inst::Print { stream, arg } => {
                 let (kind, bits) = match arg {
@@ -1237,6 +1292,10 @@ pub(crate) mod exec {
     pub const OP_OF_VALUE: u32 = 21;
     pub const OP_VEC_SET: u32 = 22;
     pub const OP_VEC_POP: u32 = 23;
+    /// IR v1.6 maps: two results (the second, presence, in `ctx.scratch`).
+    pub const OP_MAP_GET: u32 = 24;
+    pub const OP_MAP_INSERT: u32 = 25;
+    pub const OP_MAP_REMOVE: u32 = 26;
 
     fn scalar_text(kind: u64, bits: u64) -> String {
         match kind {
@@ -1264,7 +1323,7 @@ pub(crate) mod exec {
         let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
         let ops = [
             StrNew, StrClone, StrPush, StrLen, StrEq, VecNew, VecPush, VecLen, VecGet, VecClone,
-            Replace,
+            Replace, MapNew, MapLen, MapKeys, MapVals, MapSetVals, MapClone,
         ];
         let r = match op {
             OP_TEXT => match sink.text(a) {
@@ -1277,6 +1336,17 @@ pub(crate) mod exec {
                 ctx.scratch = p as u64;
                 w
             }),
+            OP_MAP_GET | OP_MAP_INSERT | OP_MAP_REMOVE => {
+                let r = match op {
+                    OP_MAP_GET => sink.heap.map_get(a, b),
+                    OP_MAP_INSERT => sink.heap.map_insert(a, b, c),
+                    _ => sink.heap.map_remove(a, b),
+                };
+                r.map(|(p, w)| {
+                    ctx.scratch = p as u64;
+                    w
+                })
+            }
             k => match ops.iter().find(|o| **o as u32 == k) {
                 Some(o) => sink.heap.op(*o, a, b),
                 None => Err(HeapStop::Fault("invalid object handle")),

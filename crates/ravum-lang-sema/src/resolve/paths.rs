@@ -264,6 +264,7 @@ pub(crate) fn prelude_container(name: &str) -> Option<Type> {
         "Vec" => Some(Type::Vec(Box::new(Type::Error))),
         "Option" => Some(Type::Option(Box::new(Type::Error))),
         "Result" => Some(Type::Result(Box::new(Type::Error), Box::new(Type::Error))),
+        "Map" => Some(builtins::map_type(Type::Error, Type::Error)),
         _ => None,
     }
 }
@@ -315,6 +316,9 @@ pub(crate) fn resolve_associated(
     match &ty {
         Type::Nominal { def, .. } if *def == builtins::PRELUDE_ERROR_DEF => {
             builtin_assoc("Error", name)
+        }
+        Type::Nominal { def, .. } if *def == builtins::PRELUDE_MAP_DEF => {
+            builtin_assoc("Map", name)
         }
         Type::Nominal { def, .. } => {
             // `nominal_kind` answers `Enum` exactly for the ids of `world.enums`.

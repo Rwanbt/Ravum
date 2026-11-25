@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.5";
+pub const IR_VERSION: &str = "ravum-ir-1.6";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -199,6 +199,18 @@ pub enum HeapOp {
     /// takes `b`'s contents (`b` is moved, the checker forbids its reuse).
     /// Both must be of the same kind. Additive in IR v1.4.
     Replace,
+    /// IR v1.6 (RFC-UI-LANG-1 P3): a new empty map; `a` is its
+    /// `heap::MapKind` code.
+    MapNew,
+    MapLen,
+    /// A new vector of the keys of map `a`, in key order.
+    MapKeys,
+    /// A new vector of the values of map `a`, in key order.
+    MapVals,
+    /// The values of map `a`, in key order, take those of vector `b`.
+    MapSetVals,
+    /// A shallow copy of map `a` (values copied as words).
+    MapClone,
 }
 
 /// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).
@@ -257,6 +269,30 @@ pub enum Inst {
         h: Local,
         i: Local,
         x: Local,
+    },
+    /// IR v1.6: `value` (raw word, 0 when absent) of key `key` in map `h`,
+    /// and whether it is `present`.
+    MapGet {
+        h: Local,
+        key: Local,
+        present: Local,
+        value: Local,
+    },
+    /// IR v1.6: insert or replace `key -> val` in map `h`; the previous
+    /// value, if any (`present`, `old`).
+    MapInsert {
+        h: Local,
+        key: Local,
+        val: Local,
+        present: Local,
+        old: Local,
+    },
+    /// IR v1.6: remove `key` from map `h`; the removed value, if any.
+    MapRemove {
+        h: Local,
+        key: Local,
+        present: Local,
+        old: Local,
     },
     /// IR v1.3: `h.pop()`: `present` and the raw word (0 when absent).
     VecPop {
@@ -328,6 +364,36 @@ pub enum Inst {
         index: Local,
         scale: u32,
     },
+}
+
+impl Inst {
+    /// Whether this instruction prints or touches the run heap (allocation
+    /// or heap object access). Real-time modules refuse every such
+    /// instruction (INV-05). Exhaustive on purpose: a new instruction must
+    /// say which side it is on.
+    pub fn touches_heap_or_io(&self) -> bool {
+        match self {
+            Inst::Print { .. }
+            | Inst::Heap { .. }
+            | Inst::HeapText { .. }
+            | Inst::HeapOfValue { .. }
+            | Inst::VecSet { .. }
+            | Inst::VecPop { .. }
+            | Inst::MapGet { .. }
+            | Inst::MapInsert { .. }
+            | Inst::MapRemove { .. } => true,
+            Inst::Const { .. }
+            | Inst::Copy { .. }
+            | Inst::Bin { .. }
+            | Inst::Un { .. }
+            | Inst::Cast { .. }
+            | Inst::Call { .. }
+            | Inst::StackAddr { .. }
+            | Inst::Load { .. }
+            | Inst::Store { .. }
+            | Inst::PtrAdd { .. } => false,
+        }
+    }
 }
 
 /// A stack slot of a function frame.
@@ -474,6 +540,49 @@ impl Module {
                             l(*present)?;
                             l(*value)?;
                             l(*h)?
+                        }
+                        Inst::MapGet {
+                            h,
+                            key,
+                            present,
+                            value: out,
+                        }
+                        | Inst::MapRemove {
+                            h,
+                            key,
+                            present,
+                            old: out,
+                        } => {
+                            for x in [*h, *key, *present, *out] {
+                                l(x)?;
+                            }
+                            if f.locals[*h as usize] != Ty::Obj
+                                || f.locals[*present as usize] != Ty::Bool
+                            {
+                                return Err(format!(
+                                    "{}: map operation on mistyped locals",
+                                    f.name
+                                ));
+                            }
+                        }
+                        Inst::MapInsert {
+                            h,
+                            key,
+                            val,
+                            present,
+                            old,
+                        } => {
+                            for x in [*h, *key, *val, *present, *old] {
+                                l(x)?;
+                            }
+                            if f.locals[*h as usize] != Ty::Obj
+                                || f.locals[*present as usize] != Ty::Bool
+                            {
+                                return Err(format!(
+                                    "{}: map operation on mistyped locals",
+                                    f.name
+                                ));
+                            }
                         }
                         Inst::Print { arg, .. } => {
                             if let PrintArg::Obj(src) = arg {

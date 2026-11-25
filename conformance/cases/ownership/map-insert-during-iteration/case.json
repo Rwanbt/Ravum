@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-insert-during-iteration",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "STD-20.4 (MUST): the map stays borrowed for the whole loop."
+}

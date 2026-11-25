@@ -849,6 +849,19 @@ impl<'a> OwnChecker<'a> {
 
     pub(super) fn is_nonstatic_ref(&self, expr: &Expr) -> bool {
         self.expr_type(expr).is_reference() && !self.is_static_ref(expr)
+            || self.is_access_view(expr)
+    }
+
+    /// OWN-6.8 / STD-20.3: the instruction view `Option<&V>` produced by
+    /// `Map::get` / `Map::get_mut`. (A view built by the user, `Some(&x)`, is
+    /// already refused at its constructor: not reported twice.)
+    pub(super) fn is_access_view(&self, expr: &Expr) -> bool {
+        matches!(expr.kind, ExprKind::MethodCall { .. })
+            && matches!(
+                self.facts.methods.get(&expr.id),
+                Some(MethodTarget::Builtin { path, .. }) if path == "Map::get" || path == "Map::get_mut"
+            )
+            && holds_nested_ref(&self.expr_type(expr))
     }
 
     // ------------------------------------------------------------------
@@ -1097,5 +1110,29 @@ impl<'a> OwnChecker<'a> {
             }
         }
         out
+    }
+}
+
+/// OWN-6.1 / OWN-6.8: a value whose type holds a reference **inside** an
+/// `Option`, `Result`, tuple, array or `Vec` (a bounded view such as
+/// `Map::get`'s `Option<&V>`) can be neither stored nor returned. Text
+/// (`&str`) is left to the static-text provenance rules (OWN-6.2).
+pub(super) fn holds_nested_ref(ty: &Type) -> bool {
+    fn inner(t: &Type) -> bool {
+        match t {
+            Type::Ref { inner: i, .. } => !matches!(**i, Type::Str) || inner(i),
+            Type::Option(i) | Type::Vec(i) | Type::Slice(i) | Type::Array { elem: i, .. } => {
+                inner(i)
+            }
+            Type::Result(a, b) => inner(a) || inner(b),
+            Type::Tuple(items) => items.iter().any(inner),
+            _ => false,
+        }
+    }
+    match ty {
+        Type::Option(i) | Type::Vec(i) | Type::Array { elem: i, .. } => inner(i),
+        Type::Result(a, b) => inner(a) || inner(b),
+        Type::Tuple(items) => items.iter().any(inner),
+        _ => false,
     }
 }

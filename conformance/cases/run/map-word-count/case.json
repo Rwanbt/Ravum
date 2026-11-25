@@ -1,0 +1,6 @@
+{
+  "id": "run/map-word-count",
+  "mode": "run-pass",
+  "stdout_contains": "a1\nb2\n",
+  "notes": "STD-20.2-20.4: the spec example; a Map<String, i64> counted through a get view in a match, then iterated in increasing key order."
+}
