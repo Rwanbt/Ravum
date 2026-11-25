@@ -1,0 +1,59 @@
+use std::io;
+enum Shape { Dot, Box(i64, i64) }
+struct Item { s: Shape, n: i64 }
+fn grow(v: &mut Vec<Item>, i: usize) -> i64 effects() {
+    match &mut v[i].s {
+        Shape::Box(w, h) => {
+            *w += 1;
+            if *w > 2 { return *w; }
+            *h += 10;
+        }
+        Shape::Dot => {}
+    }
+    return 0;
+}
+fn check(v: &mut Vec<Shape>) -> Result<i64, Error> effects(alloc) {
+    match &mut v[0] {
+        Shape::Box(w, _) => {
+            *w += 100;
+            let r: Result<i64, Error> = Err(Error::new("stop"));
+            let z = r?;
+            *w += z;
+        }
+        Shape::Dot => {}
+    }
+    return Ok(0);
+}
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<Item> = Vec::new();
+    v.push(Item { s: Shape::Box(1, 1), n: 0 });
+    v.push(Item { s: Shape::Dot, n: 5 });
+    let mut b: Vec<Shape> = Vec::new();
+    b.push(Shape::Box(0, 0));
+    let mut k = 0;
+    while k < 3 {
+        k += 1;
+        match &mut b[0] {
+            Shape::Box(w, h) => {
+                *w += 1;
+                if k == 1 { continue; }
+                *h += 1;
+                if k == 3 { break; }
+            }
+            Shape::Dot => {}
+        }
+    }
+    let r = grow(&mut v, 0);
+    let r2 = grow(&mut v, 0);
+    match check(&mut b) { Ok(_) => io::println("ok"), Err(_) => io::println("err") }
+    match &b[0] {
+        Shape::Box(w, h) => { io::println(&(*w).to_string()); io::println(&(*h).to_string()); }
+        Shape::Dot => io::println("dot"),
+    }
+    match &v[0].s {
+        Shape::Box(w, h) => { io::println(&(*w).to_string()); io::println(&(*h).to_string()); }
+        Shape::Dot => io::println("dot"),
+    }
+    io::println(&r.to_string());
+    io::println(&r2.to_string());
+}

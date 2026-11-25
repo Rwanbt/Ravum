@@ -266,17 +266,17 @@ fn o(v: Vec<String>) {
 | OWN-6.13 | `for x in &v` / `for x in &mut v` (`v: Vec<T>`, ou une référence à un `Vec<T>`) : `x` est un emprunt borné au corps de boucle, de type `&T` / `&mut T`, vers l'élément courant. `v` reste emprunté pendant toute la boucle : le modifier (`push`, `clear`, affectation), le déplacer, ou l'utiliser autrement que par `x` sous `&mut`, est `E-OWN-BORROW-CONFLICT`. Les écritures à travers `x` modifient l'élément de `v` et sont visibles après **toute** sortie de l'itération (fin du corps, `continue`, `break`, `return`, `?`). | MUST |
 | OWN-6.14 | **Clone structurel** (RFC-UI-LANG-1 P5) : `x.clone()` existe sur toute struct, tout enum, `Option`, `Result`, tuple, tableau, `String` et `Vec<T>` dont **tous** les composants sont clonables, récursivement. Il rend une copie **profonde** : aucun objet du tas n'est partagé. La clonabilité est une propriété de type. Un type de `std` est soit *valeur* (scalaires, `String`, `Error`, `CHandle`), soit *ressource* (`TcpListener`, `TcpStream`, `JoinHandle`, `Channel`, `Sender`, `Receiver`, `HttpRequest`, `HttpResponse`, `Future`), et une ressource n'est jamais clonable. Ne sont pas clonables non plus : une référence, une slice, un paramètre de type `T` (aucune borne). Un type qui contient un composant non clonable n'est pas clonable : `E-RES-UNKNOWN`, avec une note qui nomme le composant. Une méthode `clone` définie par l'utilisateur prime. Le récepteur est lu, jamais déplacé. Effet : `alloc` si le type contient un objet du tas, aucun sinon. | MUST |
 
-> **Périmètre de F-OWN-020 (P1, `experimental`).** Limites délimitées, à
-> lever avant la qualification complète de RFC-UI-LANG-1 :
-> - **L-OWN-020-1** : voie C, un `match` sur `&mut v[i]` quand `v` est un
->   `Vec` d'agrégats est **refusé** explicitement (`Unsupported`). La copie
->   prêtée n'est réécrite qu'après un appel, alors qu'un `match` exige une
->   réécriture sur toutes ses sorties (RFC §2.1). La voie B l'accepte. `&v[i]`
->   en lecture est accepté par les deux voies.
-> - **L-OWN-020-2** : un texte statique lu dans une liaison (`T::A(x) => *x`,
->   avec `x: &&'static str`) est refusé à la sortie de la fonction
->   (`E-OWN-REF-ESCAPE`). C'est plus prudent que nécessaire, sans danger : la
->   provenance statique n'est pas encore propagée à travers une liaison bornée.
+> **Périmètre de F-OWN-020 (P1, `experimental`).** Les deux limites
+> délimitées à l'origine sont levées (2026-11-25) :
+> - **L-OWN-020-1 (levée)** : voie C, un `match` sur `&mut v[i]` (ou
+>   `&mut v[i].f`) d'un `Vec` d'agrégats prête une copie privée, réécrite dans
+>   l'élément sur **toute** sortie du `match` (fin de bras, `break`,
+>   `continue`, `return`, `?` ; RFC §2.1). Les deux voies l'acceptent.
+> - **L-OWN-020-2 (levée)** : `*x`, avec `x` un emprunt borné d'un texte
+>   statique (charge utile d'un enum, élément d'un `Vec<&str>` parcouru par
+>   `for x in &v`, ou référent statique lui-même), est un `&'static str`
+>   stockable et retournable. Un emprunt borné d'un texte non statique (un
+>   paramètre) ne l'est pas : `E-OWN-REF-ESCAPE`.
 
 > **Provenance du texte statique (note de vérificateur, RFC-D13).** OWN-6.1
 > interdit de stocker une référence non statique dans un agrégat (tableau,

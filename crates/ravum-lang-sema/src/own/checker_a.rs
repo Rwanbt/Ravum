@@ -19,6 +19,7 @@ impl<'a> OwnChecker<'a> {
             depth: 0,
             diverged: false,
             loop_stack: Vec::new(),
+            static_derefs: Default::default(),
             emitted: 0,
             budget_hit: false,
             too_deep: false,
@@ -131,6 +132,7 @@ impl<'a> OwnChecker<'a> {
                 name: name.to_string(),
                 ty,
                 static_ref,
+                static_pointee: false,
                 decl_span: span,
                 binding,
                 assign_once: false,
@@ -430,6 +432,15 @@ impl<'a> OwnChecker<'a> {
                 UnOp::Ref => self.eval_borrow(inner, false, expr.span),
                 UnOp::RefMut => self.eval_borrow(inner, true, expr.span),
                 UnOp::Deref => {
+                    if let ExprKind::Path(path) = &inner.kind {
+                        if self
+                            .path_local_slot(path)
+                            .and_then(|slot| self.slot_info(slot))
+                            .is_some_and(|info| info.static_pointee)
+                        {
+                            self.static_derefs.insert(expr.id);
+                        }
+                    }
                     if let Some(place) = self.eval_place_expr(expr) {
                         self.consume_place(&place, expr.span, expr.id);
                     } else {
@@ -908,7 +919,22 @@ impl<'a> OwnChecker<'a> {
             if b.ty.is_reference() && !static_ref && !bounded {
                 self.report_ref_escape(b.span, "stockée");
             }
+            // L-OWN-020-2: a bounded `&&str` binding reads a text out of the
+            // matched value: a payload (nested, static by rule 2), or the
+            // whole referent, static when it is itself static.
+            let static_pointee = bounded
+                && matches!(&b.ty, Type::Ref { inner, .. } if is_borrowed_text(inner))
+                && (b.nested
+                    || matches!(&scrutinee.kind, ExprKind::Unary {
+                        op: UnOp::Ref | UnOp::RefMut,
+                        expr,
+                    } if self.is_static_ref(expr)));
             let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
+            if static_pointee {
+                if let Some(info) = self.slots.get_mut(&slot) {
+                    info.static_pointee = true;
+                }
+            }
             arm_slots.push(slot);
             self.state.slots.insert(slot, SlotState::initialised());
         }

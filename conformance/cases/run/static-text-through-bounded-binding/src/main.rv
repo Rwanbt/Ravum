@@ -1,0 +1,25 @@
+use std::io;
+enum T { A(&str), B }
+fn name(t: &T) -> &str effects() {
+    match t {
+        T::A(x) => *x,
+        T::B => "b",
+    }
+}
+fn first(v: &Vec<&str>) -> &str effects() {
+    for x in v {
+        return *x;
+    }
+    return "none";
+}
+fn main() -> () effects(io, alloc) {
+    let t = T::A("a");
+    io::println(name(&t));
+    io::println(name(&T::B));
+    let mut v: Vec<&str> = Vec::new();
+    v.push("x");
+    io::println(first(&v));
+    let s: &str = "lit";
+    let k: &str = match &s { y => *y };
+    io::println(k);
+}
