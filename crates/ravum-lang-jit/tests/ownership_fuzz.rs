@@ -15,6 +15,7 @@
 //!    binary, the IR interpreter and the JIT print the same stdout and panic
 //!    with the same text (or all exit normally);
 //! 3. **determinism**: two `check` runs give the same verdict.
+//!
 //! A refusal by Ravum is allowed (the checker is conservative); the rate is
 //! printed, never hidden.
 //!
