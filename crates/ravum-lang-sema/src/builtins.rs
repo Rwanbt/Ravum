@@ -1824,6 +1824,20 @@ mod tests {
     /// Malformed or arity-inconsistent signature text must fail closed: the
     /// caller turns `None` into `Type::Error`, which the generator never emits.
     #[test]
+    fn type_from_str_parses_map() {
+        // STD-20: `Map<K, V>` in a builtin signature, with names from the
+        // environment (the shape of `Map::new`'s return type).
+        let env = [("K", Type::String), ("V", Type::I64)];
+        assert_eq!(
+            type_from_str("Map<K, V>", &env),
+            Some(map_type(Type::String, Type::I64))
+        );
+        assert!(is_map_key_type(&Type::String) && is_map_key_type(&Type::U8));
+        assert!(!is_map_key_type(&Type::F64));
+        assert_eq!(prelude_opaque_name(PRELUDE_MAP_DEF), Some("Map"));
+    }
+
+    #[test]
     fn type_from_str_refuses_malformed_text() {
         for text in [
             "",
@@ -1837,6 +1851,9 @@ mod tests {
             "Result<i32>",
             "Vec<>",
             "Option<i32, i32>",
+            "Map<i32>",
+            "Map<i32, i32, i32>",
+            "Map<i32, Inconnu>",
             "Inconnu",
             "[Inconnu]",
             "(i32, Inconnu)",
