@@ -254,6 +254,7 @@ fn g() -> f64 { return math::PI; }
 pub fn from(s: &str) -> String effects(alloc)
 pub fn parse_i64(s: &str) -> Result<i64, Error> effects(alloc)
 pub fn parse_f64(s: &str) -> Result<f64, Error> effects(alloc)
+pub fn join(parts: &Vec<String>, sep: &str) -> String effects(alloc)   // RFC-UI-LANG-1 P4
 ```
 
 | ID | Sémantique | Niveau |
@@ -264,6 +265,7 @@ pub fn parse_f64(s: &str) -> Result<f64, Error> effects(alloc)
 | STD-7.4 | Chaîne vide → `Err`. Aucun remplacement, aucune réparation. | MUST |
 | STD-7.5 | Le `Error` ne porte **aucun code** : seule `message` existe, et son texte n'est pas stable (STD-1.7). Un programme ne peut pas distinguer « format invalide » de « dépassement » de façon stable (Q-STD-5). | MUST |
 | STD-7.6 | Les conversions *vers* texte sont les méthodes `to_string()` des primitives (§12), pas des fonctions de module. | MUST |
+| STD-7.7 | `join(parts, sep)` (RFC-UI-LANG-1 P4) rend un `String` neuf : les éléments de `parts` dans l'ordre, séparés par `sep` ; `parts` vide donne `""` ; un seul élément est copié sans `sep`. `parts` est emprunté, jamais consommé. | MUST |
 
 ```rv
 // POSITIF
@@ -351,6 +353,14 @@ impl String /* et Str */ {
     pub fn ends_with(&self, pat: &str) -> bool effects()
     pub fn parse_i64(&self) -> Result<i64, Error> effects(alloc)
     pub fn parse_f64(&self) -> Result<f64, Error> effects(alloc)
+    // RFC-UI-LANG-1 P4 : positions en octets UTF-8, comme len()
+    pub fn find(&self, pat: &str) -> Option<usize> effects()
+    pub fn split(&self, sep: &str) -> Vec<String> effects(alloc)
+    pub fn strip_prefix(&self, pat: &str) -> Option<String> effects(alloc)
+    pub fn strip_suffix(&self, pat: &str) -> Option<String> effects(alloc)
+    pub fn substring(&self, start: usize, end: usize) -> String effects(alloc)
+    pub fn chars(&self) -> Vec<char> effects(alloc)
+    pub fn is_char_boundary(&self, i: usize) -> bool effects()
 }
 ```
 
@@ -366,8 +376,15 @@ impl String /* et Str */ {
 | STD-9.8 | `replace(from, to)` remplace **toutes** les occurrences non chevauchantes de `from` ; `from` vide insère `to` entre chaque caractère (même comportement que Rust `str::replace`). | MUST |
 | STD-9.9 | `lines()` découpe sur `\n` (et `\r\n`), **sans** le terminateur ; une dernière ligne vide après un `\n` final n'est **pas** produite ; rend `Vec<String>` possédé. | MUST |
 | STD-9.10 | `parse_i64`/`parse_f64` sont les méthodes équivalentes à [`std::string`](#7-stdstring) : mêmes règles exactes. | MUST |
-| STD-9.11 | **Aucune autre méthode** n'existe : pas de `chars`, `bytes`, `split`, `join`, `to_string` (les primitives l'ont, pas le texte : utiliser `clone`/`from`), `insert`, `remove`, `find`, `rfind`, `char_at`, `repeat`, `clear`, `with_capacity`, `truncate`, `pop`, `as_bytes`. Utilisation → `E-RES-UNKNOWN`. | MUST |
+| STD-9.11 | **Aucune autre méthode** n'existe que celles de ce paragraphe (liste fermée, amendée par RFC-UI-LANG-1 P4 qui ajoute `find`, `split`, `strip_prefix`, `strip_suffix`, `substring`, `chars`, `is_char_boundary` ; `join` est une fonction de `std::string`, STD-7.7) : pas de `bytes`, `char_indices`, `to_string` (les primitives l'ont, pas le texte : utiliser `clone`/`from`), `insert`, `remove`, `rfind`, `char_at`, `repeat`, `clear`, `with_capacity`, `truncate`, `pop`, `as_bytes`. Utilisation → `E-RES-UNKNOWN`. | MUST |
 | STD-9.12 | Un `String` n'est **pas** indexable (`s[0]` → `E-TYP-INDEX`) et n'a **pas** d'itérateur. | MUST |
+| STD-9.13 | `find(pat)` rend `Some(i)`, `i` l'indice en **octets** du début de la première occurrence de `pat` (comparaison d'octets, STD-9.7), ou `None`. `pat` vide rend `Some(0)`. Jamais d'indice sentinelle. | MUST |
+| STD-9.14 | `split(sep)` rend les morceaux entre les occurrences non chevauchantes de `sep`, dans l'ordre, **chaînes vides comprises** : `"a,,b"` donne `["a", "", "b"]`, `""` donne `[""]`, `",a,"` donne `["", "a", ""]`. Un `sep` vide **panique** avec le texte `empty separator` (écart volontaire avec Rust, qui coupe entre chaque caractère ; `chars()` couvre ce besoin). | MUST |
+| STD-9.15 | `strip_prefix(pat)` rend `Some` d'une copie du texte sans le préfixe `pat` s'il commence par `pat` (STD-9.7), sinon `None` ; `strip_suffix` de même pour le suffixe. `pat` vide rend `Some` d'une copie entière. | MUST |
+| STD-9.16 | `substring(start, end)` rend une copie des octets `start..end`. Panique avec `substring out of range` si `start > end` ou `end > len()`, et avec `substring not on a char boundary` si une borne n'est pas une frontière de caractère (STD-9.18). Jamais de résultat partiel, jamais d'UTF-8 invalide. | MUST |
+| STD-9.17 | `chars()` rend les **points de code** Unicode du texte, dans l'ordre (ni graphèmes, ni normalisation) ; `chars().len()` peut différer de `len()`. | MUST |
+| STD-9.18 | `is_char_boundary(i)` vaut `true` si `i == 0`, si `i == len()`, ou si l'octet `i` commence un caractère UTF-8 ; `false` pour `i > len()` (jamais de panic). | MUST |
+| STD-9.19 | Les positions rendues par `find` et `len` sont des frontières de caractère : `substring(0, i)` après `find` ne panique jamais. Les opérations P4 rendent des copies possédées (STD-9.1) ; les deux voies d'exécution (rustc, IR/JIT) donnent le même résultat et les mêmes panics. | MUST |
 
 ```rv
 // POSITIF (tiré de examples/stats et tests-demo)
@@ -398,8 +415,8 @@ test fn strings_work() {
 ```
 
 ```rv
-// NÉGATIF — E-RES-UNKNOWN (méthode non fournie)
-fn f(s: String) -> usize { return s.chars().len(); }
+// NÉGATIF — E-RES-UNKNOWN (méthode non fournie, STD-9.11)
+fn f(s: String) -> usize { return s.char_indices().len(); }
 // NÉGATIF — E-TYP-INDEX
 fn g(s: String) -> u8 { return s[0]; }
 ```
@@ -760,9 +777,10 @@ fn main2() -> () effects(thread, alloc) { let x: i64 = 3; let h: JoinHandle<i64>
 
 Source : [`RFC-E11-NET-HTTP`](../../docs/rfc/RFC-E11-NET-HTTP.md) §4
 (`PROPOSED`, décisions D-18-2 et D-19-8). HTTP est une bibliothèque sur
-`std::net`, implémentée dans le runtime : le texte de Ravum n'a ni `split`,
-ni recherche, ni sous-chaîne (STD-9.11), donc un analyseur écrit en `.rv`
-n'est pas possible en 1.0. `HttpRequest` et `HttpResponse` sont des types
+`std::net`, implémentée dans le runtime : quand cette décision a été prise, le
+texte de Ravum n'avait ni `split`, ni recherche, ni sous-chaîne (STD-9.11
+avant RFC-UI-LANG-1 P4), donc un analyseur écrit en `.rv` n'était pas
+possible ; le runtime garde l'analyseur. `HttpRequest` et `HttpResponse` sont des types
 **opaques** du prélude, lus par des fonctions d'accès.
 
 ```rv

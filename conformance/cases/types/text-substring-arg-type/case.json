@@ -1,0 +1,6 @@
+{
+  "id": "types/text-substring-arg-type",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "STD-9.16 (RFC-UI-LANG-1 P4): substring takes usize byte indices; an i64 is refused (no implicit conversion)."
+}

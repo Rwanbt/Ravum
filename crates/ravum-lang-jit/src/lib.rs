@@ -1286,16 +1286,16 @@ pub(crate) mod exec {
         }
     }
 
-    /// `rv_heap` operation codes beyond `HeapOp` (whose `as u32` values are
-    /// below 20).
-    pub const OP_TEXT: u32 = 20;
-    pub const OP_OF_VALUE: u32 = 21;
-    pub const OP_VEC_SET: u32 = 22;
-    pub const OP_VEC_POP: u32 = 23;
+    /// `rv_heap` operation codes beyond `HeapOp` (whose `as u32` values,
+    /// indices in `HeapOp::ALL`, are below 64; checked by a test).
+    pub const OP_TEXT: u32 = 64;
+    pub const OP_OF_VALUE: u32 = 65;
+    pub const OP_VEC_SET: u32 = 66;
+    pub const OP_VEC_POP: u32 = 67;
     /// IR v1.6 maps: two results (the second, presence, in `ctx.scratch`).
-    pub const OP_MAP_GET: u32 = 24;
-    pub const OP_MAP_INSERT: u32 = 25;
-    pub const OP_MAP_REMOVE: u32 = 26;
+    pub const OP_MAP_GET: u32 = 68;
+    pub const OP_MAP_INSERT: u32 = 69;
+    pub const OP_MAP_REMOVE: u32 = 70;
 
     fn scalar_text(kind: u64, bits: u64) -> String {
         match kind {
@@ -1314,17 +1314,12 @@ pub(crate) mod exec {
     /// `index out of bounds` code; heap faults use the reserved codes.
     pub extern "C" fn rv_heap(ctx: *mut Ctx, op: u32, a: u64, b: u64, c: u64, trap: u32) -> u64 {
         use ravum_lang_ir::heap::HeapStop;
-        use ravum_lang_ir::ir::HeapOp::*;
         let ctx = unsafe { &mut *ctx };
         if ctx.out == 0 {
             ctx.code = super::CODE_NO_HEAP;
             return 0;
         }
         let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
-        let ops = [
-            StrNew, StrClone, StrPush, StrLen, StrEq, VecNew, VecPush, VecLen, VecGet, VecClone,
-            Replace, MapNew, MapLen, MapKeys, MapVals, MapSetVals, MapClone,
-        ];
         let r = match op {
             OP_TEXT => match sink.text(a) {
                 Some(t) => sink.heap.text(&t),
@@ -1347,7 +1342,7 @@ pub(crate) mod exec {
                     w
                 })
             }
-            k => match ops.iter().find(|o| **o as u32 == k) {
+            k => match ravum_lang_ir::ir::HeapOp::ALL.get(k as usize) {
                 Some(o) => sink.heap.op(*o, a, b),
                 None => Err(HeapStop::Fault("invalid object handle")),
             },

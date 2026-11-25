@@ -342,6 +342,19 @@ impl<'a> Emitter<'a> {
             return Ok(special);
         }
 
+        // RFC-UI-LANG-1 P4: text primitives with spec-defined panics are
+        // prelude helpers (receiver evaluated first, like any call).
+        if matches!(owner.as_str(), "String" | "str")
+            && matches!(
+                method,
+                "split" | "strip_prefix" | "strip_suffix" | "substring" | "chars"
+            )
+        {
+            let sep = if rendered.is_empty() { "" } else { ", " };
+            return Ok(format!(
+                "crate::rv_text_{method}(&{receiver}{sep}{rendered})"
+            ));
+        }
         // Direct pass-through only for the methods the Core 1.0 stdlib actually
         // provides on this owner. No hidden clone, no hidden conversion.
         if builtin_method_is_direct(&owner, method) {

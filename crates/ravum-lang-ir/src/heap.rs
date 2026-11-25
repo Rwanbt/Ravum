@@ -232,6 +232,59 @@ impl Heap {
                 let m = m.clone();
                 self.alloc(Object::Map(kind, m))?
             }
+            StrFind => {
+                let (h, n) = (self.str(a)?, self.str(b)?);
+                h.find(n).map_or(u64::MAX, |i| i as u64)
+            }
+            StrStartsWith => self.str(a)?.starts_with(self.str(b)?) as u64,
+            StrEndsWith => self.str(a)?.ends_with(self.str(b)?) as u64,
+            StrSplit => {
+                let (h, sep) = (self.str(a)?, self.str(b)?);
+                if sep.is_empty() {
+                    return Err(HeapStop::Fault("empty separator"));
+                }
+                let parts: Vec<String> = h.split(sep).map(str::to_string).collect();
+                let mut words = Vec::with_capacity(parts.len());
+                for t in parts {
+                    words.push(self.text(&t)?);
+                }
+                self.alloc(Object::Vec(words))?
+            }
+            StrTail => {
+                let h = self.str(a)?;
+                let t = h
+                    .get(b as usize..)
+                    .ok_or(HeapStop::Fault("string index not on a char boundary"))?
+                    .to_string();
+                self.text(&t)?
+            }
+            StrTruncate => {
+                let h = self.str_mut(a)?;
+                if b as usize > h.len() || !h.is_char_boundary(b as usize) {
+                    return Err(HeapStop::Fault("string index not on a char boundary"));
+                }
+                h.truncate(b as usize);
+                0
+            }
+            StrChars => {
+                let v: Vec<u64> = self.str(a)?.chars().map(|c| c as u64).collect();
+                self.alloc(Object::Vec(v))?
+            }
+            StrIsCharBoundary => {
+                let h = self.str(a)?;
+                (usize::try_from(b).is_ok_and(|i| h.is_char_boundary(i))) as u64
+            }
+            StrJoin => {
+                let sep = self.str(b)?.to_string();
+                let mut out = String::new();
+                for (i, w) in self.vec(a)?.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(&sep);
+                    }
+                    out.push_str(self.str(*w)?);
+                }
+                self.text(&out)?
+            }
             Replace => {
                 // `b` was moved into the assignment: take its contents
                 // (no new allocation, nothing charged) and leave it empty.

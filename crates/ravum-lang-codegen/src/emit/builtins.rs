@@ -100,6 +100,7 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "Error::new" | "error::new" => FreeBuiltin::ErrorNew,
         "Vec::new" | "vec::new" => FreeBuiltin::RustPath("Vec::new"),
         "Map::new" => FreeBuiltin::RustPath("crate::Map::new"),
+        "string::join" | "std::string::join" => FreeBuiltin::RustPath("crate::rv_text_join"),
         "Vec::with_capacity" | "vec::with_capacity" => FreeBuiltin::RustPath("Vec::with_capacity"),
         "String::new" | "string::new" => FreeBuiltin::RustPath("String::new"),
         "string::parse_i64" | "parse_i64" | "str::parse_i64" => FreeBuiltin::ParseI64,
@@ -207,6 +208,8 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "replace",
         "starts_with",
         "ends_with",
+        "find",
+        "is_char_boundary",
     ];
     const STR: &[&str] = &[
         "len",
@@ -217,6 +220,8 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "replace",
         "starts_with",
         "ends_with",
+        "find",
+        "is_char_boundary",
     ];
     const VEC: &[&str] = &[
         "len", "is_empty", "push", "pop", "clear", "clone", "as_slice",

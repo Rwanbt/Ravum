@@ -7,6 +7,12 @@
 
 ## 1. Résultat en une phrase
 
+> **Mesure du 2026-11-25 (RFC-UI-LANG-1 P4)** : **903 énoncés MUST** (895
+> après P1 à P3 ; P4 ajoute STD-7.7 et STD-9.13 à STD-9.19, tous rattachés à
+> F-STD-043), **253 FeatureIds**, couverture stricte **253/253**. La borne
+> haute du garde-fou `tools/tests/test_must_audit.py` passe de 900 à 1000,
+> sur décision du responsable (2026-11-25).
+
 > **Mesure du 2026-11-20 (V2-L3, V2-L1b)** : **877 énoncés MUST**, **245
 > FeatureIds** (F-EFF-011 ajouté, profil `det`), couverture stricte
 > **245/245** ; **91** MUST non rattachés (95 avant L3 : G-6.9, LEX-11.5,

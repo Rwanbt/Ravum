@@ -1,0 +1,6 @@
+{
+  "id": "run/text-split-empty-separator",
+  "mode": "run-fail",
+  "stderr_contains": "panic: empty separator",
+  "notes": "STD-9.14 (RFC-UI-LANG-1 P4): splitting on an empty separator panics instead of yielding the implementation-defined Rust split."
+}

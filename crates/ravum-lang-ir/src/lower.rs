@@ -53,6 +53,28 @@ impl std::fmt::Display for LowerError {
 
 type R<T> = Result<T, LowerError>;
 
+/// RFC-UI-LANG-1 P4: the text methods lowered by `text_method`.
+const TEXT_METHODS: &[&str] = &[
+    "String::find",
+    "str::find",
+    "String::strip_prefix",
+    "str::strip_prefix",
+    "String::strip_suffix",
+    "str::strip_suffix",
+    "String::split",
+    "str::split",
+    "String::substring",
+    "str::substring",
+    "String::chars",
+    "str::chars",
+    "String::is_char_boundary",
+    "str::is_char_boundary",
+    "String::starts_with",
+    "str::starts_with",
+    "String::ends_with",
+    "str::ends_with",
+];
+
 fn unsupported<T>(what: impl Into<String>) -> R<T> {
     Err(LowerError::Unsupported(what.into()))
 }
@@ -4071,6 +4093,180 @@ impl<'a> FnLower<'a> {
         unsupported("`io::print*` of this argument")
     }
 
+    /// `Some(value)` when `present`, else `None`, of Option type `t`.
+    fn option_of(&mut self, t: &Type, present: Local, value: Local) -> R<Local> {
+        let result = self.alloc(t)?;
+        let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: present,
+            then_to: sb,
+            else_to: nb,
+        });
+        self.switch_to(sb);
+        let some = self.construct(t, 1, vec![value])?;
+        self.copy(result, 0, some, 0, t)?;
+        self.set_term(Term::Jump(join));
+        self.switch_to(nb);
+        let none = self.construct(t, 0, Vec::new())?;
+        self.copy(result, 0, none, 0, t)?;
+        self.set_term(Term::Jump(join));
+        self.switch_to(join);
+        Ok(result)
+    }
+
+    /// Continue only when `ok`; else the run panics with `text`.
+    fn trap_unless(&mut self, ok: Local, text: &str) {
+        let (good, bad) = (self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: ok,
+            then_to: good,
+            else_to: bad,
+        });
+        self.switch_to(bad);
+        self.set_term(Term::Trap(text.into()));
+        self.switch_to(good);
+    }
+
+    fn cmp(&mut self, op: BinOp, ty: Ty, lhs: Local, rhs: Local) -> Local {
+        let dst = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst,
+            op,
+            ty,
+            lhs,
+            rhs,
+        });
+        dst
+    }
+
+    /// RFC-UI-LANG-1 P4 (STD-9.13..STD-9.18): the text methods of `String`
+    /// and `str`, `h` the receiver's string handle. Panics are checked here,
+    /// with the texts of the rustc path's prelude (`rv_text_*`).
+    fn text_method(&mut self, e: &Expr, h: Local, path: &str, args: &[Expr]) -> R<Local> {
+        let method = path.rsplit("::").next().unwrap_or(path);
+        Ok(match (method, args) {
+            ("find", [n]) => {
+                let n = self.expr(n)?;
+                let i = self.new_local(Ty::Usize);
+                self.heap(Some(i), HeapOp::StrFind, Some(h), Some(n));
+                let none = self.int_const(Ty::Usize, u64::MAX as i128)?;
+                let present = self.cmp(BinOp::Ne, Ty::Usize, i, none);
+                let t = self.type_of(e)?;
+                self.option_of(&t, present, i)?
+            }
+            ("strip_prefix" | "strip_suffix", [n]) => {
+                let n = self.expr(n)?;
+                let prefix = method == "strip_prefix";
+                let test = if prefix {
+                    HeapOp::StrStartsWith
+                } else {
+                    HeapOp::StrEndsWith
+                };
+                let present = self.new_local(Ty::Bool);
+                self.heap(Some(present), test, Some(h), Some(n));
+                let t = self.type_of(e)?;
+                let result = self.alloc(&t)?;
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: present,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                // `n` is a prefix (suffix) of `h`, so the cut is a char
+                // boundary of `h`.
+                let k = self.new_local(Ty::Usize);
+                self.heap(Some(k), HeapOp::StrLen, Some(n), None);
+                let rest = self.new_local(Ty::Obj);
+                if prefix {
+                    self.heap(Some(rest), HeapOp::StrTail, Some(h), Some(k));
+                } else {
+                    let len = self.new_local(Ty::Usize);
+                    self.heap(Some(len), HeapOp::StrLen, Some(h), None);
+                    let cut = self.new_local(Ty::Usize);
+                    self.emit(Inst::Bin {
+                        dst: cut,
+                        op: BinOp::Sub,
+                        ty: Ty::Usize,
+                        lhs: len,
+                        rhs: k,
+                    });
+                    self.heap(Some(rest), HeapOp::StrClone, Some(h), None);
+                    self.heap(None, HeapOp::StrTruncate, Some(rest), Some(cut));
+                }
+                let some = self.construct(&t, 1, vec![rest])?;
+                self.copy(result, 0, some, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                let none = self.construct(&t, 0, Vec::new())?;
+                self.copy(result, 0, none, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                result
+            }
+            ("starts_with" | "ends_with", [n]) => {
+                let n = self.expr(n)?;
+                let op = if method == "starts_with" {
+                    HeapOp::StrStartsWith
+                } else {
+                    HeapOp::StrEndsWith
+                };
+                let r = self.new_local(Ty::Bool);
+                self.heap(Some(r), op, Some(h), Some(n));
+                r
+            }
+            ("split", [sep]) => {
+                let sep = self.expr(sep)?;
+                let n = self.new_local(Ty::Usize);
+                self.heap(Some(n), HeapOp::StrLen, Some(sep), None);
+                let zero = self.int_const(Ty::Usize, 0)?;
+                let ok = self.cmp(BinOp::Ne, Ty::Usize, n, zero);
+                self.trap_unless(ok, "empty separator");
+                let v = self.new_local(Ty::Obj);
+                self.heap(Some(v), HeapOp::StrSplit, Some(h), Some(sep));
+                v
+            }
+            ("substring", [a, b]) => {
+                let (start, end) = (self.expr(a)?, self.expr(b)?);
+                let len = self.new_local(Ty::Usize);
+                self.heap(Some(len), HeapOp::StrLen, Some(h), None);
+                let ordered = self.cmp(BinOp::Le, Ty::Usize, start, end);
+                self.trap_unless(ordered, "substring out of range");
+                let inside = self.cmp(BinOp::Le, Ty::Usize, end, len);
+                self.trap_unless(inside, "substring out of range");
+                for bound in [start, end] {
+                    let ok = self.new_local(Ty::Bool);
+                    self.heap(Some(ok), HeapOp::StrIsCharBoundary, Some(h), Some(bound));
+                    self.trap_unless(ok, "substring not on a char boundary");
+                }
+                let out = self.new_local(Ty::Obj);
+                self.heap(Some(out), HeapOp::StrTail, Some(h), Some(start));
+                let n = self.new_local(Ty::Usize);
+                self.emit(Inst::Bin {
+                    dst: n,
+                    op: BinOp::Sub,
+                    ty: Ty::Usize,
+                    lhs: end,
+                    rhs: start,
+                });
+                self.heap(None, HeapOp::StrTruncate, Some(out), Some(n));
+                out
+            }
+            ("chars", []) => {
+                let v = self.new_local(Ty::Obj);
+                self.heap(Some(v), HeapOp::StrChars, Some(h), None);
+                v
+            }
+            ("is_char_boundary", [i]) => {
+                let i = self.expr(i)?;
+                let ok = self.new_local(Ty::Bool);
+                self.heap(Some(ok), HeapOp::StrIsCharBoundary, Some(h), Some(i));
+                ok
+            }
+            _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
+        })
+    }
+
     fn heap(&mut self, dst: Option<Local>, op: HeapOp, a: Option<Local>, b: Option<Local>) {
         self.emit(Inst::Heap { dst, op, a, b });
     }
@@ -4106,7 +4302,8 @@ impl<'a> FnLower<'a> {
                     | "Vec::pop"
                     | "Clone::clone"
                     | "Clone::copy"
-            );
+            )
+            || TEXT_METHODS.contains(&path);
         if !known {
             return Ok(None);
         }
@@ -4266,6 +4463,7 @@ impl<'a> FnLower<'a> {
                 self.heap(None, HeapOp::VecPush, Some(h), Some(x));
                 self.unit()
             }
+            (_, _) if TEXT_METHODS.contains(&path) => self.text_method(e, h, path, args)?,
             ("Vec::pop", []) if self.vec_agg_elem(recv)?.is_some() => {
                 let ty = self.vec_agg_elem(recv)?.expect("checked by the guard");
                 let t = self.type_of(e)?;
@@ -4694,6 +4892,15 @@ impl<'a> FnLower<'a> {
                     });
                 }
                 Ok(self.unit())
+            }
+            Some(CallTarget::BuiltinFn { path }) if path == "std::string::join" => {
+                let [parts, sep] = args else {
+                    return Err(LowerError::MissingFact("arity of `string::join`".into()));
+                };
+                let (v, sep) = (self.expr(parts)?, self.expr(sep)?);
+                let dst = self.new_local(Ty::Obj);
+                self.heap(Some(dst), HeapOp::StrJoin, Some(v), Some(sep));
+                Ok(dst)
             }
             Some(CallTarget::BuiltinFn { path }) if path.starts_with("std::math::") => {
                 let name = &path["std::math::".len()..];

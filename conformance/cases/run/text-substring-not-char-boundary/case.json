@@ -1,0 +1,6 @@
+{
+  "id": "run/text-substring-not-char-boundary",
+  "mode": "run-fail",
+  "stderr_contains": "panic: substring not on a char boundary",
+  "notes": "STD-9.16 (RFC-UI-LANG-1 P4): a byte index inside a UTF-8 sequence panics; `é` is two bytes."
+}

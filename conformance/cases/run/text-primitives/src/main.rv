@@ -1,0 +1,31 @@
+use std::io;
+use std::string;
+fn main() {
+    let line = String::from("ms=123;état=ok;x=");
+    let parts = line.split(";");
+    io::println(&parts.len().to_string());
+    for p in &parts {
+        match p.find("=") {
+            Some(i) => {
+                io::print(p.substring(0, i).as_str());
+                io::print(" -> ");
+                io::println(p.substring(i + 1, p.len()).as_str());
+            }
+            None => io::println("no ="),
+        }
+    }
+    match line.strip_prefix("ms=") {
+        Some(r) => io::println(r.as_str()),
+        None => io::println("none"),
+    }
+    io::println(&line.strip_suffix("zz").is_none().to_string());
+    let cs = String::from("aé😀").chars();
+    io::println(&cs.len().to_string());
+    io::println(&String::from("aé").is_char_boundary(2).to_string());
+    let mut v: Vec<String> = Vec::new();
+    v.push(String::from("a"));
+    v.push(String::from("b"));
+    io::println(string::join(&v, ", ").as_str());
+    io::println(&String::from("a,,b").split(",").len().to_string());
+    io::println(&String::from("").split(",").len().to_string());
+}
