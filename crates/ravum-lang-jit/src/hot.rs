@@ -444,21 +444,11 @@ impl HotEngine {
                 .functions
                 .iter()
                 .flat_map(|f| f.blocks.iter().flat_map(|b| b.insts.iter()));
-            if let Some(i) = kinds.find(|i| {
-                matches!(
-                    i,
-                    Inst::Print { .. }
-                        | Inst::Heap { .. }
-                        | Inst::HeapText { .. }
-                        | Inst::HeapOfValue { .. }
-                        | Inst::VecSet { .. }
-                        | Inst::VecPop { .. }
-                )
-            }) {
+            if let Some(i) = kinds.find(|i| i.touches_heap_or_io()) {
                 let what = if matches!(i, Inst::Print { .. }) {
                     "`io::print*`"
                 } else {
-                    "a heap allocation (`String`/`Vec`)"
+                    "a heap allocation or access (`String`/`Vec`/`Map`)"
                 };
                 return Err(Refusal::Invalid(format!(
                     "{what} in a module with a real-time entry (INV-05)"

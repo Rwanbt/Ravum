@@ -311,3 +311,29 @@ JIT) :
 2. `ravum-lang run --backend jit` dans le CLI (touche un crate partagé).
 3. T16 : le JIT rend le hot swap naturel (table d'indirection par fonction) ;
    à articuler avec `RFC-E11-HOT-RELOAD` déjà présent côté `rustc` sur `dev`.
+
+## IR v1.6 (2026-11-25) — `Map<K, V>` (RFC-UI-LANG-1 P3)
+
+- **Tas** : nouvel objet `Map`, avec un `BTreeMap` de clés typées (`Signed`,
+  `Unsigned`, `Text`) vers des mots de valeur. L'ordre est celui de STD-20.2.
+- **Opérations de tas** : `MapNew` (avec le code du type de clé), `MapLen`,
+  `MapKeys`, `MapVals`, `MapSetVals`, `MapClone`.
+- **Instructions à deux résultats** : `MapGet`, `MapInsert`, `MapRemove`
+  (présence, puis valeur). Elles sont validées (indices et types) et
+  partagées par l'interpréteur et le JIT (`rv_heap`, second résultat dans
+  `ctx.scratch`).
+- **Abaissement** :
+  - les valeurs agrégées sont des vecteurs de mots, comme pour `Vec` ;
+  - une vue `get_mut` d'un scalaire ou d'un agrégat est une copie, réécrite
+    dans la table sur **toute** sortie : fin du `match` ou de l'instruction,
+    `break`, `continue`, `return`, `?` ;
+  - `for (k, v) in &mut m` parcourt un instantané, réécrit dans la table
+    (`MapSetVals`) sur toute sortie de la boucle ;
+  - le clone est profond.
+- **INV-05** : le refus des instructions de tas dans un module temps réel
+  passe désormais par `Inst::touches_heap_or_io`, à `match` exhaustif. La
+  liste écrite à la main aurait laissé passer les nouvelles instructions
+  `Map*`.
+- **Oracle** : `run/map-ordered` et `run/map-word-count` donnent le même
+  résultat avec rustc (`BTreeMap` de Rust, oracle indépendant),
+  l'interpréteur et le JIT.

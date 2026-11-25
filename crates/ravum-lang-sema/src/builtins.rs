@@ -64,6 +64,25 @@ pub const PRELUDE_HTTP_RESPONSE_DEF: NodeId = NodeId::MAX - 9;
 /// phase 2) : la valeur rendue par l'appel d'une `async fn`.
 pub const PRELUDE_FUTURE_DEF: NodeId = NodeId::MAX - 10;
 
+/// `NodeId` réservé au type prélude `Map<K, V>` (RFC-UI-LANG-1 P3,
+/// STD-20) : une table ordonnée par l'ordre total des clés. Deux arguments
+/// de type ; `K` est un entier, `bool`, `char` ou `String`.
+pub const PRELUDE_MAP_DEF: NodeId = NodeId::MAX - 11;
+
+/// Le type `Map<K, V>`.
+pub fn map_type(k: Type, v: Type) -> Type {
+    Type::Nominal {
+        def: PRELUDE_MAP_DEF,
+        name: "Map".to_string(),
+        args: vec![k, v],
+    }
+}
+
+/// STD-20.1 : types de clés admis (ordre total défini par la spec).
+pub fn is_map_key_type(t: &Type) -> bool {
+    t.is_int() || matches!(t, Type::Bool | Type::Char | Type::String)
+}
+
 /// Le type `CHandle`.
 pub fn chandle_type() -> Type {
     opaque_type(PRELUDE_CHANDLE_DEF, "CHandle")
@@ -94,6 +113,9 @@ pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
     }
     if def == PRELUDE_HTTP_RESPONSE_DEF {
         return Some("HttpResponse");
+    }
+    if def == PRELUDE_MAP_DEF {
+        return Some("Map");
     }
     PRELUDE_GENERIC_OPAQUES
         .iter()
@@ -163,6 +185,7 @@ pub const PRELUDE_TYPES: &[&str] = &[
     "HttpRequest",
     "HttpResponse",
     "Future",
+    "Map",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -874,6 +897,13 @@ pub static BUILTIN_ASSOC_FNS: &[BuiltinAssocFn] = &[
         effects: ALLOC,
     },
     BuiltinAssocFn {
+        path: "Map::new",
+        generics: &["K", "V"],
+        params: &[],
+        ret: "Map<K, V>",
+        effects: ALLOC,
+    },
+    BuiltinAssocFn {
         path: "Vec::new",
         generics: &["T"],
         params: &[],
@@ -908,6 +938,7 @@ pub enum MethodSelfKind {
     StrRef,
     Slice,
     Vec,
+    Map,
     Option,
     Result,
     /// Entier signé ou non signé (les entrées marquées `Int` s'appliquent aux deux).
@@ -930,6 +961,7 @@ pub fn builtin_method_takes_exclusive_receiver(kind: MethodSelfKind, name: &str)
     match kind {
         MethodSelfKind::String => matches!(name, "push_str" | "push"),
         MethodSelfKind::Vec => matches!(name, "push" | "pop" | "clear"),
+        MethodSelfKind::Map => matches!(name, "insert" | "remove" | "get_mut"),
         _ => false,
     }
 }
@@ -961,6 +993,7 @@ macro_rules! method {
 const STRING_KINDS: &[MethodSelfKind] = &[MethodSelfKind::String];
 const STR_KINDS: &[MethodSelfKind] = &[MethodSelfKind::StrRef];
 const VEC_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Vec];
+const MAP_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Map];
 const SLICE_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Slice];
 const OPTION_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Option];
 const RESULT_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Result];
@@ -1144,6 +1177,43 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     method!(SLICE_KINDS, "is_empty", "slice::is_empty", [], "bool", PURE),
     // --- Vec<T> ---
     method!(VEC_KINDS, "len", "Vec::len", [], "usize", PURE),
+    // STD-20 (RFC-UI-LANG-1 P3): `Map<K, V>`. `get` / `get_mut` rend une
+    // **vue d'instruction** (OWN-6.8) : bornée, jamais stockable.
+    method!(MAP_KINDS, "len", "Map::len", [], "usize", PURE),
+    method!(MAP_KINDS, "is_empty", "Map::is_empty", [], "bool", PURE),
+    method!(
+        MAP_KINDS,
+        "insert",
+        "Map::insert",
+        ["K", "V"],
+        "Option<V>",
+        ALLOC
+    ),
+    method!(
+        MAP_KINDS,
+        "remove",
+        "Map::remove",
+        ["&K"],
+        "Option<V>",
+        PURE
+    ),
+    method!(
+        MAP_KINDS,
+        "contains_key",
+        "Map::contains_key",
+        ["&K"],
+        "bool",
+        PURE
+    ),
+    method!(MAP_KINDS, "get", "Map::get", ["&K"], "Option<&V>", PURE),
+    method!(
+        MAP_KINDS,
+        "get_mut",
+        "Map::get_mut",
+        ["&K"],
+        "Option<&mut V>",
+        PURE
+    ),
     method!(VEC_KINDS, "is_empty", "Vec::is_empty", [], "bool", PURE),
     method!(VEC_KINDS, "push", "Vec::push", ["T"], "()", ALLOC),
     method!(VEC_KINDS, "pop", "Vec::pop", [], "Option<T>", PURE),
@@ -1416,6 +1486,16 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
             items.push(type_from_str(part, env)?);
         }
         return Some(Type::Tuple(items));
+    }
+    if let Some(inner) = t.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
+        let parts = split_top_level(inner, ',')?;
+        if parts.len() != 2 {
+            return None;
+        }
+        return Some(map_type(
+            type_from_str(parts[0], env)?,
+            type_from_str(parts[1], env)?,
+        ));
     }
     for (name, _) in PRELUDE_GENERIC_OPAQUES {
         if let Some(inner) = t
@@ -1744,6 +1824,20 @@ mod tests {
     /// Malformed or arity-inconsistent signature text must fail closed: the
     /// caller turns `None` into `Type::Error`, which the generator never emits.
     #[test]
+    fn type_from_str_parses_map() {
+        // STD-20: `Map<K, V>` in a builtin signature, with names from the
+        // environment (the shape of `Map::new`'s return type).
+        let env = [("K", Type::String), ("V", Type::I64)];
+        assert_eq!(
+            type_from_str("Map<K, V>", &env),
+            Some(map_type(Type::String, Type::I64))
+        );
+        assert!(is_map_key_type(&Type::String) && is_map_key_type(&Type::U8));
+        assert!(!is_map_key_type(&Type::F64));
+        assert_eq!(prelude_opaque_name(PRELUDE_MAP_DEF), Some("Map"));
+    }
+
+    #[test]
     fn type_from_str_refuses_malformed_text() {
         for text in [
             "",
@@ -1757,6 +1851,9 @@ mod tests {
             "Result<i32>",
             "Vec<>",
             "Option<i32, i32>",
+            "Map<i32>",
+            "Map<i32, i32, i32>",
+            "Map<i32, Inconnu>",
             "Inconnu",
             "[Inconnu]",
             "(i32, Inconnu)",

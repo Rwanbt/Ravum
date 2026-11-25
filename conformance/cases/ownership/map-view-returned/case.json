@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-view-returned",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "STD-20.3 / OWN-6.8 (MUST): the get view cannot be returned."
+}

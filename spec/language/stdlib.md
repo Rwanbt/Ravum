@@ -808,3 +808,51 @@ fn handle(stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc) {
 // NÉGATIF — E-EFF-PROFILE (http sous `pure`)
 fn main() -> () effects(net, alloc) { let r = http::get("http://127.0.0.1:1/"); drop(r); }
 ```
+
+## 20. `Map<K, V>` (table ordonnée, RFC-UI-LANG-1 P3)
+
+Type du prélude, sans `use` :
+
+```rv
+impl Map<K, V> {
+    pub fn new() -> Map<K, V> effects(alloc)
+    pub fn len(&self) -> usize effects()
+    pub fn is_empty(&self) -> bool effects()
+    pub fn insert(&mut self, k: K, v: V) -> Option<V> effects(alloc)
+    pub fn remove(&mut self, k: &K) -> Option<V> effects()
+    pub fn contains_key(&self, k: &K) -> bool effects()
+    pub fn get(&self, k: &K) -> Option<&V> effects()          // vue d'instruction (OWN-6.8)
+    pub fn get_mut(&mut self, k: &K) -> Option<&mut V> effects()  // vue d'instruction
+}
+```
+
+| ID | Règle | Niveau |
+|---|---|---|
+| STD-20.1 | Les clés sont d'un type entier, `bool`, `char` ou `String`. Tout autre `K` (flottant, struct, tuple, référence, paramètre de type) est `E-TYP-MISMATCH` dès l'écriture du type `Map<K, V>`. | MUST |
+| STD-20.2 | **Ordre total des clés**, fixé par la spec et non par une bibliothèque : ordre numérique des entiers, `false < true`, ordre des points de code pour `char`, ordre lexicographique des octets UTF-8 pour `String`. L'égalité des clés est l'égalité de valeur (de contenu pour le texte). | MUST |
+| STD-20.3 | `get` / `get_mut` rendent une **vue d'instruction** `Option<&V>` / `Option<&mut V>` (OWN-6.8). Elle peut être l'objet d'un `match`, dont les liaisons sont des emprunts bornés au bras, pendant lequel la table reste empruntée (partagée pour `get`, exclusive pour `get_mut`). Elle peut aussi être testée (`is_some`) ou lue par déréférencement explicite d'un `V` `Copy` (`*m.get(&k).unwrap_or(&0)`). La stocker (`let`, champ, élément) ou la retourner est `E-OWN-REF-ESCAPE`. Une écriture à travers une vue `get_mut` modifie la valeur de la table. | MUST |
+| STD-20.4 | `for (k, v) in &m` / `for (k, v) in &mut m` parcourt la table dans l'**ordre croissant des clés**. `k: &K` n'est jamais modifiable ; `v: &V` ou `&mut V` suit l'emprunt. La table reste empruntée pendant toute la boucle (OWN-6.13) : `insert`, `remove` ou un autre accès dans le corps est `E-OWN-BORROW-CONFLICT`. | MUST |
+| STD-20.5 | `insert` remplace la valeur d'une clé présente et rend l'ancienne (`Some`), sinon `None`. `remove` d'une clé absente rend `None` sans panic. Il n'y a pas d'indexation `m[k]`. | MUST |
+| STD-20.6 | Complexité exigée : `insert`, `remove`, `contains_key`, `get`, `get_mut` en O(log n), `len` en O(1), un parcours en O(n) au total. | MUST |
+| STD-20.7 | `clone()` (OWN-6.14) est disponible si `K` et `V` sont clonables : copie profonde, aucun objet du tas partagé. | MUST |
+| STD-20.8 | Une valeur `Map` n'est pas comparable (`==` est `E-TYP-EQ`) et n'a pas de `to_string`. | MUST |
+
+> **Compatibilité.** `Map` devient un nom de type réservé du prélude. Un
+> programme Core 1.0 qui définissait son propre type `Map` est désormais en
+> conflit. Aucun programme du dépôt ni de la conformance n'en définit.
+
+```rv
+// POSITIF
+fn count(words: &Vec<String>) -> Map<String, i64> effects(alloc) {
+    let mut m: Map<String, i64> = Map::new();
+    for w in words {
+        let n = match m.get(w) { Some(c) => *c, None => 0 };
+        let _old = m.insert(w.clone(), n + 1);
+    }
+    m
+}
+// NÉGATIF — E-OWN-REF-ESCAPE (vue stockée)
+fn f(m: &Map<i64, i64>) -> i64 { let o = m.get(&1i64); 0 }
+// NÉGATIF — E-TYP-MISMATCH (clé flottante)
+fn g() { let m: Map<f64, i64> = Map::new(); }
+```

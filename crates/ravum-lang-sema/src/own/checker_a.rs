@@ -301,7 +301,8 @@ impl<'a> OwnChecker<'a> {
                 .or_else(|| l.init.as_ref().map(|e| self.expr_type(e)))
                 .unwrap_or(Type::Error);
             let static_ref = ty.is_reference() && init_static;
-            if ty.is_reference() && !static_ref {
+            let view = l.init.as_ref().is_some_and(|e| self.is_access_view(e));
+            if (ty.is_reference() && !static_ref) || view {
                 self.report_ref_escape(stmt_span, "stockée");
             }
             let slot = self.declare_slot(&name.name, ty, static_ref, l.pat.span);
@@ -475,7 +476,9 @@ impl<'a> OwnChecker<'a> {
             ExprKind::Assign { target, value } => {
                 self.eval_value(value);
                 let target_ty = self.expr_type(target);
-                if target_ty.is_reference() && self.is_nonstatic_ref(value) {
+                if (target_ty.is_reference() || super::checker_b::holds_nested_ref(&target_ty))
+                    && self.is_nonstatic_ref(value)
+                {
                     self.report_ref_escape(value.span, "stockée");
                 }
                 if let Some(place) = self.eval_place_expr(target) {
@@ -818,6 +821,27 @@ impl<'a> OwnChecker<'a> {
                         None
                     }
                 }
+            }
+            // `match m.get(&k)` / `m.get_mut(&k)` (STD-20.3): the map stays
+            // borrowed (shared / exclusive) while the arms hold the view.
+            ExprKind::MethodCall { receiver, .. } => {
+                let mutable = matches!(
+                    self.facts.methods.get(&scrutinee.id),
+                    Some(MethodTarget::Builtin { path, .. }) if path == "Map::get_mut"
+                );
+                self.eval_value(scrutinee);
+                let base = match &receiver.kind {
+                    ExprKind::Unary {
+                        op: UnOp::Ref | UnOp::RefMut,
+                        expr: inner,
+                    } => inner,
+                    _ => receiver,
+                };
+                self.eval_place_expr(base).map(|place| Loan {
+                    place,
+                    mutable,
+                    span: scrutinee.span,
+                })
             }
             _ => {
                 self.eval_value(scrutinee);

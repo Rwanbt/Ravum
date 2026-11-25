@@ -1,0 +1,7 @@
+fn f(mut m: Map<i64, i64>) {
+    for (k, v) in &m {
+        let _x = m.insert(*k, *v);
+    }
+}
+
+fn main() {}

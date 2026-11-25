@@ -1377,6 +1377,13 @@ mod rv_det {
     }
 }
 
+// --- Map<K, V> (RFC-UI-LANG-1 P3, STD-20) ---
+
+/// The ordered map of the prelude. Its key types (integers, `bool`, `char`,
+/// `String`) have Rust orders equal to the spec's total order (STD-20.2), so
+/// iteration is in increasing key order, the same in both backends.
+pub type Map<K, V> = std::collections::BTreeMap<K, V>;
+
 // --- std::task: single-threaded FIFO executor (RFC-E11-CONCURRENCY phase 2) ---
 
 /// Value of a call to an `async fn`: a boxed future, polled by `task::block_on`.

@@ -1,0 +1,6 @@
+{
+  "id": "types/map-float-key",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "STD-20.1 (MUST): a float has no total order, it is not a key type."
+}

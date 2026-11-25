@@ -48,7 +48,7 @@ acceptée ici.
 |---|---|---|---|---|
 | L1 | Pas de découpage de texte : ni `split`, ni `find`, ni sous-chaîne | STD-9.11 | `todo` stocke l'état et le titre sur deux lignes ; `log-report` ne peut pas extraire un champ (`ms=123`) | RFC : `split(sep) -> Vec<String>`, `find(s) -> Option<usize>`, `strip_prefix(s) -> Option<String>` |
 | L2 | `for` impossible sur `&Vec<T>`, et une référence ne peut pas être stockée dans un `let` | EXPR-6.4, OWN-6 | toute lecture d'une liste empruntée passe par une boucle `while` sur un index | **Levée pour `Vec`** le 2026-11-24 : `for x in &v` / `&mut v` (OWN-6.13, RFC-UI-LANG-1 P2) ; tableaux et slices restent parcourus par index |
-| L3 | Pas de table associative | STD-1.3 | des compteurs fixes (`log-report`) ; pas de comptage par clé libre | RFC : `Map<String, V>` minimal |
+| L3 | Pas de table associative | STD-1.3 | des compteurs fixes (`log-report`) ; pas de comptage par clé libre | **Levée** le 2026-11-25 : `Map<K, V>` ordonnée (STD-20, RFC-UI-LANG-1 P3) |
 | L4 | Pas de répertoire temporaire ni de `create_dir` | STD-3.6 | les tests écrivent dans `.ravum/` | RFC : `fs::create_dir`, ou un répertoire de test fourni par `ravum-lang test` |
 
 ## Non mesuré

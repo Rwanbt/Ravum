@@ -1,0 +1,11 @@
+fn f(m: &Map<i64, String>) -> i64 {
+    match m.get(&1i64) {
+        Some(v) => {
+            let keep = v;
+            0
+        }
+        None => 0,
+    }
+}
+
+fn main() {}

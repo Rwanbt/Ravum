@@ -184,6 +184,9 @@ pub(super) fn method_self_kind(ty: &Type) -> Option<MethodSelfKind> {
         Type::Ref { inner, .. } if matches!(**inner, Type::Str) => MethodSelfKind::StrRef,
         Type::Slice(_) => MethodSelfKind::Slice,
         Type::Vec(_) => MethodSelfKind::Vec,
+        Type::Nominal { def, .. } if *def == crate::builtins::PRELUDE_MAP_DEF => {
+            MethodSelfKind::Map
+        }
         Type::Option(_) => MethodSelfKind::Option,
         Type::Result(_, _) => MethodSelfKind::Result,
         Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::I128 | Type::Isize => {
@@ -203,6 +206,15 @@ pub(super) fn method_self_kind(ty: &Type) -> Option<MethodSelfKind> {
 pub(super) fn method_env_for(ty: &Type) -> Vec<(&'static str, Type)> {
     match ty {
         Type::Vec(elem) => vec![("Self", ty.clone()), ("T", (**elem).clone())],
+        Type::Nominal { def, args, .. }
+            if *def == crate::builtins::PRELUDE_MAP_DEF && args.len() == 2 =>
+        {
+            vec![
+                ("Self", ty.clone()),
+                ("K", args[0].clone()),
+                ("V", args[1].clone()),
+            ]
+        }
         Type::Option(inner) => vec![("Self", ty.clone()), ("T", (**inner).clone())],
         Type::Result(ok, err) => vec![
             ("Self", ty.clone()),
@@ -502,6 +514,13 @@ pub(super) fn clonability(
             }
             if *def == b::PRELUDE_ERROR_DEF {
                 return Ok(true);
+            }
+            if *def == b::PRELUDE_MAP_DEF {
+                let mut alloc = true;
+                for a in args {
+                    alloc |= clonability(world, facts, a, seen)?;
+                }
+                return Ok(alloc);
             }
             if *def == b::PRELUDE_CHANDLE_DEF {
                 return Ok(false);

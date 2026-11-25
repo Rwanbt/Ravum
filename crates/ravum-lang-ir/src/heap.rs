@@ -18,8 +18,52 @@ pub const HEAP_LIMIT: usize = 256 << 20;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     Str(String),
+    /// IR v1.6 (RFC-UI-LANG-1 P3): an ordered map. Keys are ordered by the
+    /// spec's total order (numeric, or UTF-8 bytes for text); values are raw
+    /// words (scalar bits or a handle).
+    Map(MapKind, std::collections::BTreeMap<MapKey, u64>),
     /// Elements as raw 64-bit words (scalars only in IR v1.3).
     Vec(Vec<u64>),
+}
+
+/// How the keys of a map are read from their raw word (fixed at creation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapKind {
+    /// Signed integers (two's complement words, sign-extended).
+    Signed,
+    /// Unsigned integers, `bool`, `char`.
+    Unsigned,
+    /// `String`: the word is a string handle; the key is its contents.
+    Text,
+}
+
+impl MapKind {
+    /// The `a` operand of `HeapOp::MapNew`.
+    pub fn code(self) -> u64 {
+        match self {
+            MapKind::Signed => 0,
+            MapKind::Unsigned => 1,
+            MapKind::Text => 2,
+        }
+    }
+
+    pub fn from_code(c: u64) -> Option<MapKind> {
+        Some(match c {
+            0 => MapKind::Signed,
+            1 => MapKind::Unsigned,
+            2 => MapKind::Text,
+            _ => return None,
+        })
+    }
+}
+
+/// A key in its total order (STD map rules: numeric order, `false < true`,
+/// code points for `char`, lexicographic UTF-8 bytes for text).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MapKey {
+    Signed(i64),
+    Unsigned(u64),
+    Text(String),
 }
 
 /// Why a heap operation stopped the run.
@@ -63,6 +107,7 @@ impl Heap {
         let n = match &o {
             Object::Str(s) => s.len(),
             Object::Vec(v) => v.len() * 8,
+            Object::Map(_, m) => m.len() * 24,
         };
         self.charge(n + 32)?;
         self.objects.push(o);
@@ -145,12 +190,55 @@ impl Heap {
                 let v = self.vec(a)?.clone();
                 self.alloc(Object::Vec(v))?
             }
+            MapNew => {
+                let kind = MapKind::from_code(a).ok_or(HeapStop::Fault("invalid map kind"))?;
+                self.alloc(Object::Map(kind, Default::default()))?
+            }
+            MapLen => self.map(a)?.1.len() as u64,
+            MapKeys => {
+                // A fresh vector of the keys in order; text keys are fresh
+                // strings (the map keeps its own).
+                let (kind, m) = self.map(a)?;
+                let keys: Vec<MapKey> = m.keys().cloned().collect();
+                let mut words = Vec::with_capacity(keys.len());
+                for k in keys {
+                    words.push(match (kind, k) {
+                        (_, MapKey::Signed(x)) => x as u64,
+                        (_, MapKey::Unsigned(x)) => x,
+                        (_, MapKey::Text(t)) => self.text(&t)?,
+                    });
+                }
+                self.alloc(Object::Vec(words))?
+            }
+            MapVals => {
+                let v: Vec<u64> = self.map(a)?.1.values().copied().collect();
+                self.alloc(Object::Vec(v))?
+            }
+            MapSetVals => {
+                // The values of map `a`, in key order, become those of vector
+                // `b` (same length, checked).
+                let v = self.vec(b)?.clone();
+                let m = self.map_mut(a)?;
+                if m.len() != v.len() {
+                    return Err(HeapStop::Fault("map values of a different length"));
+                }
+                for (slot, x) in m.values_mut().zip(v) {
+                    *slot = x;
+                }
+                0
+            }
+            MapClone => {
+                let (kind, m) = self.map(a)?;
+                let m = m.clone();
+                self.alloc(Object::Map(kind, m))?
+            }
             Replace => {
                 // `b` was moved into the assignment: take its contents
                 // (no new allocation, nothing charged) and leave it empty.
                 let empty = match self.get(b)? {
                     Object::Str(_) => Object::Str(String::new()),
                     Object::Vec(_) => Object::Vec(Vec::new()),
+                    Object::Map(k, _) => Object::Map(*k, Default::default()),
                 };
                 if std::mem::discriminant(self.get(a)?) != std::mem::discriminant(&empty) {
                     return Err(HeapStop::Fault("replace between different kinds"));
@@ -177,6 +265,64 @@ impl Heap {
     pub fn vec_pop(&mut self, h: u64) -> Result<(bool, u64), HeapStop> {
         Ok(match self.vec_mut(h)?.pop() {
             Some(x) => (true, x),
+            None => (false, 0),
+        })
+    }
+
+    fn map(&self, h: u64) -> Result<(MapKind, &std::collections::BTreeMap<MapKey, u64>), HeapStop> {
+        match self.get(h)? {
+            Object::Map(k, m) => Ok((*k, m)),
+            _ => Err(HeapStop::Fault("not a map")),
+        }
+    }
+
+    fn map_mut(
+        &mut self,
+        h: u64,
+    ) -> Result<&mut std::collections::BTreeMap<MapKey, u64>, HeapStop> {
+        match self.get_mut(h)? {
+            Object::Map(_, m) => Ok(m),
+            _ => Err(HeapStop::Fault("not a map")),
+        }
+    }
+
+    /// The key of `map` that raw word `w` stands for.
+    fn key(&self, map: u64, w: u64) -> Result<MapKey, HeapStop> {
+        Ok(match self.map(map)?.0 {
+            MapKind::Signed => MapKey::Signed(w as i64),
+            MapKind::Unsigned => MapKey::Unsigned(w),
+            MapKind::Text => MapKey::Text(self.str(w)?.to_string()),
+        })
+    }
+
+    /// `MapGet`: `(present, value)` (value 0 when absent).
+    pub fn map_get(&self, h: u64, k: u64) -> Result<(bool, u64), HeapStop> {
+        let key = self.key(h, k)?;
+        Ok(match self.map(h)?.1.get(&key) {
+            Some(v) => (true, *v),
+            None => (false, 0),
+        })
+    }
+
+    /// `MapInsert`: inserts or replaces; `(present, old value)`.
+    pub fn map_insert(&mut self, h: u64, k: u64, v: u64) -> Result<(bool, u64), HeapStop> {
+        let key = self.key(h, k)?;
+        let extra = match &key {
+            MapKey::Text(t) => t.len(),
+            _ => 0,
+        };
+        self.charge(24 + extra)?;
+        Ok(match self.map_mut(h)?.insert(key, v) {
+            Some(old) => (true, old),
+            None => (false, 0),
+        })
+    }
+
+    /// `MapRemove`: `(present, old value)`.
+    pub fn map_remove(&mut self, h: u64, k: u64) -> Result<(bool, u64), HeapStop> {
+        let key = self.key(h, k)?;
+        Ok(match self.map_mut(h)?.remove(&key) {
+            Some(old) => (true, old),
             None => (false, 0),
         })
     }

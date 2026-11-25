@@ -62,7 +62,37 @@ const MAX_LEAVES: usize = 4096;
 
 /// Map a checker type to the IR type of its *value*: scalars to themselves,
 /// references and aggregates to `Ptr`.
+/// The `MapKind` code `c` (see `crate::heap::MapKind::code`).
+fn ravum_lang_ir_heap_kind(c: u64) -> u64 {
+    debug_assert!(crate::heap::MapKind::from_code(c).is_some());
+    c
+}
+
+/// `Map<K, V>` of the prelude (RFC-UI-LANG-1 P3).
+fn is_map(t: &Type) -> bool {
+    matches!(t, Type::Nominal { def, .. } if *def == ravum_lang_sema::builtins::PRELUDE_MAP_DEF)
+}
+
+/// Key and value types of a `Map<K, V>` (or of a reference to one).
+fn map_kv(t: &Type) -> Option<(Type, Type)> {
+    match t {
+        Type::Ref { inner, .. } => map_kv(inner),
+        Type::Nominal { args, .. } if is_map(t) && args.len() == 2 => {
+            Some((args[0].clone(), args[1].clone()))
+        }
+        _ => None,
+    }
+}
+
 pub fn map_ty(t: &Type) -> R<Ty> {
+    if is_map(t) {
+        return Ok(Ty::Obj);
+    }
+    if let Type::Ref { inner, .. } = t {
+        if is_map(inner) {
+            return Ok(Ty::Obj);
+        }
+    }
     Ok(match t {
         Type::I8 => Ty::I8,
         Type::I16 => Ty::I16,
@@ -122,6 +152,10 @@ impl<'a> Layouts<'a> {
     }
 
     fn is_agg(t: &Type) -> bool {
+        // `Map<K, V>` is a heap object (a handle), not an aggregate.
+        if is_map(t) {
+            return false;
+        }
         matches!(
             t,
             Type::Nominal { .. }
@@ -310,7 +344,11 @@ impl<'a> Layouts<'a> {
             // `()` occupies no memory: a `Result<(), E>` payload, a unit
             // field. Loads and stores of it are elided.
             Ty::Unit => Ok(Layout { size: 0, align: 1 }),
-            Ty::Ptr => unsupported("reference stored in memory"),
+            // OWN-6.8 / P3: a bounded view (`Option<&V>` of `Map::get`) holds
+            // an address in a temporary of the current frame; the checker
+            // forbids storing it anywhere it could outlive that frame, and
+            // OWN-6.1 keeps references out of every field and state.
+            Ty::Ptr => Ok(Layout { size: 8, align: 8 }),
             s => Ok(Layout {
                 size: s.size(),
                 align: s.size(),
@@ -531,6 +569,15 @@ struct LoopWriteBack {
     ty: Type,
     addr: Local,
     agg: Option<Local>,
+    /// RFC-UI-LANG-1 P3: a `get_mut` view of map `h`: `(key, present)`; the
+    /// copy at `addr` is stored back under `key` when the entry was present.
+    map: Option<(Local, Local)>,
+    /// P3: the values vector of a `for (k, v) in &mut m` snapshot, committed
+    /// into map `h` (`MapSetVals`) on any exit of the loop.
+    commit: Option<Local>,
+    /// P3: a `get_mut` view not consumed by a `match`: it ends with its
+    /// statement.
+    stmt: bool,
 }
 
 /// Where a value lives.
@@ -1199,7 +1246,7 @@ impl<'a> FnLower<'a> {
         if ty == Ty::Unit {
             return Ok(());
         }
-        if ty == Ty::Ptr {
+        if ty == Ty::Ptr && !matches!(t, Type::Ref { .. }) {
             return unsupported("reference stored in memory");
         }
         self.emit(Inst::Store {
@@ -1739,6 +1786,7 @@ impl<'a> FnLower<'a> {
                     self.expr(expr)?;
                 }
             }
+            self.end_stmt_views()?;
         }
         match &b.tail {
             Some(t) => self.expr(t),
@@ -1801,6 +1849,22 @@ impl<'a> FnLower<'a> {
                     // sound shared borrow; `&mut` would need its address.
                     p @ Place::VecAgg { .. } if *op == ast::UnOp::Ref => self.read(p),
                     Place::VecAgg { o, base, ty } => self.lend_mut(o, base, ty),
+                    // `&3` or `&f(x)`: a temporary (no other path names it),
+                    // and `&x` of a scalar for reading: the address of a copy
+                    // is the same value (OWN-6.4 / P3 `m.get(&k)`).
+                    Place::Reg(l)
+                        if *op == ast::UnOp::Ref || !matches!(expr.kind, ExprKind::Path(_)) =>
+                    {
+                        let t = self.type_of(expr)?;
+                        let slot = self.alloc(&t)?;
+                        self.emit(Inst::Store {
+                            ty: self.locals[l as usize],
+                            addr: slot,
+                            offset: 0,
+                            src: l,
+                        });
+                        Ok(slot)
+                    }
                     Place::Reg(_) | Place::VecElem { .. } => {
                         unsupported("reference to a scalar local")
                     }
@@ -2217,6 +2281,7 @@ impl<'a> FnLower<'a> {
                 agg,
             );
         }
+        let wb_before = self.loop_wb.len();
         let place = match self.place(scrutinee)? {
             Place::Reg(l) => Place::Reg(l),
             Place::Mem { addr, off, ty } => Place::Mem { addr, off, ty },
@@ -2230,6 +2295,10 @@ impl<'a> FnLower<'a> {
                 ty,
             },
         };
+        // P3: a `get_mut` view in the scrutinee lives for the whole match.
+        for w in &mut self.loop_wb[wb_before..] {
+            w.stmt = false;
+        }
         let join = self.new_block();
         for arm in arms {
             let next = self.new_block();
@@ -2244,6 +2313,10 @@ impl<'a> FnLower<'a> {
         // reported as a fault, never a value.
         self.set_term(Term::Unreachable);
         self.switch_to(join);
+        if self.loop_wb.len() > wb_before {
+            self.flush_wb(wb_before)?;
+            self.loop_wb.truncate(wb_before);
+        }
         Ok(result)
     }
 
@@ -2741,6 +2814,9 @@ impl<'a> FnLower<'a> {
             Type::Ref { mutable, inner } if matches!(*inner, Type::Vec(_)) => {
                 return self.for_vec_ref(pat, iter, body, mutable);
             }
+            Type::Ref { mutable, inner } if is_map(&inner) => {
+                return self.for_map_ref(pat, iter, body, mutable);
+            }
             _ => {}
         }
         let ExprKind::Range {
@@ -2904,10 +2980,45 @@ impl<'a> FnLower<'a> {
     /// same iterations still need them.
     fn flush_wb(&mut self, from: usize) -> R<()> {
         for k in (from..self.loop_wb.len()).rev() {
-            let (h, i, addr, agg, ty) = {
+            let (h, i, addr, agg, ty, map, commit) = {
                 let w = &self.loop_wb[k];
-                (w.h, w.i, w.addr, w.agg, w.ty.clone())
+                (w.h, w.i, w.addr, w.agg, w.ty.clone(), w.map, w.commit)
             };
+            if let Some(vals) = commit {
+                self.heap(None, HeapOp::MapSetVals, Some(h), Some(vals));
+                continue;
+            }
+            if let Some((key, present)) = map {
+                // Store the copy back only if the entry existed.
+                let (yes, done) = (self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: present,
+                    then_to: yes,
+                    else_to: done,
+                });
+                self.switch_to(yes);
+                let w = self.value_word(addr, &ty)?;
+                let (p, o) = (
+                    self.new_local(Ty::Bool),
+                    self.new_local(map_ty(&ty).map(|t| {
+                        if Layouts::is_agg(&ty) {
+                            Ty::Obj
+                        } else {
+                            t
+                        }
+                    })?),
+                );
+                self.emit(Inst::MapInsert {
+                    h,
+                    key,
+                    val: w,
+                    present: p,
+                    old: o,
+                });
+                self.set_term(Term::Jump(done));
+                self.switch_to(done);
+                continue;
+            }
             match agg {
                 Some(o) => self.vec_store(o, 0, &ty, addr)?,
                 None => {
@@ -2924,6 +3035,440 @@ impl<'a> FnLower<'a> {
             }
         }
         Ok(())
+    }
+
+    /// P3: the raw word that stores a `V` held at `addr` in a map: the
+    /// scalar itself, or a fresh word vector of an aggregate's leaves.
+    fn value_word(&mut self, addr: Local, t: &Type) -> R<Local> {
+        if Layouts::is_agg(t) {
+            return self.agg_words(addr, t);
+        }
+        let lt = map_ty(t)?;
+        let x = self.new_local(lt);
+        self.emit(Inst::Load {
+            dst: x,
+            ty: lt,
+            addr,
+            offset: 0,
+        });
+        Ok(x)
+    }
+
+    /// A fresh word vector holding the leaves of the aggregate at `addr`.
+    fn agg_words(&mut self, addr: Local, t: &Type) -> R<Local> {
+        let o = self.new_local(Ty::Obj);
+        self.heap(Some(o), HeapOp::VecNew, None, None);
+        for (off, lt) in self.vec_leaves(t)? {
+            let tmp = self.new_local(lt);
+            self.emit(Inst::Load {
+                dst: tmp,
+                ty: lt,
+                addr,
+                offset: off,
+            });
+            self.heap(None, HeapOp::VecPush, Some(o), Some(tmp));
+        }
+        Ok(o)
+    }
+
+    /// RFC-UI-LANG-1 P3: the `Map` methods (STD-20). `Ok(None)` for any
+    /// other path.
+    fn map_method(&mut self, recv: &Expr, path: &str, args: &[Expr]) -> R<Option<Local>> {
+        if !path.starts_with("Map::") {
+            return Ok(None);
+        }
+        let (k, v) = map_kv(&self.type_of(recv)?)
+            .ok_or_else(|| LowerError::MissingFact("receiver of a `Map` method".into()))?;
+        let h = self.expr(recv)?;
+        let vword = if Layouts::is_agg(&v) {
+            Ty::Obj
+        } else {
+            map_ty(&v)?
+        };
+        Ok(Some(match (path, args) {
+            ("Map::len", []) => {
+                let n = self.new_local(Ty::Usize);
+                self.heap(Some(n), HeapOp::MapLen, Some(h), None);
+                n
+            }
+            ("Map::is_empty", []) => {
+                let n = self.new_local(Ty::Usize);
+                self.heap(Some(n), HeapOp::MapLen, Some(h), None);
+                let z = self.int_const(Ty::Usize, 0)?;
+                let b = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: b,
+                    op: BinOp::Eq,
+                    ty: Ty::Usize,
+                    lhs: n,
+                    rhs: z,
+                });
+                b
+            }
+            ("Map::insert", [ka, va]) => {
+                let key = self.expr(ka)?;
+                let val = self.map_val_of(va, &v)?;
+                let (present, old) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapInsert {
+                    h,
+                    key,
+                    val,
+                    present,
+                    old,
+                });
+                self.map_option(present, old, &v, None)?
+            }
+            ("Map::remove", [ka]) => {
+                let key = self.map_key_of_ref(ka, &k)?;
+                let (present, old) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapRemove {
+                    h,
+                    key,
+                    present,
+                    old,
+                });
+                self.map_option(present, old, &v, None)?
+            }
+            ("Map::contains_key", [ka]) => {
+                let key = self.map_key_of_ref(ka, &k)?;
+                let (present, value) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapGet {
+                    h,
+                    key,
+                    present,
+                    value,
+                });
+                present
+            }
+            ("Map::get" | "Map::get_mut", [ka]) => {
+                let mutable = path == "Map::get_mut";
+                let key = self.map_key_of_ref(ka, &k)?;
+                let (present, value) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapGet {
+                    h,
+                    key,
+                    present,
+                    value,
+                });
+                let opt = self.map_option(present, value, &v, Some(mutable))?;
+                let heap_v = vword == Ty::Obj && !Layouts::is_agg(&v);
+                if mutable && !heap_v {
+                    // The view is a copy: store it back when it ends (the
+                    // enclosing `match`, else the statement), on every exit.
+                    let opt_ty = Type::Option(Box::new(Type::Ref {
+                        mutable: true,
+                        inner: Box::new(v.clone()),
+                    }));
+                    let (off, _) = self.layouts.variant_fields(&opt_ty, 1)?[0];
+                    let addr = self.new_local(Ty::Ptr);
+                    self.emit(Inst::Load {
+                        dst: addr,
+                        ty: Ty::Ptr,
+                        addr: opt,
+                        offset: off,
+                    });
+                    self.loop_wb.push(LoopWriteBack {
+                        h,
+                        i: key,
+                        ty: v.clone(),
+                        addr,
+                        agg: None,
+                        map: Some((key, present)),
+                        commit: None,
+                        stmt: true,
+                    });
+                }
+                opt
+            }
+            _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
+        }))
+    }
+
+    /// P3: store back and forget the `get_mut` views that end with the
+    /// current statement (those no `match` consumed).
+    fn end_stmt_views(&mut self) -> R<()> {
+        let first = self.loop_wb.iter().position(|w| w.stmt);
+        if let Some(first) = first {
+            if !self.dead {
+                self.flush_wb(first)?;
+            }
+            self.loop_wb.truncate(first);
+        }
+        Ok(())
+    }
+
+    /// P3: the `MapKind` code of keys of type `k` (STD-20.2 order).
+    fn map_kind(k: &Type) -> R<u64> {
+        Ok(match k {
+            Type::String => ravum_lang_ir_heap_kind(2),
+            t if t.is_signed_int() => ravum_lang_ir_heap_kind(0),
+            t if t.is_int() || matches!(t, Type::Bool | Type::Char) => ravum_lang_ir_heap_kind(1),
+            _ => return unsupported(format!("`Map` key type `{k}`")),
+        })
+    }
+
+    /// P3: the raw key word of an argument `&K` (a string handle, or the
+    /// scalar read through the reference).
+    fn map_key_of_ref(&mut self, arg: &Expr, k: &Type) -> R<Local> {
+        let v = self.expr(arg)?;
+        if matches!(k, Type::String) {
+            return Ok(v);
+        }
+        let lt = map_ty(k)?;
+        let x = self.new_local(lt);
+        self.emit(Inst::Load {
+            dst: x,
+            ty: lt,
+            addr: v,
+            offset: 0,
+        });
+        Ok(x)
+    }
+
+    /// P3: the raw word of a value `V` passed by value.
+    fn map_val_of(&mut self, arg: &Expr, v: &Type) -> R<Local> {
+        let x = self.expr(arg)?;
+        if Layouts::is_agg(v) {
+            return self.agg_words(x, v);
+        }
+        Ok(x)
+    }
+
+    /// P3: an `Option<V>` (or `Option<&V>` when `view`) built from a map
+    /// result `(present, word)`.
+    fn map_option(
+        &mut self,
+        present: Local,
+        word: Local,
+        v: &Type,
+        view: Option<bool>,
+    ) -> R<Local> {
+        let payload_ty = match view {
+            Some(m) => Type::Ref {
+                mutable: m,
+                inner: Box::new(v.clone()),
+            },
+            None => v.clone(),
+        };
+        let opt = Type::Option(Box::new(payload_ty.clone()));
+        let dst = self.alloc(&opt)?;
+        let tag = self.new_local(Ty::U32);
+        self.emit(Inst::Cast {
+            dst: tag,
+            from: Ty::Bool,
+            to: Ty::U32,
+            src: present,
+        });
+        self.emit(Inst::Store {
+            ty: Ty::U32,
+            addr: dst,
+            offset: 0,
+            src: tag,
+        });
+        let (yes, done) = (self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: present,
+            then_to: yes,
+            else_to: done,
+        });
+        self.switch_to(yes);
+        let fields = self.layouts.variant_fields(&opt, 1)?;
+        let (off, _) = fields[0];
+        let heap_v = matches!(map_ty(v)?, Ty::Obj) && !Layouts::is_agg(v);
+        let payload = if Layouts::is_agg(v) {
+            // `word` is the entry's word vector: a copy of the value.
+            self.vec_materialize(word, 0, v)?
+        } else if view.is_some() && !heap_v {
+            // A view of a scalar: the address of a copy.
+            let slot = self.alloc(v)?;
+            self.emit(Inst::Store {
+                ty: map_ty(v)?,
+                addr: slot,
+                offset: 0,
+                src: word,
+            });
+            slot
+        } else {
+            word
+        };
+        self.store_value(dst, off, payload, &payload_ty)?;
+        self.set_term(Term::Jump(done));
+        self.switch_to(done);
+        Ok(dst)
+    }
+
+    /// RFC-UI-LANG-1 P3 (STD-20.4): `for (k, v) in &m` / `&mut m`, in
+    /// increasing key order, over a snapshot of the keys and values taken
+    /// when the loop starts (the map is borrowed for the whole loop, so it
+    /// cannot change meanwhile). `k` is a key (handle or copy); `v` is the
+    /// value's handle for a heap object, else a copy; under `&mut`, scalar
+    /// copies go back to the snapshot each iteration and the snapshot to the
+    /// map on every exit of the loop (`MapSetVals`).
+    fn for_map_ref(
+        &mut self,
+        pat: &ast::Pat,
+        iter: &Expr,
+        body: &AstBlock,
+        mutable: bool,
+    ) -> R<Local> {
+        let names: Vec<Option<(Span, String)>> = match &pat.kind {
+            PatKind::Tuple(items) if items.len() == 2 => items
+                .iter()
+                .map(|p| match &p.kind {
+                    PatKind::Binding { name, .. } => Ok(Some((p.span, name.name.clone()))),
+                    PatKind::Wild => Ok(None),
+                    _ => unsupported("`for` pattern over a map"),
+                })
+                .collect::<R<_>>()?,
+            _ => return unsupported("`for` pattern over a map"),
+        };
+        let (k, v) = map_kv(&self.type_of(iter)?)
+            .ok_or_else(|| LowerError::MissingFact("`for` over a non-map".into()))?;
+        let h = self.expr(iter)?;
+        let keys = self.new_local(Ty::Obj);
+        self.heap(Some(keys), HeapOp::MapKeys, Some(h), None);
+        let vals = self.new_local(Ty::Obj);
+        self.heap(Some(vals), HeapOp::MapVals, Some(h), None);
+        let v_agg = Layouts::is_agg(&v);
+        let v_heap = !v_agg && map_ty(&v)? == Ty::Obj;
+        let commit_at = self.loop_wb.len();
+        let commits = mutable && !v_agg && !v_heap;
+        if commits {
+            self.loop_wb.push(LoopWriteBack {
+                h,
+                i: h,
+                ty: v.clone(),
+                addr: vals,
+                agg: None,
+                map: None,
+                commit: Some(vals),
+                stmt: false,
+            });
+        }
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(keys), None);
+        let i = self.u64_const(0);
+        let (head, bodyb, step, exit) = (
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+        );
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: bodyb,
+            else_to: exit,
+        });
+        self.switch_to(bodyb);
+        let base = self.loop_wb.len();
+        // The key: a string handle, or the address of a copy.
+        let kword = self.new_local(map_ty(&k)?);
+        self.heap(Some(kword), HeapOp::VecGet, Some(keys), Some(i));
+        let kvar = if matches!(k, Type::String) {
+            kword
+        } else {
+            let slot = self.alloc(&k)?;
+            self.emit(Inst::Store {
+                ty: map_ty(&k)?,
+                addr: slot,
+                offset: 0,
+                src: kword,
+            });
+            slot
+        };
+        let vword = self.new_local(if v_agg { Ty::Obj } else { map_ty(&v)? });
+        self.heap(Some(vword), HeapOp::VecGet, Some(vals), Some(i));
+        let vvar = if v_heap {
+            vword
+        } else if v_agg {
+            let addr = self.vec_materialize(vword, 0, &v)?;
+            if mutable {
+                // The snapshot shares the entry's word vector with the map.
+                self.loop_wb.push(LoopWriteBack {
+                    h: vals,
+                    i,
+                    ty: v.clone(),
+                    addr,
+                    agg: Some(vword),
+                    map: None,
+                    commit: None,
+                    stmt: false,
+                });
+            }
+            addr
+        } else {
+            let slot = self.alloc(&v)?;
+            self.emit(Inst::Store {
+                ty: map_ty(&v)?,
+                addr: slot,
+                offset: 0,
+                src: vword,
+            });
+            if mutable {
+                self.loop_wb.push(LoopWriteBack {
+                    h: vals,
+                    i,
+                    ty: v.clone(),
+                    addr: slot,
+                    agg: None,
+                    map: None,
+                    commit: None,
+                    stmt: false,
+                });
+            }
+            slot
+        };
+        let kt = Type::Ref {
+            mutable: false,
+            inner: Box::new(k.clone()),
+        };
+        let vt = Type::Ref {
+            mutable,
+            inner: Box::new(v.clone()),
+        };
+        for (n, (var, t)) in names.iter().zip([(kvar, kt), (vvar, vt)]) {
+            if let Some(key) = n {
+                self.vars.insert(key.clone(), (var, t));
+            }
+        }
+        self.loops.push(LoopCtx {
+            break_to: exit,
+            continue_to: step,
+            wb_base: base,
+        });
+        self.block(body)?;
+        self.loops.pop();
+        self.flush_wb(base)?;
+        self.loop_wb.truncate(base);
+        self.set_term(Term::Jump(step));
+        self.switch_to(step);
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+        if commits {
+            self.heap(None, HeapOp::MapSetVals, Some(h), Some(vals));
+            self.loop_wb.truncate(commit_at);
+        }
+        Ok(self.unit())
     }
 
     /// OWN-6.8 / P2: `for x in &v` / `for x in &mut v` over a `Vec<T>`.
@@ -3000,6 +3545,9 @@ impl<'a> FnLower<'a> {
                     ty: et.clone(),
                     addr,
                     agg: Some(raw),
+                    map: None,
+                    commit: None,
+                    stmt: false,
                 });
             }
             addr
@@ -3018,6 +3566,9 @@ impl<'a> FnLower<'a> {
                     ty: et.clone(),
                     addr: slot,
                     agg: None,
+                    map: None,
+                    commit: None,
+                    stmt: false,
                 });
             }
             slot
@@ -3099,6 +3650,7 @@ impl<'a> FnLower<'a> {
     fn has_heap(&self, t: &Type) -> R<bool> {
         Ok(match t {
             Type::String | Type::Vec(_) => true,
+            _ if is_map(t) => true,
             Type::Array { elem, .. } => self.has_heap(elem)?,
             _ if Layouts::is_agg(t) => {
                 if let Some(vs) = self.layouts.variants(t)? {
@@ -3122,6 +3674,33 @@ impl<'a> FnLower<'a> {
     /// OWN-6.14: deep clone of heap object `h` of type `t` (`String` or
     /// `Vec<T>`): a fresh object whose own heap parts are cloned too.
     fn clone_heap(&mut self, h: Local, t: &Type) -> R<Local> {
+        if let Some((_, v)) = map_kv(t) {
+            // A map: shallow copy, then every value holding a heap object
+            // (or an aggregate's word vector) replaced by a deep copy.
+            let out = self.new_local(Ty::Obj);
+            self.heap(Some(out), HeapOp::MapClone, Some(h), None);
+            if !self.has_heap(&v)? && !Layouts::is_agg(&v) {
+                return Ok(out);
+            }
+            let vals = self.new_local(Ty::Obj);
+            self.heap(Some(vals), HeapOp::MapVals, Some(out), None);
+            let fresh = self.new_local(Ty::Obj);
+            self.heap(Some(fresh), HeapOp::VecNew, None, None);
+            let (i, head, exit) = self.loop_open(vals);
+            let w = self.new_local(Ty::Obj);
+            self.heap(Some(w), HeapOp::VecGet, Some(vals), Some(i));
+            let copy = if Layouts::is_agg(&v) {
+                let addr = self.vec_materialize(w, 0, &v)?;
+                self.deep_fix(addr, 0, &v)?;
+                self.agg_words(addr, &v)?
+            } else {
+                self.clone_heap(w, &v)?
+            };
+            self.heap(None, HeapOp::VecPush, Some(fresh), Some(copy));
+            self.loop_close(i, head, exit);
+            self.heap(None, HeapOp::MapSetVals, Some(out), Some(fresh));
+            return Ok(out);
+        }
         let Type::Vec(e) = t else {
             let d = self.new_local(Ty::Obj);
             self.heap(Some(d), HeapOp::StrClone, Some(h), None);
@@ -3171,6 +3750,23 @@ impl<'a> FnLower<'a> {
             return Ok(());
         }
         match t {
+            _ if is_map(t) => {
+                let h = self.new_local(Ty::Obj);
+                self.emit(Inst::Load {
+                    dst: h,
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                });
+                let c = self.clone_heap(h, t)?;
+                self.emit(Inst::Store {
+                    ty: Ty::Obj,
+                    addr,
+                    offset: off,
+                    src: c,
+                });
+                Ok(())
+            }
             Type::String | Type::Vec(_) => {
                 let h = self.new_local(Ty::Obj);
                 self.emit(Inst::Load {
@@ -3281,6 +3877,9 @@ impl<'a> FnLower<'a> {
             _ => None,
         };
         let ty = self.ty_of(recv)?;
+        if let Some(r) = self.map_method(recv, &path, args)? {
+            return Ok(r);
+        }
         if let Some(r) = self.heap_method(e, recv, &path, args)? {
             return Ok(r);
         }
@@ -3558,6 +4157,9 @@ impl<'a> FnLower<'a> {
                     Type::Ref { inner, .. } => *inner,
                     t => t,
                 };
+                if is_map(&t) {
+                    return Ok(Some(self.clone_heap(h, &t)?));
+                }
                 if !Layouts::is_agg(&t) {
                     return unsupported("structural clone of a non-aggregate");
                 }
@@ -4148,10 +4750,17 @@ impl<'a> FnLower<'a> {
                         | "std::string::from"
                         | "Vec::new"
                         | "Vec::with_capacity"
+                        | "Map::new"
                 ) =>
             {
                 let dst = self.new_local(Ty::Obj);
                 match (path.as_str(), args) {
+                    ("Map::new", []) => {
+                        let (k, _) = map_kv(&self.type_of(e)?)
+                            .ok_or_else(|| LowerError::MissingFact("type of `Map::new`".into()))?;
+                        let code = self.u64_const(Self::map_kind(&k)?);
+                        self.heap(Some(dst), HeapOp::MapNew, Some(code), None)
+                    }
                     ("String::new", []) => self.heap(Some(dst), HeapOp::StrNew, None, None),
                     ("String::from" | "std::string::from", [a]) => {
                         let s = self.expr(a)?;

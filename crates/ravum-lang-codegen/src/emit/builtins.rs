@@ -99,6 +99,7 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "string::from" | "String::from" | "str::from" => FreeBuiltin::StringFrom,
         "Error::new" | "error::new" => FreeBuiltin::ErrorNew,
         "Vec::new" | "vec::new" => FreeBuiltin::RustPath("Vec::new"),
+        "Map::new" => FreeBuiltin::RustPath("crate::Map::new"),
         "Vec::with_capacity" | "vec::with_capacity" => FreeBuiltin::RustPath("Vec::with_capacity"),
         "String::new" | "string::new" => FreeBuiltin::RustPath("String::new"),
         "string::parse_i64" | "parse_i64" | "str::parse_i64" => FreeBuiltin::ParseI64,
@@ -221,6 +222,15 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "len", "is_empty", "push", "pop", "clear", "clone", "as_slice",
     ];
     const SLICE: &[&str] = &["len", "is_empty"];
+    const MAP: &[&str] = &[
+        "len",
+        "is_empty",
+        "insert",
+        "remove",
+        "contains_key",
+        "get",
+        "get_mut",
+    ];
     const OPTION: &[&str] = &["is_some", "is_none", "unwrap", "unwrap_or", "ok_or"];
     const RESULT: &[&str] = &["is_ok", "is_err", "unwrap", "unwrap_or", "ok", "err"];
     const FLOAT: &[&str] = &[
@@ -250,6 +260,7 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "String" => STRING.contains(&method),
         "str" => STR.contains(&method),
         "Vec" => VEC.contains(&method),
+        "Map" => MAP.contains(&method),
         "slice" | "Slice" | "[T]" => SLICE.contains(&method),
         "Option" => OPTION.contains(&method),
         "Result" => RESULT.contains(&method),

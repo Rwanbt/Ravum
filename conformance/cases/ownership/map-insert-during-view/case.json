@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-insert-during-view",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "STD-20.3 (MUST): the map stays borrowed while a match holds its view."
+}

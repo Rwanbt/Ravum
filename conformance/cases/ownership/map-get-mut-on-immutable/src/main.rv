@@ -1,0 +1,8 @@
+fn f(m: Map<i64, i64>) -> i64 {
+    match m.get_mut(&1i64) {
+        Some(v) => *v,
+        None => 0,
+    }
+}
+
+fn main() {}

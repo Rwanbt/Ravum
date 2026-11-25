@@ -1,0 +1,6 @@
+{
+  "id": "types/map-not-comparable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-EQ"],
+  "notes": "STD-20.8 (MUST): a Map is not comparable."
+}

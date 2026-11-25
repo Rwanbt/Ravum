@@ -1,0 +1,7 @@
+fn f(mut m: Map<i64, i64>) {
+    for (k, v) in &mut m {
+        *k = 1;
+    }
+}
+
+fn main() {}

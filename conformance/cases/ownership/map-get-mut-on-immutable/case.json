@@ -1,0 +1,6 @@
+{
+  "id": "ownership/map-get-mut-on-immutable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-IMMUTABLE"],
+  "notes": "STD-20 / OWN-7 (MUST): get_mut takes &mut self."
+}

@@ -1,0 +1,6 @@
+fn f(m: &Map<i64, String>) -> i64 {
+    let o = m.get(&1i64);
+    0
+}
+
+fn main() {}

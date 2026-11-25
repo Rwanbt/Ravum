@@ -99,6 +99,28 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 Type::Vec(elem) => (**elem).clone(),
                 // OWN-6.8 / P2: `for x in &v` / `&mut v` over a `Vec<T>` binds
                 // bounded references `&T` / `&mut T` to its elements.
+                // OWN-6.13 / STD-20.4: `for (k, v) in &m` / `&mut m` over a
+                // `Map<K, V>`, in increasing key order; keys are never
+                // mutable (`k: &K`), values follow the borrow (`&V` / `&mut V`).
+                Type::Ref { mutable, inner }
+                    if matches!(&**inner, Type::Nominal { def, args, .. }
+                        if *def == crate::builtins::PRELUDE_MAP_DEF && args.len() == 2) =>
+                {
+                    let Type::Nominal { args, .. } = &**inner else {
+                        unreachable!()
+                    };
+                    self.facts.ref_fors.insert(iter.id);
+                    Type::Tuple(vec![
+                        Type::Ref {
+                            mutable: false,
+                            inner: Box::new(args[0].clone()),
+                        },
+                        Type::Ref {
+                            mutable: *mutable,
+                            inner: Box::new(args[1].clone()),
+                        },
+                    ])
+                }
                 Type::Ref { mutable, inner } if matches!(**inner, Type::Vec(_)) => {
                     let Type::Vec(elem) = &**inner else {
                         unreachable!()
@@ -231,7 +253,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             other => (other.clone(), None),
         };
-        if by_ref.is_some() {
+        // OWN-6.8 / STD-20.3: `match m.get(&k)` (or `get_mut`) matches the
+        // instruction view `Option<&V>`: its bindings are bounded borrows.
+        let map_view = matches!(&scrutinee.kind, ExprKind::MethodCall { .. })
+            && matches!(
+                self.facts.methods.get(&scrutinee.id),
+                Some(MethodTarget::Builtin { path, .. }) if path == "Map::get" || path == "Map::get_mut"
+            );
+        if by_ref.is_some() || map_view {
             self.facts.ref_matches.insert(scrutinee.id);
         }
         let mut result: Option<Type> = None;

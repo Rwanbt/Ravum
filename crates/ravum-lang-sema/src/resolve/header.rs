@@ -1090,7 +1090,7 @@ pub(crate) fn resolve_type_path(
 }
 
 pub(crate) fn is_builtin_type_name(name: &str) -> bool {
-    matches!(name, "Vec" | "Option" | "Result")
+    matches!(name, "Vec" | "Option" | "Result" | "Map")
         || builtins::prelude_type(name).is_some()
         || builtins::PRELUDE_GENERIC_OPAQUES
             .iter()
@@ -1118,6 +1118,22 @@ pub(crate) fn prelude_nominal(
                 Box::new(args[0].clone()),
                 Box::new(args[1].clone()),
             ))
+        }
+        "Map" => {
+            expect_arity(name, 2, args.len(), span, diags)?;
+            // STD-20.1: keys are integers, `bool`, `char` or `String` (a
+            // type the spec gives a total order). Inference variables and
+            // errors are checked where they are resolved.
+            let k = &args[0];
+            if !builtins::is_map_key_type(k) && !matches!(k, Type::Error) {
+                diags.error(
+                    "E-TYP-MISMATCH",
+                    span,
+                    format!("`Map` keys must be an integer, `bool`, `char` or `String`, found `{k}` (STD-20.1)"),
+                );
+                return None;
+            }
+            Some(builtins::map_type(args[0].clone(), args[1].clone()))
         }
         _ if builtins::PRELUDE_GENERIC_OPAQUES
             .iter()

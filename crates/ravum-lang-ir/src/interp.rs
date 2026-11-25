@@ -393,6 +393,43 @@ impl<'m> Machine<'m> {
                 let t = locals[*value as usize];
                 slots[*value as usize] = from_word(t, w);
             }
+            Inst::MapGet {
+                h,
+                key,
+                present,
+                value,
+            } => {
+                let w = |l: &Local| to_word(slots[*l as usize]);
+                let (p, x) = self.heap.map_get(w(h), w(key)).map_err(heap_stop)?;
+                slots[*present as usize] = Val::Bool(p);
+                slots[*value as usize] = from_word(locals[*value as usize], x);
+            }
+            Inst::MapInsert {
+                h,
+                key,
+                val,
+                present,
+                old,
+            } => {
+                let w = |l: &Local| to_word(slots[*l as usize]);
+                let (p, x) = self
+                    .heap
+                    .map_insert(w(h), w(key), w(val))
+                    .map_err(heap_stop)?;
+                slots[*present as usize] = Val::Bool(p);
+                slots[*old as usize] = from_word(locals[*old as usize], x);
+            }
+            Inst::MapRemove {
+                h,
+                key,
+                present,
+                old,
+            } => {
+                let w = |l: &Local| to_word(slots[*l as usize]);
+                let (p, x) = self.heap.map_remove(w(h), w(key)).map_err(heap_stop)?;
+                slots[*present as usize] = Val::Bool(p);
+                slots[*old as usize] = from_word(locals[*old as usize], x);
+            }
             _ => {}
         }
         Ok(())
@@ -493,7 +530,10 @@ impl<'m> Machine<'m> {
                     | Inst::HeapText { .. }
                     | Inst::HeapOfValue { .. }
                     | Inst::VecSet { .. }
-                    | Inst::VecPop { .. }) => self.heap_inst(i, &f.locals, slots)?,
+                    | Inst::VecPop { .. }
+                    | Inst::MapGet { .. }
+                    | Inst::MapInsert { .. }
+                    | Inst::MapRemove { .. }) => self.heap_inst(i, &f.locals, slots)?,
                     Inst::Call { dst, func, args } => {
                         let vals: Vec<Val> = args.iter().map(|a| slots[*a as usize]).collect();
                         let r = self.call(*func, &vals, depth + 1)?;

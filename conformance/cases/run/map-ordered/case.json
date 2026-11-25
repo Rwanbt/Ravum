@@ -1,0 +1,6 @@
+{
+  "id": "run/map-ordered",
+  "mode": "run-pass",
+  "stdout_contains": "-8012081451702986385\n",
+  "notes": "STD-20 / RFC-UI-LANG-1 P3: insert (replace, old value), ordered iteration over &m and &mut m (with break), get_mut in a match, String keys with struct values, deep clone then mutation of the clone, remove, contains_key, len. The hash is computed by rustc (Rust BTreeMap, the independent oracle), the IR interpreter and the JIT (ir_corpus_oracle)."
+}

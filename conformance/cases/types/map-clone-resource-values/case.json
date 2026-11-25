@@ -1,0 +1,6 @@
+{
+  "id": "types/map-clone-resource-values",
+  "mode": "compile-fail",
+  "expect_codes": ["E-RES-UNKNOWN"],
+  "notes": "STD-20.7 / OWN-6.14 (MUST): a Map of resources is not clonable."
+}
