@@ -23,6 +23,8 @@ sha2 = { workspace = true }
 
 [dev-dependencies]
 ravum-lang-sema = { workspace = true }
+# ownership_fuzz.rs: the rustc path (B) of the differential oracle.
+ravum-lang-codegen = { workspace = true }
 ravum-core-machine = { path = "../ravum-core-machine" }
 
 [target.'cfg(unix)'.dev-dependencies]
