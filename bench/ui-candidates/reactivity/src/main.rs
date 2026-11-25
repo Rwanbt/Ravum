@@ -41,7 +41,10 @@ struct Model {
 fn row(i: usize, v: f32) -> [Node; 2] {
     [
         Node::Label(format!("param {i}: {v:.3}")),
-        Node::Slider { id: i as u32, value: v },
+        Node::Slider {
+            id: i as u32,
+            value: v,
+        },
     ]
 }
 
@@ -92,7 +95,9 @@ impl Granular {
 }
 
 fn reactivity(n: usize) {
-    let mut m = Model { params: (0..n).map(|i| i as f32 * 0.001).collect() };
+    let mut m = Model {
+        params: (0..n).map(|i| i as f32 * 0.001).collect(),
+    };
     let mut tree: Vec<Node> = Vec::new();
     for i in 0..n {
         tree.extend(row(i, m.params[i]));
@@ -120,11 +125,17 @@ fn reactivity(n: usize) {
         assert!(tree[2 * key] == g.nodes[2 * key], "A and B disagree");
     }
     let deps_bytes: usize = g.deps.iter().map(|d| 24 + d.capacity() * 4).sum();
-    println!("-- reactivity, {n} rows ({} nodes), one parameter changed per update", n * 2);
+    println!(
+        "-- reactivity, {n} rows ({} nodes), one parameter changed per update",
+        n * 2
+    );
     stats("A rebuild+diff, all rows", a_full);
     stats("A rebuild+diff, 50 visible rows (virtualized)", a_virt);
     stats("B granular (deps), one row", b);
-    println!("B dependency table: {deps_bytes} bytes ({} per row)", deps_bytes / n);
+    println!(
+        "B dependency table: {deps_bytes} bytes ({} per row)",
+        deps_bytes / n
+    );
 }
 
 // ---------- 2. Taffy : vrais changements ----------
@@ -133,22 +144,34 @@ fn taffy_real(rows: usize, fixed_row_height: bool) {
     use taffy::prelude::*;
     let mut tree: TaffyTree<()> = TaffyTree::new();
     let cell = |w: f32| Style {
-        size: Size { width: length(w), height: length(24.0) },
+        size: Size {
+            width: length(w),
+            height: length(24.0),
+        },
         ..Default::default()
     };
     let row_style = Style {
         flex_direction: FlexDirection::Row,
-        gap: Size { width: length(8.0), height: zero() },
+        gap: Size {
+            width: length(8.0),
+            height: zero(),
+        },
         size: Size {
             width: auto(),
-            height: if fixed_row_height { length(32.0) } else { auto() },
+            height: if fixed_row_height {
+                length(32.0)
+            } else {
+                auto()
+            },
         },
         ..Default::default()
     };
     let mut rows_ids = Vec::new();
     let mut cells0 = Vec::new();
     for _ in 0..rows {
-        let cs: Vec<NodeId> = (0..4).map(|_| tree.new_leaf(cell(100.0)).unwrap()).collect();
+        let cs: Vec<NodeId> = (0..4)
+            .map(|_| tree.new_leaf(cell(100.0)).unwrap())
+            .collect();
         cells0.push(cs[0]);
         rows_ids.push(tree.new_with_children(row_style.clone(), &cs).unwrap());
     }
@@ -156,14 +179,21 @@ fn taffy_real(rows: usize, fixed_row_height: bool) {
         .new_with_children(
             Style {
                 flex_direction: FlexDirection::Column,
-                size: Size { width: length(1280.0), height: auto() },
+                size: Size {
+                    width: length(1280.0),
+                    height: auto(),
+                },
                 ..Default::default()
             },
             &rows_ids,
         )
         .unwrap();
     tree.compute_layout(root, Size::MAX_CONTENT).unwrap();
-    let label = if fixed_row_height { "fixed-height rows" } else { "auto-height rows" };
+    let label = if fixed_row_height {
+        "fixed-height rows"
+    } else {
+        "auto-height rows"
+    };
 
     let mut resize = Vec::new();
     for r in 0..RUNS {
@@ -175,7 +205,13 @@ fn taffy_real(rows: usize, fixed_row_height: bool) {
         resize.push(t.elapsed());
         assert_eq!(tree.layout(leaf).unwrap().size.width, w);
     }
-    stats(&format!("taffy {label}, {} nodes, resize one cell", tree.total_node_count()), resize);
+    stats(
+        &format!(
+            "taffy {label}, {} nodes, resize one cell",
+            tree.total_node_count()
+        ),
+        resize,
+    );
 
     let mut insert = Vec::new();
     for r in 0..RUNS {
@@ -189,7 +225,10 @@ fn taffy_real(rows: usize, fixed_row_height: bool) {
         tree.remove(c).unwrap();
         tree.compute_layout(root, Size::MAX_CONTENT).unwrap();
     }
-    stats(&format!("taffy {label}, insert one cell (structure)"), insert);
+    stats(
+        &format!("taffy {label}, insert one cell (structure)"),
+        insert,
+    );
 
     let mut full = Vec::new();
     for _ in 0..30 {
