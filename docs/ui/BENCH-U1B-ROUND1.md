@@ -32,7 +32,7 @@ distinctes.
 |---|---|---|---|
 | Modulaire : winit, wgpu, Vello, Taffy, Parley, AccessKit | 177 | aucune | compatible avec la licence de Ravum |
 | egui et eframe (wgpu, AccessKit) | 214 | `self_cell` : `Apache-2.0 OR GPL-2.0-only`, l'option Apache suffit | compatible |
-| Blitz (`blitz-dom`) | 198 | aucune | compatible ; **version bêta** |
+| Blitz (`blitz-dom`) | 198 | aucune (**inexact**, corrigé au tour 2 §4.4 : 14 crates sous MPL-2.0, dont `stylo`) | compatible ; **version bêta** |
 | **Slint** | 335 | le cœur `i-slint-*` est sous `GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0` | **écarté comme fondation (UI-D12)**. Ce n'est pas une impossibilité juridique : les trois options sont la GPLv3, une licence gratuite avec conditions (dont l'attribution) et une licence commerciale. La raison est qu'un framework universel ne doit imposer à ses utilisateurs aucune condition d'un fournisseur au-delà de `MIT OR Apache-2.0`. Slint reste une référence de comparaison |
 
 ## 2. Coûts CPU headless (N = 30 exécutions après un échauffement)

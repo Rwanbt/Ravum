@@ -1,4 +1,4 @@
-# U1-B — Banc d'essai, tour 2, parties 1 et 2 (2026-11-24, 2026-11-25)
+# U1-B — Banc d'essai, tour 2, parties 1 à 3 (2026-11-24, 2026-11-25)
 
 Statut : `TESTED`, local et headless. Ce rapport couvre la réactivité A/B
 (UI-D13) et de vrais changements de layout Taffy (UI-D16). Aucune pile n'est
@@ -134,12 +134,98 @@ Taffy calcule chaque sous-arbre. Limite : seules les lignes de **hauteur
 fixe** sont des frontières sûres ; une ligne de hauteur automatique dont la
 hauteur change doit propager au parent (non mesuré ici).
 
-## 4. Reste du tour 2
+## 4. Partie 3 (2026-11-25) : rendu CPU, compilation, dépendances, licences
 
-- Partie 3 :
-  - même scène dans les piles complètes ;
-  - rendu CPU (`vello_cpu`, `tiny-skia`) ;
-  - mémoire et allocations ;
-  - temps de compilation, taille des binaires ;
-  - dépendances par catégorie et par plateforme.
-- Tour 3 : scripts GPU pour vos machines (UI-D9).
+Même machine (Linux x86_64, 4 CPU, sans GPU, `rustc 1.95.0`, `release`).
+
+### 4.1 Rendu CPU : `vello_cpu 0.4.0` contre `tiny-skia 0.12.0`
+
+Code : [`render-cpu/src/main.rs`](../../bench/ui-candidates/render-cpu/src/main.rs).
+La même géométrie (produite une fois par `kurbo`) est donnée aux deux
+moteurs ; 1280 × 800, anticrénelé, RGBA8 prémultiplié, **mono-thread**,
+100 frames après une frame d'échauffement. Contrôle : écart absolu moyen par
+canal entre les deux images, borné à 2,0 (l'anticrénelage diffère), et image
+non vide. Texte **exclu** (shaping et polices au tour suivant).
+
+```bash
+cd bench/ui-candidates
+cargo run --release -p ui-bench-render-cpu
+```
+
+| Scène | `vello_cpu` p50 / p99 | `tiny-skia` p50 / p99 | Allocations par frame (stable) | Écart moyen |
+|---|---|---|---|---|
+| Liste, 50 lignes visibles (201 formes) | 2,10 ms / 3,80 ms | 1,44 ms / 2,15 ms | 4 (36 Ko) / 603 (1,5 Mo) | 0,035 |
+| Dense, 5 001 formes qui se chevauchent | 18,2 ms / 27,5 ms | 45,5 ms / 78,9 ms | 4 (36 Ko) / 15 003 (26 Mo) | 0,50 |
+
+Pic de mémoire résidente du processus (les deux moteurs et les deux scènes) :
+22,6 Mo.
+
+Lecture :
+- Sur une scène d'UI simple, `tiny-skia` est un peu plus rapide ; sur une
+  scène dense, `vello_cpu` l'est 2,5 fois et tient mieux le p99.
+- **Allocations** : `vello_cpu` réutilise son contexte (4 allocations par
+  frame en régime stable) ; `tiny-skia` alloue à chaque forme (3 par forme
+  ici). Pour un rendu à chaque frame, c'est un argument pour `vello_cpu` ou
+  pour un cache de chemins côté runtime.
+- Aucun des deux n'atteint 16 ms sur la scène dense en mono-thread sans GPU ;
+  le rendu CPU est un **repli**, et le chemin principal reste GPU (tour 3).
+  Le mode multi-thread de `vello_cpu` n'est pas mesuré.
+
+### 4.2 Compilation à froid
+
+Chaque pile est compilée seule, en `release`, dans un répertoire `target`
+vide, `-j 4`, sans autre charge sur la machine.
+
+| Pile | Temps de compilation à froid | Bibliothèques compilées |
+|---|---|---|
+| Modulaire (winit, wgpu, Vello, Taffy, Parley, AccessKit) | 168 s | 196 |
+| egui (eframe, wgpu, AccessKit) | 195 s | 224 |
+| Blitz (`blitz-dom` seul) | 144 s | 198 |
+| Slint | 222 s | 386 |
+
+**Taille des binaires : `NOT_MEASURED`.** Les programmes du banc
+(`footprint/*`) ont un `main` vide : l'éditeur de liens élimine tout le code
+des piles, et les quatre binaires font la même taille (439 Ko). Ce chiffre ne
+mesure aucune pile et n'est pas publié comme tel. Il faut une application
+minimale réelle par pile (fenêtre, texte, bouton), à écrire avec les scripts
+du tour 3.
+
+### 4.3 Dépendances par plateforme
+
+Crates de la compilation normale (`cargo tree -e normal`), puis avec les
+dépendances de build (`-e normal,build`) :
+
+| Pile | Linux | Windows | macOS | Android | iOS |
+|---|---|---|---|---|---|
+| Modulaire | 177 / 184 | 150 / 156 | 137 / 140 | 162 / 174 | 136 / 139 |
+| egui | 214 / 221 | 134 / 140 | 131 / 134 | 143 / 155 | 125 / 128 |
+| Blitz (`blitz-dom`) | 198 / 214 | 203 / 218 | 197 / 212 | 192 / 207 | 199 / 214 |
+| Slint | 335 / 347 | 240 / 248 | 247 / 252 | 150 / 155 | 260 / 289 |
+
+Linux coûte le plus (Wayland, X11, D-Bus) pour la pile modulaire et egui.
+
+### 4.4 Licences sur toutes les cibles
+
+Audit de `cargo metadata` par cible (dépendances normales et de build),
+licence SPDX de chaque crate, une option `OR` permissive suffisant :
+
+| Pile | Licences hors MIT/Apache/BSD/Zlib/ISC/Unicode |
+|---|---|
+| Modulaire | aucune, sur les cinq cibles |
+| egui | aucune, sur les cinq cibles |
+| Blitz | **MPL-2.0** sur les cinq cibles : `stylo` (et `stylo_*`), `cssparser`, `selectors`, `app_units`, `dtoa-short`, `to_shmem`, `uluru` (14 crates) |
+| Slint | le cœur `i-slint-*` (`GPL-3.0-only OR` licences Slint), sur les cinq cibles |
+
+**Correction du tour 1** : le tableau du tour 1 (§1) donnait Blitz sans
+licence hors MIT/Apache/BSD/Zlib. C'est inexact : la MPL-2.0 est un copyleft
+faible, fichier par fichier. Elle n'impose pas d'ouvrir le code de Ravum,
+mais elle ajoute des obligations (sources des fichiers MPL modifiés) au-delà
+de `MIT OR Apache-2.0`. À peser pour UI-D12.
+
+## 5. Reste
+
+- Tour 3, sur vos machines (UI-D9) : la même scène dans les piles complètes
+  (fenêtre, GPU) ; temps de frame CPU et GPU, latence d'entrée, repos, VRAM,
+  démarrage ; applications minimales réelles pour la taille des binaires ;
+  `vello_cpu` multi-thread ; texte (shaping, rastérisation des glyphes).
+- Diff par clé incrémental (§3.2) et lignes à hauteur automatique (§3.3).
