@@ -2,7 +2,7 @@
 # les bibliothèques candidates n'entrent dans aucun crate Ravum avant la
 # décision du responsable (UI-D4). Versions épinglées exactement.
 [workspace]
-members = ["headless", "reactivity", "render-cpu", "footprint/egui", "footprint/slint", "footprint/modular", "footprint/blitz"]
+members = ["headless", "reactivity", "render-cpu", "footprint/egui", "footprint/slint", "footprint/modular", "footprint/blitz", "round3/common", "round3/egui", "round3/slint", "round3/modular"]
 resolver = "2"
 
 [profile.release]

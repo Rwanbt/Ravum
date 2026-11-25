@@ -1,0 +1,13 @@
+[package]
+name = "r3-modular"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+r3-common = { path = "../common" }
+winit = "=0.31.0-beta.4"
+wgpu = "=30.0.2"
+vello = "=0.12.0"
+parley = "=0.13.0"
+pollster = "0.4"
