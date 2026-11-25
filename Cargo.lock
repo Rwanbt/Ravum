@@ -1018,6 +1018,7 @@ dependencies = [
  "cranelift-native",
  "libc",
  "ravum-core-machine",
+ "ravum-lang-codegen",
  "ravum-lang-ir",
  "ravum-lang-sema",
  "serde",
