@@ -1,0 +1,6 @@
+{
+  "id": "types/text-find-result-is-option",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "STD-9.13 (RFC-UI-LANG-1 P4): find returns Option<usize>, never a sentinel index; using it as usize is refused."
+}

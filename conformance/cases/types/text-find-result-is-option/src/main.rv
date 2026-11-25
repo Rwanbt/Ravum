@@ -1,0 +1,5 @@
+fn main() {
+    let s = String::from("abc");
+    let i: usize = s.find("b");
+    std::io::println(&i.to_string());
+}

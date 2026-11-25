@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.6";
+pub const IR_VERSION: &str = "ravum-ir-1.7";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -211,6 +211,60 @@ pub enum HeapOp {
     MapSetVals,
     /// A shallow copy of map `a` (values copied as words).
     MapClone,
+    /// IR v1.7 (RFC-UI-LANG-1 P4): byte index of the first occurrence of
+    /// string `b` in string `a`, or `u64::MAX` when absent.
+    StrFind,
+    /// Whether string `a` starts with string `b`.
+    StrStartsWith,
+    /// Whether string `a` ends with string `b`.
+    StrEndsWith,
+    /// A new vector of new strings: `a` split on the non-empty separator
+    /// `b` (an empty one is a fault; the lowering traps before).
+    StrSplit,
+    /// A new string `a[b..]` (`b` a char boundary within `a`, else a fault;
+    /// the lowering traps before).
+    StrTail,
+    /// `a.truncate(b)` in place (`b` a char boundary within `a`, else a
+    /// fault).
+    StrTruncate,
+    /// A new vector of the `char`s of `a` (code points as words).
+    StrChars,
+    /// Whether `b` is a char boundary of `a` (`b == a.len()` included).
+    StrIsCharBoundary,
+    /// A new string: the strings of vector `a` joined by string `b`.
+    StrJoin,
+}
+
+impl HeapOp {
+    /// Every operation, in declaration order (`op as u32` is its index).
+    pub const ALL: [HeapOp; 26] = [
+        HeapOp::StrNew,
+        HeapOp::StrClone,
+        HeapOp::StrPush,
+        HeapOp::StrLen,
+        HeapOp::StrEq,
+        HeapOp::VecNew,
+        HeapOp::VecPush,
+        HeapOp::VecLen,
+        HeapOp::VecGet,
+        HeapOp::VecClone,
+        HeapOp::Replace,
+        HeapOp::MapNew,
+        HeapOp::MapLen,
+        HeapOp::MapKeys,
+        HeapOp::MapVals,
+        HeapOp::MapSetVals,
+        HeapOp::MapClone,
+        HeapOp::StrFind,
+        HeapOp::StrStartsWith,
+        HeapOp::StrEndsWith,
+        HeapOp::StrSplit,
+        HeapOp::StrTail,
+        HeapOp::StrTruncate,
+        HeapOp::StrChars,
+        HeapOp::StrIsCharBoundary,
+        HeapOp::StrJoin,
+    ];
 }
 
 /// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).
@@ -715,5 +769,21 @@ pub fn bin_op_accepts(op: BinOp, ty: Ty) -> bool {
         | OverflowsAdd | OverflowsSub | OverflowsMul => ty.is_int(),
         MathMin | MathMax => ty == Ty::F64,
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod heap_op_tests {
+    use super::HeapOp;
+
+    /// `HeapOp::ALL` is complete and in declaration order: the native
+    /// backend decodes `op as u32` by indexing it (`rv_heap`), below 64.
+    #[test]
+    fn all_lists_every_heap_op_in_order() {
+        for (i, op) in HeapOp::ALL.iter().enumerate() {
+            assert_eq!(*op as usize, i, "{op:?}");
+        }
+        assert_eq!(HeapOp::StrJoin as usize + 1, HeapOp::ALL.len());
+        assert!(HeapOp::ALL.len() < 64);
     }
 }

@@ -1384,6 +1384,41 @@ mod rv_det {
 /// iteration is in increasing key order, the same in both backends.
 pub type Map<K, V> = std::collections::BTreeMap<K, V>;
 
+// --- Text primitives (RFC-UI-LANG-1 P4, STD-9.13..STD-9.19, STD-7.7) ---
+
+pub fn rv_text_split(s: &str, sep: &str) -> Vec<String> {
+    if sep.is_empty() {
+        panic!("empty separator");
+    }
+    s.split(sep).map(String::from).collect()
+}
+
+pub fn rv_text_strip_prefix(s: &str, prefix: &str) -> Option<String> {
+    s.strip_prefix(prefix).map(String::from)
+}
+
+pub fn rv_text_strip_suffix(s: &str, suffix: &str) -> Option<String> {
+    s.strip_suffix(suffix).map(String::from)
+}
+
+pub fn rv_text_substring(s: &str, start: usize, end: usize) -> String {
+    if start > end || end > s.len() {
+        panic!("substring out of range");
+    }
+    if !s.is_char_boundary(start) || !s.is_char_boundary(end) {
+        panic!("substring not on a char boundary");
+    }
+    s[start..end].to_string()
+}
+
+pub fn rv_text_chars(s: &str) -> Vec<char> {
+    s.chars().collect()
+}
+
+pub fn rv_text_join(parts: &Vec<String>, sep: &str) -> String {
+    parts.join(sep)
+}
+
 // --- std::task: single-threaded FIFO executor (RFC-E11-CONCURRENCY phase 2) ---
 
 /// Value of a call to an `async fn`: a boxed future, polled by `task::block_on`.

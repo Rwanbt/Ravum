@@ -1,0 +1,6 @@
+{
+  "id": "run/text-primitives",
+  "mode": "run-pass",
+  "stdout_contains": "3\nms -> 123\nétat -> ok\nx -> \n123;état=ok;x=\ntrue\n3\nfalse\na, b\n3\n1\n",
+  "notes": "STD-9.13-9.19 and STD-7.7 (RFC-UI-LANG-1 P4): split (empty fields kept), find (byte index), substring on byte indices at char boundaries, strip_prefix/strip_suffix, chars (code points), is_char_boundary, string::join. Same output on the rustc path and on the IR path (ir_corpus_oracle)."
+}

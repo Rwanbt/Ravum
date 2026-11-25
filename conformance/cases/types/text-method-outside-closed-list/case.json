@@ -1,0 +1,6 @@
+{
+  "id": "types/text-method-outside-closed-list",
+  "mode": "compile-fail",
+  "expect_codes": ["E-RES-UNKNOWN"],
+  "notes": "STD-9.11 (amended by RFC-UI-LANG-1 P4): the String/str method list is closed; char_indices is not in it."
+}

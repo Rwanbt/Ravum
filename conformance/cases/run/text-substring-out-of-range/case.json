@@ -1,0 +1,6 @@
+{
+  "id": "run/text-substring-out-of-range",
+  "mode": "run-fail",
+  "stderr_contains": "panic: substring out of range",
+  "notes": "STD-9.16 (RFC-UI-LANG-1 P4): an end past the length panics with a fixed text, never a partial result."
+}

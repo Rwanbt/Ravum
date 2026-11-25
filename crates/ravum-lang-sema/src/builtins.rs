@@ -685,6 +685,15 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         ret: "String",
         effects: ALLOC,
     },
+    // STD-7.7 (RFC-UI-LANG-1 P4): `join(parts, sep)` concatenates the parts
+    // with `sep` between consecutive ones.
+    BuiltinFnSig {
+        path: "std::string::join",
+        generics: &[],
+        params: &["&Vec<String>", "&str"],
+        ret: "String",
+        effects: ALLOC,
+    },
     BuiltinFnSig {
         path: "std::math::abs",
         generics: &[],
@@ -1176,6 +1185,112 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     method!(SLICE_KINDS, "len", "slice::len", [], "usize", PURE),
     method!(SLICE_KINDS, "is_empty", "slice::is_empty", [], "bool", PURE),
     // --- Vec<T> ---
+    // STD-9.13..9.19 (RFC-UI-LANG-1 P4): positions are UTF-8 byte offsets.
+    method!(
+        STRING_KINDS,
+        "find",
+        "String::find",
+        ["&str"],
+        "Option<usize>",
+        PURE
+    ),
+    method!(
+        STRING_KINDS,
+        "split",
+        "String::split",
+        ["&str"],
+        "Vec<String>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "strip_prefix",
+        "String::strip_prefix",
+        ["&str"],
+        "Option<String>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "strip_suffix",
+        "String::strip_suffix",
+        ["&str"],
+        "Option<String>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "substring",
+        "String::substring",
+        ["usize", "usize"],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "chars",
+        "String::chars",
+        [],
+        "Vec<char>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "is_char_boundary",
+        "String::is_char_boundary",
+        ["usize"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STR_KINDS,
+        "find",
+        "str::find",
+        ["&str"],
+        "Option<usize>",
+        PURE
+    ),
+    method!(
+        STR_KINDS,
+        "split",
+        "str::split",
+        ["&str"],
+        "Vec<String>",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "strip_prefix",
+        "str::strip_prefix",
+        ["&str"],
+        "Option<String>",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "strip_suffix",
+        "str::strip_suffix",
+        ["&str"],
+        "Option<String>",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "substring",
+        "str::substring",
+        ["usize", "usize"],
+        "String",
+        ALLOC
+    ),
+    method!(STR_KINDS, "chars", "str::chars", [], "Vec<char>", ALLOC),
+    method!(
+        STR_KINDS,
+        "is_char_boundary",
+        "str::is_char_boundary",
+        ["usize"],
+        "bool",
+        PURE
+    ),
     method!(VEC_KINDS, "len", "Vec::len", [], "usize", PURE),
     // STD-20 (RFC-UI-LANG-1 P3): `Map<K, V>`. `get` / `get_mut` rend une
     // **vue d'instruction** (OWN-6.8) : bornée, jamais stockable.

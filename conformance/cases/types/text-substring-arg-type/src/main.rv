@@ -1,0 +1,6 @@
+fn main() {
+    let s = String::from("abc");
+    let i: i64 = 1;
+    let t = s.substring(i, 2);
+    std::io::println(t.as_str());
+}

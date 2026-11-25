@@ -337,3 +337,27 @@ JIT) :
 - **Oracle** : `run/map-ordered` et `run/map-word-count` donnent le même
   résultat avec rustc (`BTreeMap` de Rust, oracle indépendant),
   l'interpréteur et le JIT.
+
+## IR v1.7 (2026-11-25) — primitives de texte (RFC-UI-LANG-1 P4)
+
+- **Opérations de tas** : `StrFind` (indice, ou `u64::MAX` si absent),
+  `StrStartsWith`, `StrEndsWith`, `StrSplit`, `StrTail`, `StrTruncate`,
+  `StrChars`, `StrIsCharBoundary`, `StrJoin`. Une opération appelée hors de
+  son domaine (séparateur vide, borne qui n'est pas une frontière de
+  caractère) est une **faute** du tas, jamais un résultat partiel.
+- **Abaissement** : les panics de la spec sont vérifiés **avant** l'opération
+  de tas, par un `Trap` aux textes du prélude rustc (`empty separator`,
+  `substring out of range`, `substring not on a char boundary`). `find` rend
+  un `Option<usize>` construit d'après la sentinelle, jamais exposée au
+  programme. `strip_prefix` et `strip_suffix` sont un test, puis une copie
+  coupée (`StrTail` ou `StrClone` + `StrTruncate`). `starts_with` et
+  `ends_with` sont aussi abaissés.
+- **JIT** : `rv_heap` décode une opération par son indice dans `HeapOp::ALL`.
+  Un test vérifie que cette liste est complète et dans l'ordre de
+  déclaration. Avant, une liste écrite à la main dans le JIT devait suivre
+  l'énumération. Les codes spéciaux de `rv_heap` passent de 20 à 64, pour
+  ne plus pouvoir chevaucher les indices de `HeapOp`.
+- **Oracle** : `run/text-primitives` donne la même sortie avec rustc,
+  l'interpréteur et le JIT. Les cas limites et les cinq panics sont comparés
+  entre l'interpréteur et le JIT (`crates/ravum-lang-jit/tests/text_primitives.rs`),
+  et ont été vérifiés à la main avec rustc.

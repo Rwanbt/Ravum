@@ -1,0 +1,5 @@
+fn main() {
+    let s = String::from("abc");
+    let v = s.char_indices();
+    std::io::println(&v.len().to_string());
+}
