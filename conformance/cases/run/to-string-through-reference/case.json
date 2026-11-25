@@ -1,0 +1,6 @@
+{
+  "id": "run/to-string-through-reference",
+  "mode": "run-pass",
+  "stdout_contains": "3\n-4\n7\n2.5\ntrue\n42\n",
+  "notes": "STD-12 to_string on a reference to a scalar (a for item over &Vec<i64>, bounded match bindings &i64/&f64/&bool, a &i64 parameter): the receiver is read through the reference, the same text on the rustc path and the IR path (ir_corpus_oracle). Was refused by the IR path (B/C parity gap)."
+}

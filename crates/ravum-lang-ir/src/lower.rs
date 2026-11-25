@@ -4080,8 +4080,7 @@ impl<'a> FnLower<'a> {
                     if matches!(path.as_str(), "int::to_string" | "float::to_string" | "bool::to_string")
             );
             if method.name == "to_string" && args.is_empty() && scalar_text {
-                let ty = self.ty_of(receiver)?;
-                let src = self.expr(receiver)?;
+                let (ty, src) = self.scalar_through_refs(receiver)?;
                 return Ok(PrintArg::Value { ty, src });
             }
         }
@@ -4091,6 +4090,28 @@ impl<'a> FnLower<'a> {
             return Ok(PrintArg::Obj(h));
         }
         unsupported("`io::print*` of this argument")
+    }
+
+    /// The scalar value of `e` and its IR type, read through any number of
+    /// references (`w.to_string()` with `w: &i64`, a bounded binding): the
+    /// rustc path auto-dereferences the receiver, so the IR does too.
+    fn scalar_through_refs(&mut self, e: &Expr) -> R<(Ty, Local)> {
+        let mut t = self.type_of(e)?;
+        let mut v = self.expr(e)?;
+        while let Type::Ref { inner, .. } = t {
+            let it = *inner;
+            let lt = map_ty(&it)?;
+            let x = self.new_local(lt);
+            self.emit(Inst::Load {
+                dst: x,
+                ty: lt,
+                addr: v,
+                offset: 0,
+            });
+            v = x;
+            t = it;
+        }
+        Ok((map_ty(&t)?, v))
     }
 
     /// `Some(value)` when `present`, else `None`, of Option type `t`.
@@ -4307,13 +4328,13 @@ impl<'a> FnLower<'a> {
         if !known {
             return Ok(None);
         }
-        let h = self.expr(recv)?;
         if scalar_text {
-            let ty = self.ty_of(recv)?;
+            let (ty, h) = self.scalar_through_refs(recv)?;
             let dst = self.new_local(Ty::Obj);
             self.emit(Inst::HeapOfValue { dst, ty, src: h });
             return Ok(Some(dst));
         }
+        let h = self.expr(recv)?;
         let len = |me: &mut Self, op: HeapOp| {
             let n = me.new_local(Ty::Usize);
             me.heap(Some(n), op, Some(h), None);
