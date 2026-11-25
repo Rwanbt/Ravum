@@ -220,9 +220,9 @@ fn auto_height(rows: usize) {
             assert_eq!(gl.size.height, heights[j], "height of row {j}");
         }
     }
-    for j in 0..rows {
+    for (j, row) in g_rows.iter().enumerate() {
         assert_eq!(
-            g.layout(g_rows[j]).unwrap().location.y,
+            g.layout(*row).unwrap().location.y,
             fw.prefix(j),
             "final y of row {j}"
         );
