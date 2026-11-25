@@ -76,9 +76,18 @@ fn edge_cases_agree_with_the_interpreter() {
 #[test]
 fn text_primitives_panic_with_the_specified_texts() {
     for (body, text) in [
-        ("let v = String::from(\"abc\").split(\"\");\n    drop(v);", "empty separator"),
-        ("let t = String::from(\"abc\").substring(2, 1);\n    drop(t);", "substring out of range"),
-        ("let t = String::from(\"abc\").substring(0, 4);\n    drop(t);", "substring out of range"),
+        (
+            "let v = String::from(\"abc\").split(\"\");\n    drop(v);",
+            "empty separator",
+        ),
+        (
+            "let t = String::from(\"abc\").substring(2, 1);\n    drop(t);",
+            "substring out of range",
+        ),
+        (
+            "let t = String::from(\"abc\").substring(0, 4);\n    drop(t);",
+            "substring out of range",
+        ),
         (
             "let t = String::from(\"é\").substring(1, 2);\n    drop(t);",
             "substring not on a char boundary",
