@@ -1,0 +1,6 @@
+{
+  "id": "run/static-text-through-bounded-binding",
+  "mode": "run-pass",
+  "stdout_contains": "a\nb\nx\nlit\n",
+  "notes": "OWN-6.9/OWN-6.13 with D13 (L-OWN-020-2 lifted): *x, x a bounded borrow of a static text (an enum payload, a Vec<&str> element, or a static local matched by reference), is a storable and returnable &str."
+}

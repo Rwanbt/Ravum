@@ -1,0 +1,6 @@
+{
+  "id": "ownership/nonstatic-text-through-bounded-binding",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "L-OWN-020-2 (negative): a bounded borrow of a non-static text (a parameter matched by reference) does not make *x static: returning it is refused."
+}

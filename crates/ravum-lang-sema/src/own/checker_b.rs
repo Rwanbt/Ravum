@@ -38,6 +38,13 @@ impl<'a> OwnChecker<'a> {
                 self.report_ref_escape(b.span, "stockée");
             }
             let slot = self.declare_slot(&b.name, b.ty.clone(), static_ref, b.span);
+            // L-OWN-020-2: `for x in &v` with `v: Vec<&str>`: the elements
+            // are static texts (rule 2), so `*x` is static.
+            if bounded && matches!(&b.ty, Type::Ref { inner, .. } if is_borrowed_text(inner)) {
+                if let Some(info) = self.slots.get_mut(&slot) {
+                    info.static_pointee = true;
+                }
+            }
             loop_slots.push(slot);
         }
 
@@ -768,6 +775,10 @@ impl<'a> OwnChecker<'a> {
             // stores a reference to a temporary, which must be rejected like any
             // other escaping borrow (F2 audit finding).
             ExprKind::Unary { op: UnOp::Ref, .. } => false,
+            // L-OWN-020-2: `*x`, `x` a bounded borrow of a static text.
+            ExprKind::Unary {
+                op: UnOp::Deref, ..
+            } => self.static_derefs.contains(&expr.id),
             ExprKind::Path(path) => self
                 .path_local_slot(path)
                 .and_then(|slot| self.slot_info(slot))
