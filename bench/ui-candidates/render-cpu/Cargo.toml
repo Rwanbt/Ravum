@@ -1,0 +1,10 @@
+[package]
+name = "ui-bench-render-cpu"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Default features only: single-threaded rendering (no `multithreading`).
+vello_cpu = "=0.4.0"
+tiny-skia = "=0.12.0"
