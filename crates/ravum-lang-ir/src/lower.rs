@@ -591,6 +591,9 @@ struct LoopWriteBack {
     ty: Type,
     addr: Local,
     agg: Option<Local>,
+    /// Leaf index of the lent part inside the element's word vector `agg`
+    /// (0 for a whole element; L-OWN-020-1: `&mut v[i].f`).
+    base: u32,
     /// RFC-UI-LANG-1 P3: a `get_mut` view of map `h`: `(key, present)`; the
     /// copy at `addr` is stored back under `key` when the entry was present.
     map: Option<(Local, Local)>,
@@ -2362,9 +2365,37 @@ impl<'a> FnLower<'a> {
             mutable,
             inner: Box::new(inner.clone()),
         })? == Ty::Obj;
-        // `&mut v[i]` of an aggregate `Vec` is refused by `expr` itself
-        // (its copy is lent to calls only): limit L-OWN-020-1.
-        let addr = self.expr(scrutinee)?;
+        // `&mut v[i]` (or `&mut v[i].f`) of an aggregate `Vec` element: a
+        // private copy, stored back on **every** exit of the match (end of
+        // an arm, `break`, `continue`, `return`, `?`; RFC §2.1). This lifts
+        // L-OWN-020-1.
+        let wb_before = self.loop_wb.len();
+        let lent = match &scrutinee.kind {
+            ExprKind::Unary {
+                op: ast::UnOp::RefMut,
+                expr: inner_e,
+            } if self.vec_rooted(inner_e)? => {
+                let (o, base, ty) = self.vec_agg_place(inner_e)?;
+                let addr = self.vec_materialize(o, base, &ty)?;
+                self.loop_wb.push(LoopWriteBack {
+                    h: o,
+                    i: o,
+                    ty,
+                    addr,
+                    agg: Some(o),
+                    base,
+                    map: None,
+                    commit: None,
+                    stmt: false,
+                });
+                Some(addr)
+            }
+            _ => None,
+        };
+        let addr = match lent {
+            Some(a) => a,
+            None => self.expr(scrutinee)?,
+        };
         // A borrow of a heap object (`&String`, `&Vec<T>`) is its handle:
         // bindings receive the handle itself (see `pat_bind`).
         let place = if heap {
@@ -2391,6 +2422,10 @@ impl<'a> FnLower<'a> {
         }
         self.set_term(Term::Unreachable);
         self.switch_to(join);
+        if self.loop_wb.len() > wb_before {
+            self.flush_wb(wb_before)?;
+            self.loop_wb.truncate(wb_before);
+        }
         Ok(result)
     }
 
@@ -3002,9 +3037,18 @@ impl<'a> FnLower<'a> {
     /// same iterations still need them.
     fn flush_wb(&mut self, from: usize) -> R<()> {
         for k in (from..self.loop_wb.len()).rev() {
-            let (h, i, addr, agg, ty, map, commit) = {
+            let (h, i, addr, agg, ty, map, commit, base) = {
                 let w = &self.loop_wb[k];
-                (w.h, w.i, w.addr, w.agg, w.ty.clone(), w.map, w.commit)
+                (
+                    w.h,
+                    w.i,
+                    w.addr,
+                    w.agg,
+                    w.ty.clone(),
+                    w.map,
+                    w.commit,
+                    w.base,
+                )
             };
             if let Some(vals) = commit {
                 self.heap(None, HeapOp::MapSetVals, Some(h), Some(vals));
@@ -3042,7 +3086,7 @@ impl<'a> FnLower<'a> {
                 continue;
             }
             match agg {
-                Some(o) => self.vec_store(o, 0, &ty, addr)?,
+                Some(o) => self.vec_store(o, base, &ty, addr)?,
                 None => {
                     let lt = map_ty(&ty)?;
                     let x = self.new_local(lt);
@@ -3195,6 +3239,7 @@ impl<'a> FnLower<'a> {
                         ty: v.clone(),
                         addr,
                         agg: None,
+                        base: 0,
                         map: Some((key, present)),
                         commit: None,
                         stmt: true,
@@ -3362,6 +3407,7 @@ impl<'a> FnLower<'a> {
                 ty: v.clone(),
                 addr: vals,
                 agg: None,
+                base: 0,
                 map: None,
                 commit: Some(vals),
                 stmt: false,
@@ -3422,6 +3468,7 @@ impl<'a> FnLower<'a> {
                     ty: v.clone(),
                     addr,
                     agg: Some(vword),
+                    base: 0,
                     map: None,
                     commit: None,
                     stmt: false,
@@ -3443,6 +3490,7 @@ impl<'a> FnLower<'a> {
                     ty: v.clone(),
                     addr: slot,
                     agg: None,
+                    base: 0,
                     map: None,
                     commit: None,
                     stmt: false,
@@ -3567,6 +3615,7 @@ impl<'a> FnLower<'a> {
                     ty: et.clone(),
                     addr,
                     agg: Some(raw),
+                    base: 0,
                     map: None,
                     commit: None,
                     stmt: false,
@@ -3588,6 +3637,7 @@ impl<'a> FnLower<'a> {
                     ty: et.clone(),
                     addr: slot,
                     agg: None,
+                    base: 0,
                     map: None,
                     commit: None,
                     stmt: false,

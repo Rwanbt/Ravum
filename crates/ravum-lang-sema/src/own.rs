@@ -308,6 +308,9 @@ pub(super) struct SlotInfo {
     /// True when the binding certainly holds a `&'static str` (a string literal
     /// or a copy of one), the only storable reference in Core 1.0.
     pub(super) static_ref: bool,
+    /// L-OWN-020-2: a bounded borrow `&&str` (or `&mut &str`) whose target
+    /// text is certainly `'static`, so `*x` is a storable `&'static str`.
+    pub(super) static_pointee: bool,
     pub(super) decl_span: Span,
     /// Program-wide identity of the binding (RFC-OWN-FACTS-2 step C4).
     pub(super) binding: BindingId,
@@ -443,6 +446,10 @@ pub(super) struct OwnChecker<'a> {
     /// Ownership decisions recorded for the backend (RFC-OWN-FACTS-1, step A).
     /// Shared across the functions of one program (see `check_ownership`).
     pub(super) own: &'a mut OwnFacts,
+    /// L-OWN-020-2: the `*x` expressions, `x` a bounded borrow of a static
+    /// text, recorded while `x` is in scope (a `match` tail is judged after
+    /// its arm's bindings are gone).
+    pub(super) static_derefs: std::collections::BTreeSet<crate::syntax::ast::NodeId>,
 }
 
 mod checker_a;

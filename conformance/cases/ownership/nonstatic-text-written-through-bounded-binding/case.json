@@ -1,0 +1,6 @@
+{
+  "id": "ownership/nonstatic-text-written-through-bounded-binding",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "L-OWN-020-2 (adversarial): writing a non-static text through a &mut bounded binding into an enum payload is refused, so the static provenance of payload texts stays sound."
+}
