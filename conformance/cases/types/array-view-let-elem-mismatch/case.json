@@ -1,0 +1,8 @@
+{
+  "id": "types/array-view-let-elem-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-009 (TYP-13.1): an array of `i32` is not a view of `i64`; the element types differ, so it stays a type mismatch."
+}

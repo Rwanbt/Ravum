@@ -989,12 +989,22 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .map(|e| self.check_expr(e, declared.as_ref()));
                 let final_ty = match (&declared, &init_ty) {
                     (Some(d), Some(i)) => {
-                        self.unify(
-                            i,
-                            d,
-                            lets.init.as_ref().map(|e| e.span).unwrap_or(stmt.span),
-                            "let",
-                        );
+                        let span = lets.init.as_ref().map(|e| e.span).unwrap_or(stmt.span);
+                        if is_array_view_into_slice(i, d) {
+                            // TYP-13.1 / Q-TYP-2 : la vue `&[T; N] → &[T]`
+                            // n'existe qu'en argument ou récepteur ; la
+                            // stocker dans un `let` est une fuite de
+                            // référence, pas un désaccord de types.
+                            self.error(
+                                "E-OWN-REF-ESCAPE",
+                                span,
+                                "a `&[T]` view of an array exists only as an argument or \
+                                 receiver (TYP-13.1); it cannot be stored by `let`"
+                                    .to_string(),
+                            );
+                        } else {
+                            self.unify(i, d, span, "let");
+                        }
                         d.clone()
                     }
                     (Some(d), None) => d.clone(),
@@ -1107,5 +1117,17 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let ty = self.resolve_vars(&ty);
         self.record_expr_type(expr.id, &ty);
         ty
+    }
+}
+
+/// `&[T; N]` (ou `&mut`) lié à un `let` déclaré `&[T]` : la coercition de
+/// TYP-13.1 tentée hors de sa seule position permise.
+fn is_array_view_into_slice(init: &Type, declared: &Type) -> bool {
+    match (init, declared) {
+        (Type::Ref { inner: i, .. }, Type::Ref { inner: d, .. }) => match (&**i, &**d) {
+            (Type::Array { elem, .. }, Type::Slice(t)) => elem == t,
+            _ => false,
+        },
+        _ => false,
     }
 }

@@ -115,6 +115,14 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 - DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
 ### Fixed
+- `let s: &[T] = &array;` is refused with `E-OWN-REF-ESCAPE`, as
+  `spec/language/types.md` Q-TYP-2 and F-TYP-009 require, instead of
+  `E-TYP-MISMATCH` (the array view exists only as an argument or receiver).
+  A view with another element type stays `E-TYP-MISMATCH`. Two new
+  conformance cases.
+- `ravum-lang fmt` keeps a `// comment` that follows code on the same line
+  at the end of that line, instead of moving it to the next line, where it
+  described the wrong code. Comments on their own line are unchanged.
 - The safe wrapper of an `extern` function declared in a dependency is now
   called at its own module path; it was called at the crate root and the
   generated Rust did not compile.

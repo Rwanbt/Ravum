@@ -20,8 +20,10 @@
 //! * `else` stays on the same line as the closing brace;
 //! * a comma directly inside a brace opens a new line (struct fields, enum
 //!   variants, match arms), except before the closing `}`;
-//! * line comments are moved to their own line; block comments are kept inline
-//!   (a multi-line block comment is placed on its own lines).
+//! * a line comment that follows code on the same source line stays at the
+//!   end of that code's output line; any other line comment gets its own
+//!   line; block comments are kept inline (a multi-line block comment is
+//!   placed on its own lines).
 //!
 //! Any lexing error makes `format_source` return `Err(diagnostics)`: the
 //! formatter never rewrites corrupted text.
@@ -30,8 +32,6 @@
 //!
 //! * there is no line-width limit and no alignment: long lines are never
 //!   wrapped and adjacent assignments/fields are not aligned;
-//! * a trailing `// comment` at the end of a code line is moved to the
-//!   following line (the token stream cannot distinguish "trailing" reliably);
 //! * blank lines between items are not preserved (the output is canonical);
 //! * the lines *inside* a multi-line `/* ... */` comment are copied verbatim
 //!   and are not re-indented;
@@ -409,7 +409,11 @@ impl<'a> Formatter<'a> {
                 self.blank_line();
             }
             if let TokenKind::Comment(text) = self.tokens[i].kind.clone() {
-                self.emit_comment(&text);
+                if self.is_trailing_line_comment(i, &text) {
+                    self.emit_trailing_comment(&text);
+                } else {
+                    self.emit_comment(&text);
+                }
                 i += 1;
                 continue;
             }
@@ -682,6 +686,37 @@ impl<'a> Formatter<'a> {
     // ---------------------------------------------------------------------
     // Comments
     // ---------------------------------------------------------------------
+
+    /// A `//` comment written after code on the same source line (no line
+    /// break between the previous token and the comment).
+    fn is_trailing_line_comment(&self, i: usize, text: &str) -> bool {
+        if i == 0 || !text.starts_with("//") || self.out.is_empty() {
+            return false;
+        }
+        let gap = self
+            .src
+            .get(self.tokens[i - 1].span.end as usize..self.tokens[i].span.start as usize)
+            .unwrap_or("\n");
+        !gap.contains('\n') && !gap.contains('\r')
+    }
+
+    /// Keeps a trailing comment at the end of the output line that holds the
+    /// code it follows. Its own source line ends with it, so the output line
+    /// ends after it too.
+    fn emit_trailing_comment(&mut self, text: &str) {
+        let text = text.trim_end_matches([' ', '\t', '\r']);
+        if self.line_empty && self.out.ends_with('\n') {
+            // The code's line was already closed: reopen it.
+            self.out.pop();
+        }
+        while self.out.ends_with(' ') {
+            self.out.pop();
+        }
+        self.out.push(' ');
+        self.out.push_str(text);
+        self.out.push('\n');
+        self.line_empty = true;
+    }
 
     fn emit_comment(&mut self, text: &str) {
         if text.starts_with("//") {
@@ -1128,18 +1163,50 @@ fn main() {
     }
 
     #[test]
-    fn comments_are_kept_on_their_own_lines() {
-        let out = fmt("// top\nfn f(){ // trailing\nlet x=1; // tail\n/* b */}");
+    fn trailing_comments_stay_and_others_keep_their_own_lines() {
+        let src = "// top\nfn f(){ // trailing\nlet x=1; // tail\n/* b */}";
+        let out = fmt(src);
         let expected = "\
 // top
-fn f() {
-    // trailing
-    let x = 1;
-    // tail
+fn f() { // trailing
+    let x = 1; // tail
     /* b */
 }
 ";
         assert_eq!(out, expected);
+        assert_meaning_preserved(src, &out);
+        assert_idempotent(src);
+    }
+
+    #[test]
+    fn trailing_comments_follow_their_code_in_every_position() {
+        let src = "fn f(){\n// own line\nlet a=1;   //  spaced  \r\nlet b=g(a, // arg\n2);\n} // after item\nfn h(){}\n";
+        let out = fmt(src);
+        let expected = "\
+fn f() {
+    // own line
+    let a = 1; //  spaced
+    let b = g(a, // arg
+    2);
+} // after item
+fn h() {}
+";
+        assert_eq!(out, expected);
+        assert_meaning_preserved(src, &out);
+        assert_idempotent(src);
+    }
+
+    #[test]
+    fn a_comment_after_a_line_break_is_not_trailing() {
+        // Negative: the comment is on the next source line, so it is not
+        // pulled up onto the code line.
+        let out = fmt("fn f(){let x=1;\n// next\nlet y=2;}");
+        assert_eq!(
+            out,
+            "fn f() {\n    let x = 1;\n    // next\n    let y = 2;\n}\n"
+        );
+        let out = fmt("fn f(){let x=1;\r\n// crlf\r\n}");
+        assert_eq!(out, "fn f() {\n    let x = 1;\n    // crlf\n}\n");
     }
 
     #[test]
