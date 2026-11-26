@@ -180,7 +180,18 @@ pub struct Stats {
     pub removed: usize,
 }
 
+/// Mesure d'un texte sur une ligne : (largeur, hauteur) en pixels logiques.
+/// Fournie par la pile (U2 : Parley) ; par défaut, [`monospace`].
+pub type Measure = std::rc::Rc<dyn Fn(&str) -> (f32, f32)>;
+
+/// Mesure de substitution sans moteur de texte : `CHAR_W` × `LINE_H` par
+/// caractère, déterministe partout.
+pub fn monospace(t: &str) -> (f32, f32) {
+    (t.chars().count() as f32 * CHAR_W, LINE_H)
+}
+
 pub struct Ui {
+    measure: Measure,
     root: Desc,
     generation: u64,
     states: BTreeMap<Path, NodeState>,
@@ -224,6 +235,15 @@ fn validate(d: &Desc, path: &mut Path) -> Result<(), PatchError> {
     Ok(())
 }
 
+fn collect_texts<'a>(d: &'a Desc, out: &mut Vec<&'a str>) {
+    if let Some(t) = &d.text {
+        out.push(t);
+    }
+    for c in &d.children {
+        collect_texts(c, out);
+    }
+}
+
 fn paths(d: &Desc, p: &mut Path, out: &mut BTreeSet<Path>) {
     p.push(d.key);
     out.insert(p.clone());
@@ -248,6 +268,7 @@ impl Ui {
     pub fn new(root: Desc, viewport: (f32, f32)) -> Result<Ui, PatchError> {
         validate(&root, &mut Vec::new())?;
         let mut ui = Ui {
+            measure: std::rc::Rc::new(monospace),
             root: Desc::new(0, Style::default()),
             generation: 0,
             states: BTreeMap::new(),
@@ -258,6 +279,43 @@ impl Ui {
         };
         ui.install(root);
         Ok(ui)
+    }
+
+    /// Remplace la mesure du texte et refait le layout. Une mesure qui rend
+    /// une taille négative ou non finie est refusée (fail-closed) : `false`
+    /// et rien ne change. Elle est essayée sur chaque texte de l'arbre.
+    pub fn set_measure(&mut self, m: Measure) -> bool {
+        let mut texts = Vec::new();
+        collect_texts(&self.root, &mut texts);
+        let ok = |s: &str| {
+            let (w, h) = m(s);
+            w.is_finite() && h.is_finite() && w >= 0.0 && h >= 0.0
+        };
+        if !texts.iter().all(|t| ok(t)) || !ok("") {
+            return false;
+        }
+        self.measure = m;
+        self.relayout();
+        true
+    }
+
+    /// Chaque texte doit avoir une mesure finie et positive.
+    fn validate_text(&self, root: &Desc) -> Result<(), PatchError> {
+        fn walk(ui: &Ui, d: &Desc, p: &mut Path) -> Result<(), PatchError> {
+            p.push(d.key);
+            if let Some(t) = &d.text {
+                let (w, h) = (ui.measure)(t);
+                if !(w.is_finite() && h.is_finite() && w >= 0.0 && h >= 0.0) {
+                    return Err(PatchError::InvalidSize { path: p.clone() });
+                }
+            }
+            for c in &d.children {
+                walk(ui, c, p)?;
+            }
+            p.pop();
+            Ok(())
+        }
+        walk(self, root, &mut Vec::new())
     }
 
     pub fn generation(&self) -> u64 {
@@ -274,6 +332,7 @@ impl Ui {
             });
         }
         validate(&root, &mut Vec::new())?;
+        self.validate_text(&root)?;
         Ok(self.install(root))
     }
 
@@ -363,16 +422,16 @@ impl Ui {
 
     // ---------- layout ----------
 
-    fn intrinsic(d: &Desc) -> (f32, f32) {
+    fn intrinsic(&self, d: &Desc) -> (f32, f32) {
         if let Some(t) = &d.text {
-            return (t.chars().count() as f32 * CHAR_W, LINE_H);
+            return (self.measure)(t);
         }
         let s = &d.style;
         let kids: Vec<(f32, f32)> = d
             .children
             .iter()
             .map(|c| {
-                let (iw, ih) = Self::intrinsic(c);
+                let (iw, ih) = self.intrinsic(c);
                 (fixed_or(c.style.width, iw), fixed_or(c.style.height, ih))
             })
             .collect();
@@ -419,7 +478,7 @@ impl Ui {
         let mut weights = 0.0;
         let mut sizes = Vec::with_capacity(d.children.len());
         for c in &d.children {
-            let (iw, ih) = Self::intrinsic(c);
+            let (iw, ih) = self.intrinsic(c);
             let (main, cross) = if row {
                 (c.style.width, c.style.height)
             } else {
@@ -557,7 +616,7 @@ impl Ui {
 
     fn scroll_max(&self, p: &Path, d: &Desc) -> f32 {
         let r = self.rects[p];
-        let (_, ih) = Self::intrinsic(d);
+        let (_, ih) = self.intrinsic(d);
         (ih - r.h).max(0.0)
     }
 
@@ -587,7 +646,7 @@ impl Ui {
         path.push(d.key);
         let r = self.rects[path.as_slice()];
         if d.text.is_some() {
-            let (iw, _) = Self::intrinsic(d);
+            let (iw, _) = self.intrinsic(d);
             if iw > r.w + 1e-3 {
                 out.push(Diagnostic {
                     rule: Rule::Overflow,
