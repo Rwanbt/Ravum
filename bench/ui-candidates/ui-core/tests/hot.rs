@@ -268,3 +268,25 @@ fn reloads_go_through_the_full_verify_gate() {
     );
     assert_eq!(s.ui().generation(), g);
 }
+
+/// Le gate juge le candidat avec la mesure du texte de la vue affichée, pas
+/// avec la mesure monospace par défaut.
+#[test]
+fn the_gate_measures_candidates_like_the_active_view() {
+    let wide = || -> Measure { std::rc::Rc::new(|t: &str| (t.chars().count() as f32 * 30.0, 10.0)) };
+    let mut s = session();
+    assert!(s.set_measure(wide()));
+    assert_eq!(s.ui().verify(), vec![]);
+    // « abcd » tient en monospace (100 px) mais pas avec la mesure active.
+    let g = s.ui().generation();
+    let e = s
+        .reload(g, view("abcd", 40.0, false), binds(false), None)
+        .unwrap_err();
+    assert!(matches!(e, ReloadError::VerifyRegression(_)), "{e:?}");
+    assert_eq!(s.ui().generation(), g, "refused: nothing activated");
+    // Same candidate on a monospace session is accepted.
+    let mut m = session();
+    let g = m.ui().generation();
+    m.reload(g, view("abcd", 40.0, false), binds(false), None)
+        .unwrap();
+}

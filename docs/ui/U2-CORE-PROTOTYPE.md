@@ -119,7 +119,7 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : spectrogramme, graphe de nœuds, canevas, vidéo, 3D, textures
   GPU partagées (demandent le rendu).
 
-## Tests (`cargo test -p ui-core`, 43 tests)
+## Tests (`cargo test -p ui-core`, 44 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |

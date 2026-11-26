@@ -281,6 +281,12 @@ impl Ui {
         Ok(ui)
     }
 
+    /// La mesure du texte active (pour construire un candidat mesuré de la
+    /// même façon, par exemple la sonde du gate Verify).
+    pub fn measure(&self) -> Measure {
+        self.measure.clone()
+    }
+
     /// Remplace la mesure du texte et refait le layout. Une mesure qui rend
     /// une taille négative ou non finie est refusée (fail-closed) : `false`
     /// et rien ne change. Elle est essayée sur chaque texte de l'arbre.

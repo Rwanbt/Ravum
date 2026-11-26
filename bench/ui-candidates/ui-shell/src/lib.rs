@@ -7,7 +7,8 @@
 //! - [`App0`] : l'application de qualification 0 (PLAN §6) : compteur et
 //!   liste de tâches, pilotée par les clics que `ui-core` rapporte.
 
-use ui_core::{Desc, Dir, Len, Path, Rect, Style, Ui};
+use ui_core::hot::{classify, Level};
+use ui_core::{verify, Desc, Dir, Len, Path, Rect, Style, Ui};
 
 /// Un ordre de dessin, en pixels logiques.
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +84,136 @@ fn walk(ui: &Ui, d: &Desc, p: &mut Path, clip: Rect, level: usize, out: &mut Vec
     p.pop();
 }
 
+/// Habillage rechargeable à chaud de l'application 0 (U3, niveaux L0 et
+/// L1) : dimensions et libellés, lus depuis un texte `clé = valeur`.
+/// L'état de l'application n'en fait pas partie et n'est jamais touché.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Skin {
+    pub bar_height: f32,
+    pub bar_gap: f32,
+    pub button_width: f32,
+    pub button_height: f32,
+    pub row_height: f32,
+    pub list_gap: f32,
+    pub label_count: String,
+    pub label_plus: String,
+    pub label_minus: String,
+    pub label_add: String,
+}
+
+impl Default for Skin {
+    fn default() -> Self {
+        Skin {
+            bar_height: 48.0,
+            bar_gap: 8.0,
+            button_width: 96.0,
+            button_height: 32.0,
+            row_height: 28.0,
+            list_gap: 4.0,
+            label_count: "compteur".into(),
+            label_plus: "+1".into(),
+            label_minus: "-1".into(),
+            label_add: "ajouter".into(),
+        }
+    }
+}
+
+/// Erreur de lecture d'un habillage ; la ligne est comptée à partir de 1.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SkinError {
+    Syntax {
+        line: usize,
+    },
+    UnknownKey {
+        line: usize,
+        key: String,
+    },
+    DuplicateKey {
+        line: usize,
+        key: String,
+    },
+    /// Nombre non fini, négatif, ou hors de la plage admise.
+    BadNumber {
+        line: usize,
+        key: String,
+    },
+    /// Libellé vide ou contenant un caractère de contrôle.
+    BadLabel {
+        line: usize,
+        key: String,
+    },
+}
+
+/// Bornes des dimensions (pixels logiques) : au-delà, c'est une faute de
+/// frappe, pas un réglage.
+const MAX_LEN: f32 = 4096.0;
+
+impl Skin {
+    /// Lecture fail-closed : la moindre ligne fautive refuse tout le
+    /// texte. Une clé absente garde sa valeur par défaut ; `#` commente.
+    pub fn parse(text: &str) -> Result<Skin, SkinError> {
+        let mut skin = Skin::default();
+        let mut seen: Vec<&str> = Vec::new();
+        for (i, raw) in text.lines().enumerate() {
+            let line = i + 1;
+            let l = raw.trim();
+            if l.is_empty() || l.starts_with('#') {
+                continue;
+            }
+            let (k, v) = l.split_once('=').ok_or(SkinError::Syntax { line })?;
+            let (k, v) = (k.trim(), v.trim());
+            if seen.contains(&k) {
+                return Err(SkinError::DuplicateKey {
+                    line,
+                    key: k.into(),
+                });
+            }
+            let num = |slot: &mut f32| -> Result<(), SkinError> {
+                match v.parse::<f32>() {
+                    Ok(n) if n.is_finite() && (0.0..=MAX_LEN).contains(&n) => {
+                        *slot = n;
+                        Ok(())
+                    }
+                    _ => Err(SkinError::BadNumber {
+                        line,
+                        key: k.into(),
+                    }),
+                }
+            };
+            let label = |slot: &mut String| -> Result<(), SkinError> {
+                if v.is_empty() || v.chars().any(char::is_control) {
+                    return Err(SkinError::BadLabel {
+                        line,
+                        key: k.into(),
+                    });
+                }
+                *slot = v.into();
+                Ok(())
+            };
+            match k {
+                "bar.height" => num(&mut skin.bar_height)?,
+                "bar.gap" => num(&mut skin.bar_gap)?,
+                "button.width" => num(&mut skin.button_width)?,
+                "button.height" => num(&mut skin.button_height)?,
+                "row.height" => num(&mut skin.row_height)?,
+                "list.gap" => num(&mut skin.list_gap)?,
+                "label.count" => label(&mut skin.label_count)?,
+                "label.plus" => label(&mut skin.label_plus)?,
+                "label.minus" => label(&mut skin.label_minus)?,
+                "label.add" => label(&mut skin.label_add)?,
+                _ => {
+                    return Err(SkinError::UnknownKey {
+                        line,
+                        key: k.into(),
+                    })
+                }
+            }
+            seen.push(k);
+        }
+        Ok(skin)
+    }
+}
+
 /// Clés stables de l'application 0.
 pub mod key {
     pub const ROOT: u64 = 1;
@@ -119,12 +250,12 @@ impl Default for App0 {
     }
 }
 
-fn button(key: u64, label: &str) -> Desc {
+fn button(skin: &Skin, key: u64, label: &str) -> Desc {
     Desc::new(
         key,
         Style {
-            width: Len::Fixed(96.0),
-            height: Len::Fixed(32.0),
+            width: Len::Fixed(skin.button_width),
+            height: Len::Fixed(skin.button_height),
             padding: 8.0,
             focusable: true,
             ..Style::default()
@@ -140,16 +271,16 @@ impl App0 {
         self.tasks.push((id, format!("tâche {id}"), false));
     }
 
-    /// La vue : une fonction pure de l'état.
-    pub fn view(&self) -> Desc {
+    /// La vue : une fonction pure de l'état et de l'habillage.
+    pub fn view(&self, skin: &Skin) -> Desc {
         let bar = Desc::new(
             key::BAR,
             Style {
                 dir: Dir::Row,
                 width: Len::Fill(1.0),
-                height: Len::Fixed(48.0),
+                height: Len::Fixed(skin.bar_height),
                 padding: 8.0,
-                gap: 8.0,
+                gap: skin.bar_gap,
                 ..Style::default()
             },
         )
@@ -158,15 +289,18 @@ impl App0 {
                 key::COUNT,
                 Style {
                     width: Len::Fixed(160.0),
-                    height: Len::Fixed(32.0),
+                    height: Len::Fixed(skin.button_height),
                     padding: 8.0,
                     ..Style::default()
                 },
             )
-            .with(vec![Desc::text(1, &format!("compteur : {}", self.count))]),
-            button(key::PLUS, "+1"),
-            button(key::MINUS, "-1"),
-            button(key::ADD, "ajouter"),
+            .with(vec![Desc::text(
+                1,
+                &format!("{} : {}", skin.label_count, self.count),
+            )]),
+            button(skin, key::PLUS, &skin.label_plus),
+            button(skin, key::MINUS, &skin.label_minus),
+            button(skin, key::ADD, &skin.label_add),
         ]);
         let rows = self
             .tasks
@@ -176,7 +310,7 @@ impl App0 {
                     key::TASK + id,
                     Style {
                         width: Len::Fill(1.0),
-                        height: Len::Fixed(28.0),
+                        height: Len::Fixed(skin.row_height),
                         padding: 6.0,
                         focusable: true,
                         ..Style::default()
@@ -194,7 +328,7 @@ impl App0 {
                 width: Len::Fill(1.0),
                 height: Len::Fill(1.0),
                 padding: 8.0,
-                gap: 4.0,
+                gap: skin.list_gap,
                 scroll: true,
                 ..Style::default()
             },
@@ -243,13 +377,29 @@ impl App0 {
 pub struct Shell {
     pub app: App0,
     pub ui: Ui,
+    skin: Skin,
+}
+
+/// Refus d'un rechargement d'habillage ; l'habillage actif reste en place.
+#[derive(Debug, PartialEq)]
+pub enum ReloadError {
+    Skin(SkinError),
+    Patch(ui_core::PatchError),
+    /// Le gate Verify refuse : le candidat ajoute des diagnostics.
+    Verify(Vec<ui_core::verify::Finding>),
+    RulesetTampered,
 }
 
 impl Shell {
     pub fn new(viewport: (f32, f32)) -> Shell {
         let app = App0::default();
-        let ui = Ui::new(app.view(), viewport).expect("app 0 view is valid");
-        Shell { app, ui }
+        let skin = Skin::default();
+        let ui = Ui::new(app.view(&skin), viewport).expect("app 0 view is valid");
+        Shell { app, ui, skin }
+    }
+
+    pub fn skin(&self) -> &Skin {
+        &self.skin
     }
 
     /// `true` si l'écran doit être redessiné.
@@ -261,11 +411,45 @@ impl Shell {
         if self.app.on_clicks(&clicks) {
             let g = self.ui.generation();
             // Fail-closed : une vue refusée laisse l'arbre actif intact.
-            if self.ui.patch(g, self.app.view()).is_ok() {
+            if self.ui.patch(g, self.app.view(&self.skin)).is_ok() {
                 redraw = true;
             }
         }
         redraw
+    }
+
+    /// Rechargement à chaud transactionnel d'un habillage (U3, L0/L1).
+    /// Lecture, construction du candidat avec la mesure du texte active,
+    /// gate Verify, puis activation ; au moindre refus, rien ne change
+    /// (vue, habillage, état, focus, défilement).
+    pub fn reload_skin(&mut self, text: &str) -> Result<Level, ReloadError> {
+        let skin = Skin::parse(text).map_err(ReloadError::Skin)?;
+        let view = self.app.view(&skin);
+        let level = classify(&self.app.view(&self.skin), &view);
+        if level == Level::None {
+            self.skin = skin;
+            return Ok(level);
+        }
+        let mut probe = Ui::new(view.clone(), self.ui.viewport()).map_err(ReloadError::Patch)?;
+        if !probe.set_measure(self.ui.measure()) {
+            return Err(ReloadError::Patch(ui_core::PatchError::InvalidSize {
+                path: Vec::new(),
+            }));
+        }
+        probe.copy_states_from(&self.ui);
+        let ctx = verify::Context {
+            tokens: None,
+            input: ui_core::responsive::Input::Pointer,
+        };
+        match verify::activation_gate(&self.ui, &probe, &ctx) {
+            Ok(()) => {}
+            Err(verify::GateError::Regression(f)) => return Err(ReloadError::Verify(f)),
+            Err(verify::GateError::Tampered(_)) => return Err(ReloadError::RulesetTampered),
+        }
+        let g = self.ui.generation();
+        self.ui.patch(g, view).map_err(ReloadError::Patch)?;
+        self.skin = skin;
+        Ok(level)
     }
 
     pub fn resize(&mut self, viewport: (f32, f32)) {
@@ -409,5 +593,259 @@ mod tests {
             (s.app.clone(), paint(&s.ui))
         };
         assert_eq!(run(), run());
+    }
+    #[test]
+    fn l0_and_l1_reloads_keep_state_focus_and_scroll() {
+        let mut s = Shell::new((1024.0, 700.0));
+        click(&mut s, &[key::ROOT, key::BAR, key::PLUS]);
+        click(&mut s, &[key::ROOT, key::LIST, key::TASK + 2]);
+        let (x, y) = center(&s.ui, &[key::ROOT, key::LIST]);
+        s.event(&Event::Scroll { x, y, dy: 60.0 });
+        let app = s.app.clone();
+        let focus = s.ui.focus().cloned();
+
+        assert_eq!(
+            s.reload_skin("row.height = 32\nlist.gap = 6"),
+            Ok(Level::Style)
+        );
+        assert_eq!(
+            s.ui.rect(&[key::ROOT, key::LIST, key::TASK]).unwrap().h,
+            32.0
+        );
+        assert_eq!(
+            s.reload_skin("row.height = 32\nlist.gap = 6\nlabel.add = nouvelle"),
+            Ok(Level::Structure)
+        );
+        assert!(paint(&s.ui)
+            .iter()
+            .any(|o| matches!(o, Op::Text { text, .. } if text == "nouvelle")));
+
+        assert_eq!(s.app, app, "a reload never touches the app state");
+        assert_eq!(s.ui.focus().cloned(), focus);
+        assert_eq!(s.ui.state(&[key::ROOT, key::LIST]).unwrap().scroll, 60.0);
+        assert_eq!(s.ui.verify(), vec![]);
+        // The new skin stays active for the next state change.
+        click(&mut s, &[key::ROOT, key::BAR, key::PLUS]);
+        assert_eq!(s.app.count, 2);
+        assert_eq!(
+            s.ui.rect(&[key::ROOT, key::LIST, key::TASK]).unwrap().h,
+            32.0
+        );
+    }
+
+    #[test]
+    fn an_identical_skin_is_level_none_and_changes_nothing() {
+        let mut s = Shell::new((1024.0, 700.0));
+        let g = s.ui.generation();
+        assert_eq!(
+            s.reload_skin("# rien\n\nbutton.width = 96"),
+            Ok(Level::None)
+        );
+        assert_eq!(s.ui.generation(), g);
+    }
+
+    #[test]
+    fn bad_skins_are_refused_line_by_line() {
+        use SkinError::*;
+        let k = |s: &str| s.to_string();
+        let cases: Vec<(&str, SkinError)> = vec![
+            ("row.height 30", Syntax { line: 1 }),
+            (
+                "\nrow.heigth = 30",
+                UnknownKey {
+                    line: 2,
+                    key: k("row.heigth"),
+                },
+            ),
+            (
+                "bar.gap = 1\nbar.gap = 2",
+                DuplicateKey {
+                    line: 2,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "bar.gap = -1",
+                BadNumber {
+                    line: 1,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "bar.gap = NaN",
+                BadNumber {
+                    line: 1,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "bar.gap = inf",
+                BadNumber {
+                    line: 1,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "bar.gap = 1e9",
+                BadNumber {
+                    line: 1,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "bar.gap = huit",
+                BadNumber {
+                    line: 1,
+                    key: k("bar.gap"),
+                },
+            ),
+            (
+                "label.add =",
+                BadLabel {
+                    line: 1,
+                    key: k("label.add"),
+                },
+            ),
+            (
+                "label.add = a\u{7}b",
+                BadLabel {
+                    line: 1,
+                    key: k("label.add"),
+                },
+            ),
+        ];
+        for (text, want) in cases {
+            assert_eq!(Skin::parse(text), Err(want), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_refused_reload_leaves_everything_active() {
+        let mut s = Shell::new((1024.0, 700.0));
+        click(&mut s, &[key::ROOT, key::BAR, key::PLUS]);
+        let (g, app, skin) = (s.ui.generation(), s.app.clone(), s.skin().clone());
+        let ops = paint(&s.ui);
+        // Parse error, then a skin that parses but makes the labels overflow
+        // their buttons: the Verify gate refuses it.
+        assert!(matches!(
+            s.reload_skin("button.width = x"),
+            Err(ReloadError::Skin(_))
+        ));
+        let e = s.reload_skin("button.width = 12").unwrap_err();
+        assert!(
+            matches!(&e, ReloadError::Verify(f) if !f.is_empty()),
+            "{e:?}"
+        );
+        assert_eq!((s.ui.generation(), &s.app, s.skin()), (g, &app, &skin));
+        assert_eq!(paint(&s.ui), ops);
+        // And the next state change still uses the old, valid skin.
+        click(&mut s, &[key::ROOT, key::BAR, key::PLUS]);
+        assert_eq!(
+            s.ui.rect(&[key::ROOT, key::BAR, key::PLUS]).unwrap().w,
+            96.0
+        );
+    }
+
+    /// Textes arbitraires : jamais de panique, et soit un refus sans
+    /// effet, soit une vue active qui passe Verify.
+    #[test]
+    fn adversarial_skins_never_break_the_active_view() {
+        let keys = [
+            "bar.height",
+            "bar.gap",
+            "button.width",
+            "button.height",
+            "row.height",
+            "list.gap",
+            "label.add",
+            "nope",
+        ];
+        let vals = [
+            "0", "1", "8", "40", "200", "4096", "4097", "-0", "1e-3", "", "x", "NaN",
+        ];
+        let mut s = Shell::new((800.0, 600.0));
+        let mut rng = 11u64;
+        for _ in 0..400 {
+            let mut text = String::new();
+            for _ in 0..1 + rng % 3 {
+                rng = rng
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let k = keys[(rng >> 33) as usize % keys.len()];
+                let v = vals[(rng >> 17) as usize % vals.len()];
+                text.push_str(&format!("{k} = {v}\n"));
+            }
+            let before = (s.ui.generation(), s.skin().clone());
+            match s.reload_skin(&text) {
+                Ok(_) => assert_eq!(s.ui.verify(), vec![], "{text}"),
+                Err(_) => assert_eq!((s.ui.generation(), s.skin().clone()), before, "{text}"),
+            }
+        }
+    }
+    /// Critère de sortie U3 (PLAN §5) sur l'application réelle : 10 000
+    /// événements et 20 éditions d'habillage (acceptées ou refusées) sans
+    /// perte. Les clics visent des nœuds par leur chemin, donc un jumeau
+    /// sans rechargement doit finir dans le même état, avec le même focus.
+    #[test]
+    fn ten_thousand_events_and_twenty_edits_lose_nothing() {
+        let skins = [
+            "row.height = 40\nlist.gap = 10",
+            "button.width = 12",
+            "label.add = nouvelle tâche\nbutton.width = 140",
+            "bar.gap = -1",
+            "row.height = 24\nlabel.count = total",
+        ];
+        let mut a = Shell::new((1024.0, 700.0));
+        let mut b = Shell::new((1024.0, 700.0));
+        let (mut accepted, mut refused) = (0, 0);
+        let mut rng = 3u64;
+        for i in 0..10_000u64 {
+            if (i + 1).is_multiple_of(500) {
+                match a.reload_skin(skins[(i / 500) as usize % skins.len()]) {
+                    Ok(_) => accepted += 1,
+                    Err(_) => refused += 1,
+                }
+                assert_eq!(a.ui.verify(), vec![]);
+            }
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let target: Vec<u64> = match (rng >> 40) % 5 {
+                0 => vec![key::ROOT, key::BAR, key::PLUS],
+                1 => vec![key::ROOT, key::BAR, key::MINUS],
+                2 if a.app.tasks.len() < 60 => vec![key::ROOT, key::BAR, key::ADD],
+                _ => {
+                    let id = a.app.tasks[(rng >> 20) as usize % a.app.tasks.len()].0;
+                    vec![key::ROOT, key::LIST, key::TASK + id]
+                }
+            };
+            // A row can be visible in one twin and scrolled out or clipped
+            // in the other (different heights): click only targets whose
+            // centre lies inside the list (or the bar) in both.
+            let visible = |s: &Shell| {
+                let (Some(r), Some(c)) = (s.ui.rect(&target), s.ui.rect(&target[..2])) else {
+                    return false;
+                };
+                let (x, y) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+                x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h
+            };
+            let focus = (rng >> 8).is_multiple_of(7);
+            let hit = visible(&a) && visible(&b);
+            for s in [&mut a, &mut b] {
+                if focus {
+                    s.event(&Event::FocusNext);
+                } else if hit {
+                    click(s, &target);
+                }
+            }
+        }
+        assert_eq!(accepted + refused, 20);
+        assert!(accepted > 0 && refused > 0);
+        assert_eq!(a.app, b.app);
+        assert_eq!(a.ui.focus(), b.ui.focus());
+        assert!(
+            a.app.tasks.len() > 30 && a.app.tasks.iter().any(|t| t.2),
+            "the run did click"
+        );
     }
 }

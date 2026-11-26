@@ -44,7 +44,7 @@ donne le focus ; avec la mesure Parley, le clic sur une tâche la coche et
 lui donne le focus. Captures : [avant](img/u2-app0.png),
 [après](img/u2-app0-input.png), [mesure Parley](img/u2-app0-parley.png).
 
-Tests ajoutés à `ui-core` (43 au total) : `a_stack_measure_drives_layout_and_verify`,
+Tests ajoutés à `ui-core` (43 à cette étape) : `a_stack_measure_drives_layout_and_verify`,
 `a_bad_measure_is_refused_and_changes_nothing` (négatif).
 
 ## Pas encore (critère de sortie d'U2 non atteint)
@@ -52,4 +52,5 @@ Tests ajoutés à `ui-core` (43 au total) : `a_stack_measure_drives_layout_and_v
 - Le focus clavier ne fait pas défiler son nœud dans la vue.
 - Pas d'IME, de bidi, d'accessibilité (AccessKit), de survol ni d'état
   pressé ; pas de styles issus des jetons U5.
-- Hot reload L0 à L2 (U3) pas encore branché sur la fenêtre.
+- Hot reload : L0 et L1 branchés sur la fenêtre (voir [U3-SHELL](U3-SHELL.md)) ;
+  L2 pas encore.
