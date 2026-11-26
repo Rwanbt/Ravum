@@ -1,0 +1,8 @@
+   Compiling x11-dl v2.21.0
+   Compiling winit v0.30.13
+   Compiling accesskit_winit v0.34.2
+   Compiling egui-wgpu v0.37.0
+   Compiling egui-winit v0.37.0
+   Compiling eframe v0.37.0
+   Compiling r3-egui v0.0.0 (/mnt/Stockage/App/Ravum/bench/ui-candidates/round3/egui)
+    Finished `release` profile [optimized] target(s) in 7.79s
