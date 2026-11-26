@@ -1,0 +1,3 @@
+enum E { A, B }
+fn f(e: E) -> i32 { match e { E::A => 0 } }
+fn main() {}

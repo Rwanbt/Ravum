@@ -1,0 +1,164 @@
+//! Montants en centimes (`i64`), sans flottant : aucune erreur d'arrondi.
+//! Toute opération qui déborde rend une erreur au lieu de paniquer.
+
+/// Plus grand nombre de chiffres après la virgule accepté.
+pub const DECIMALS: usize = 2;
+
+/// Lit un montant décimal : `12`, `12.5`, `-0.05`, `+3.40`.
+/// Refus : vide, signe seul, plus de 2 décimales, virgule finale ou
+/// initiale (`1.`, `.5`), caractère étranger, dépassement d'`i64`.
+pub fn parse(text: &str) -> Result<i64, Error> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Err(Error::new("empty amount"));
+    }
+    let chars = t.chars();
+    let mut i: usize = 0;
+    let mut negative = false;
+    if chars[0] == '-' || chars[0] == '+' {
+        negative = chars[0] == '-';
+        i = 1;
+    }
+    let mut units: i64 = 0;
+    let mut digits: usize = 0;
+    while i < chars.len() && chars[i] != '.' {
+        units = push_digit(units, chars[i])?;
+        digits += 1;
+        i += 1;
+    }
+    if digits == 0 {
+        return Err(Error::new("amount without digits before the point"));
+    }
+    let mut cents: i64 = 0;
+    if i < chars.len() {
+        // chars[i] == '.'
+        i += 1;
+        let mut decimals: usize = 0;
+        while i < chars.len() {
+            if decimals == DECIMALS {
+                return Err(Error::new("too many decimals"));
+            }
+            cents = push_digit(cents, chars[i])?;
+            decimals += 1;
+            i += 1;
+        }
+        if decimals == 0 {
+            return Err(Error::new("amount ends with a point"));
+        }
+        if decimals == 1 {
+            cents = cents * 10;
+        }
+    }
+    let total = match units.checked_mul(100) {
+        Some(u) => u.checked_add(cents),
+        None => None,
+    };
+    let magnitude = total.ok_or(Error::new("amount too large"))?;
+    if negative {
+        Ok(-magnitude)
+    } else {
+        Ok(magnitude)
+    }
+}
+
+fn push_digit(acc: i64, c: char) -> Result<i64, Error> {
+    if c < '0' || c > '9' {
+        return Err(Error::new("unexpected character in amount"));
+    }
+    let d = (c as u32 - '0' as u32) as i64;
+    let shifted = acc.checked_mul(10).ok_or(Error::new("amount too large"))?;
+    shifted.checked_add(d).ok_or(Error::new("amount too large"))
+}
+
+/// Somme vérifiée.
+pub fn add(a: i64, b: i64) -> Result<i64, Error> {
+    a.checked_add(b).ok_or(Error::new("total overflows"))
+}
+
+/// `-1234` → `-12.34` ; `5` → `0.05` ; `i64` minimal compris.
+pub fn format(cents: i64) -> String {
+    // i128 : la valeur absolue d'i64::MIN ne tient pas dans un i64.
+    let wide = cents as i128;
+    let abs = if wide < 0 {
+        -wide
+    } else {
+        wide
+    };
+    let mut s = String::new();
+    if wide < 0 {
+        s.push('-');
+    }
+    s.push_str(&(abs / 100).to_string());
+    s.push('.');
+    let rest = abs % 100;
+    if rest < 10 {
+        s.push('0');
+    }
+    s.push_str(&rest.to_string());
+    s
+}
+
+test fn amounts_are_read_exactly() {
+    assert_eq(parse("12").unwrap(), 1200);
+    assert_eq(parse("12.5").unwrap(), 1250);
+    assert_eq(parse("12.05").unwrap(), 1205);
+    assert_eq(parse(" -0.05 ").unwrap(), -5);
+    assert_eq(parse("+3.40").unwrap(), 340);
+    assert_eq(parse("-0").unwrap(), 0);
+    assert_eq(parse("0007").unwrap(), 700);
+}
+
+test fn bad_amounts_are_refused() {
+    assert(parse("").is_err());
+    assert(parse("   ").is_err());
+    assert(parse("-").is_err());
+    assert(parse("+.5").is_err());
+    assert(parse(".5").is_err());
+    assert(parse("1.").is_err());
+    assert(parse("1.234").is_err());
+    assert(parse("1,50").is_err());
+    assert(parse("1.5.0").is_err());
+    assert(parse("--1").is_err());
+    assert(parse("1e3").is_err());
+    // chiffres pleine chasse
+    assert(parse("１２").is_err());
+    // chiffre arabe-indien
+    assert(parse("٣").is_err());
+}
+
+test fn the_i64_limits_are_exact() {
+    // i64::MAX = 9223372036854775807 centimes.
+    assert_eq(parse("92233720368547758.07").unwrap(), 9223372036854775807);
+    assert(parse("92233720368547758.08").is_err());
+    assert(parse("99999999999999999999").is_err());
+    assert_eq(parse("-92233720368547758.07").unwrap(), -9223372036854775807);
+    assert(add(9223372036854775807, 1).is_err());
+    assert_eq(add(-1, 1).unwrap(), 0);
+}
+
+test fn amounts_are_formatted_back() {
+    assert_eq(format(0), "0.00");
+    assert_eq(format(5), "0.05");
+    assert_eq(format(-5), "-0.05");
+    assert_eq(format(1250), "12.50");
+    assert_eq(format(-123456), "-1234.56");
+    assert_eq(format(9223372036854775807), "92233720368547758.07");
+    assert_eq(format(-9223372036854775807 - 1), "-92233720368547758.08");
+}
+
+test fn parse_and_format_round_trip() {
+    let samples = ["0.00", "0.01", "-0.01", "999.99", "-1000000.00"];
+    // Un tableau n'a pas de méthode : la vue `&[T]` ne s'obtient qu'en
+    // argument (TYP-13.1).
+    assert_eq(round_trips(&samples), 5);
+}
+
+fn round_trips(view: &[&str]) -> usize {
+    let mut n: usize = 0;
+    for i in 0usize..view.len() {
+        if format(parse(view[i]).unwrap()) == view[i] {
+            n += 1;
+        }
+    }
+    n
+}

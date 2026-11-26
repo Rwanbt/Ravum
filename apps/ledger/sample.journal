@@ -1,0 +1,11 @@
+# Journal d'exemple de l'application ledger.
+budget courses 250
+budget loisirs 60
+
+2026-10-28 | courses/alimentation | -82.40 | Marché du samedi
+2026-10-31 | salaire | 2100.00 | Paie d'octobre
+2026-11-02 | courses/alimentation | -64.15 | Supermarché « Été »
+2026-11-03 | courses/hygiène | -18.90 | Pharmacie
+2026-11-08 | loisirs/cinéma | -11.50 | Séance 🎬
+2026-11-12 | loisirs/livres | -54.00 | Librairie : trois romans et un essai sur la musique
+2026-11-15 | courses/alimentation | -97.30 | Épicerie fine

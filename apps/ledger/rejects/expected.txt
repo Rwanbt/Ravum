@@ -1,0 +1,21 @@
+# Programme refusé → code d'erreur attendu (le seul, ou l'un d'eux).
+arena-to-thread E-CONC-NOT-TRANSFERABLE
+closure E-UNSUPPORTED-CLOSURE
+handle-order E-TYP-CMP
+label-break E-UNSUPPORTED-TOKEN
+let-tuple-pattern E-PARSE-EXPECTED
+map-float-key E-TYP-MISMATCH
+map-mutated-in-loop E-OWN-BORROW-CONFLICT
+map-view-escape E-OWN-REF-ESCAPE
+mixed-int-types E-TYP-MISMATCH
+move-out-of-vec E-OWN-PARTIAL-MOVE
+non-exhaustive E-TYP-NONEXHAUSTIVE
+option-eq E-TYP-EQ
+or-pattern E-UNSUPPORTED-TOKEN
+pure-does-io E-EFF-UNDECLARED
+ref-escape-return E-OWN-REF-ESCAPE
+slice-range E-UNSUPPORTED-RANGE
+stale-shadow-mut E-OWN-IMMUTABLE
+trait E-UNSUPPORTED-TRAIT
+unicode-ident E-UNSUPPORTED-IDENT
+use-after-move E-OWN-USE-AFTER-MOVE

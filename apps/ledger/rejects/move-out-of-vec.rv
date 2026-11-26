@@ -1,0 +1,1 @@
+fn main() { let v: Vec<String> = Vec::new(); let s = v[0]; }

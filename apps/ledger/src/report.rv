@@ -1,0 +1,272 @@
+//! Calcul du rapport : soldes, mois, dépassements de budget, plus grosse
+//! dépense. Le total général est recompté en parallèle sur deux threads
+//! (en `i128`, sans débordement possible) et comparé au total séquentiel.
+use std::thread;
+use crate::category::Tree;
+use crate::journal::Entry;
+use crate::journal;
+use crate::money;
+
+/// Un élément noté ; générique sans borne (Core 1.0 n'a pas de traits).
+pub struct Ranked<T> {
+    pub item: T,
+    pub score: i64,
+}
+
+/// Le meilleur score ; à égalité, le premier rencontré (stable).
+pub fn best<T>(items: Vec<Ranked<T>>) -> Option<Ranked<T>> {
+    let mut top: Option<Ranked<T>> = None;
+    for r in items {
+        let better = match &top {
+            Some(t) => r.score > t.score,
+            None => true,
+        };
+        if better {
+            top = Some(r);
+        }
+    }
+    top
+}
+
+pub struct Report {
+    pub tree: Tree,
+    pub by_month: Map<u32, i64>,
+    pub total: i64,
+    pub moves: usize,
+    /// (libellé, montant) de la plus grosse dépense.
+    pub biggest: Option<Ranked<String>>,
+}
+
+fn sum_wide(v: Vec<i64>) -> i128 {
+    let mut s: i128 = 0;
+    for x in v {
+        s += x as i128;
+    }
+    s
+}
+
+/// Somme en parallèle : moitié gauche et moitié droite, chacune sur son
+/// thread. `i128` : la somme de 2^63 montants `i64` ne déborde pas.
+pub fn parallel_total(amounts: &Vec<i64>) -> i128 {
+    let mut left: Vec<i64> = Vec::new();
+    let mut right: Vec<i64> = Vec::new();
+    let half = amounts.len() / 2;
+    for i in 0usize..amounts.len() {
+        if i < half {
+            left.push(amounts[i]);
+        } else {
+            right.push(amounts[i]);
+        }
+    }
+    let a: JoinHandle<i128> = thread::spawn(sum_wide, left);
+    let b: JoinHandle<i128> = thread::spawn(sum_wide, right);
+    thread::join(a) + thread::join(b)
+}
+
+pub fn build(entries: Vec<Entry>) -> Result<Report, Error> {
+    let mut tree = Tree::new();
+    let mut by_month: Map<u32, i64> = Map::new();
+    let mut total: i64 = 0;
+    let mut amounts: Vec<i64> = Vec::new();
+    let mut spends: Vec<Ranked<String>> = Vec::new();
+    for e in entries {
+        match e {
+            Entry::Budget {
+                path,
+                cents
+            }
+            => {
+                let h = tree.ensure(path.as_str())?;
+                tree.set_budget(h, cents)?;
+            }
+            Entry::Move {
+                date,
+                path,
+                cents,
+                label
+            }
+            => {
+                let h = tree.ensure(path.as_str())?;
+                tree.post(h, cents)?;
+                total = money::add(total, cents)?;
+                amounts.push(cents);
+                let k = journal::month_key(&date);
+                let before = *by_month.get(&k).unwrap_or(&0i64);
+                let _old = by_month.insert(k, money::add(before, cents)?);
+                if cents < 0 {
+                    spends.push(Ranked {
+                        item: label,
+                        score: -cents,
+                    });
+                }
+            }
+        }
+    }
+    // Contrôle croisé : le total séquentiel vérifié et le total parallèle
+    // élargi doivent coïncider ; sinon c'est un bug, pas une donnée.
+    if parallel_total(&amounts) != total as i128 {
+        panic("parallel and sequential totals disagree");
+    }
+    Ok(Report {
+        tree: tree,
+        by_month: by_month,
+        total: total,
+        moves: amounts.len(),
+        biggest: best(spends),
+    })
+}
+
+/// Catégories dont le total dépasse le budget : (chemin, dépensé, budget).
+/// Un budget porte sur les dépenses, donc sur l'opposé du total.
+pub fn overruns(r: &Report) -> Result<Vec<(String, i64, i64)>, Error> {
+    let mut out: Vec<(String, i64, i64)> = Vec::new();
+    for (path, h) in &r.tree.index {
+        let budget = match r.tree.nodes.get(*h) {
+            Some(c) => c.budget,
+            None => None,
+        };
+        match budget {
+            Some(b) => {
+                let spent = r.tree.total(*h)?;
+                let spent = spent.checked_neg().ok_or(Error::new("total overflows"))?;
+                if spent > b {
+                    out.push((path.clone(), spent, b));
+                }
+            }
+            None => {}
+        }
+    }
+    Ok(out)
+}
+
+pub fn render(r: &Report) -> Result<String, Error> {
+    let mut s = String::new();
+    s.push_str("mouvements : ");
+    s.push_str(&r.moves.to_string());
+    s.push_str("\nsolde : ");
+    s.push_str(&money::format(r.total));
+    s.push_str("\n\npar catégorie\n");
+    for (path, h) in &r.tree.index {
+        s.push_str("  ");
+        s.push_str(path);
+        s.push_str(" : ");
+        s.push_str(&money::format(r.tree.total(*h)?));
+        s.push('\n');
+    }
+    s.push_str("\npar mois\n");
+    for (m, v) in &r.by_month {
+        s.push_str("  ");
+        s.push_str(&(*m / 100).to_string());
+        s.push('-');
+        if *m % 100 < 10 {
+            s.push('0');
+        }
+        s.push_str(&(*m % 100).to_string());
+        s.push_str(" : ");
+        s.push_str(&money::format(*v));
+        s.push('\n');
+    }
+    match &r.biggest {
+        Some(b) => {
+            s.push_str("\nplus grosse dépense : ");
+            s.push_str(&journal::shorten(b.item.as_str(), 24));
+            s.push_str(" (");
+            s.push_str(&money::format(b.score));
+            s.push_str(")\n");
+        }
+        None => {}
+    }
+    let over = overruns(r)?;
+    if over.is_empty() {
+        s.push_str("\nbudgets : tous respectés\n");
+    } else {
+        s.push_str("\nbudgets dépassés\n");
+        for o in over {
+            s.push_str("  ");
+            s.push_str(&o.0);
+            s.push_str(" : ");
+            s.push_str(&money::format(o.1));
+            s.push_str(" / ");
+            s.push_str(&money::format(o.2));
+            s.push('\n');
+        }
+    }
+    Ok(s)
+}
+
+test fn best_is_stable_and_handles_empty() {
+    let none: Vec<Ranked<i32>> = Vec::new();
+    assert(best(none).is_none());
+    let mut v: Vec<Ranked<char>> = Vec::new();
+    v.push(Ranked {
+        item: 'a',
+        score: 5
+    });
+    v.push(Ranked {
+        item: 'b',
+        score: 9
+    });
+    v.push(Ranked {
+        item: 'c',
+        score: 9
+    });
+    assert_eq(best(v).unwrap().item, 'b');
+}
+
+test fn the_parallel_total_survives_extreme_amounts() {
+    let mut v: Vec<i64> = Vec::new();
+    v.push(9223372036854775807);
+    v.push(9223372036854775807);
+    v.push(-9223372036854775807 - 1);
+    // En i64 : débordement ; en i128 : exact.
+    assert_eq(parallel_total(&v), 9223372036854775806i128);
+    assert_eq(parallel_total(&Vec::new()), 0i128);
+    let mut one: Vec<i64> = Vec::new();
+    one.push(-3);
+    assert_eq(parallel_total(&one), -3i128);
+}
+
+fn sample() -> Report {
+    let text = "budget courses 100\nbudget loisirs 50\n2026-10-30 | courses/alimentation | -80 | Marché\n2026-11-02 | courses/hygiène | -30.50 | Pharmacie\n2026-11-03 | loisirs | -20 | Cinéma « L'Été »\n2026-11-05 | salaire | 2000 | Paie de novembre\n";
+    build(journal::parse(text).unwrap()).unwrap()
+}
+
+test fn the_report_rolls_up_categories_months_and_budgets() {
+    let r = sample();
+    assert_eq(r.moves, 4);
+    assert_eq(r.total, 186950);
+    assert_eq(*r.by_month.get(&202610u32).unwrap(), -8000);
+    assert_eq(*r.by_month.get(&202611u32).unwrap(), 194950);
+    let over = overruns(&r).unwrap();
+    assert_eq(over.len(), 1);
+    assert_eq(over[0].0, "courses");
+    assert_eq(over[0].1, 11050);
+    assert_eq(r.biggest.unwrap().item, "Marché");
+}
+
+test fn the_rendering_is_deterministic() {
+    let a = render(&sample()).unwrap();
+    let b = render(&sample()).unwrap();
+    // `assert_eq` consommerait `a`
+    assert(a == b);
+    assert(a.contains("  courses/alimentation : -80.00\n"));
+    assert(a.contains("  2026-10 : -80.00\n"));
+    assert(a.contains("budgets dépassés\n  courses : 110.50 / 100.00\n"));
+    // Les catégories sortent dans l'ordre des octets UTF-8 de leur chemin.
+    let i = a.find("  courses : ").unwrap();
+    let j = a.find("  loisirs : ").unwrap();
+    let k = a.find("  salaire : ").unwrap();
+    assert(i < j && j < k);
+}
+
+test fn inconsistent_journals_are_refused() {
+    let twice = "budget a 1\nbudget a 2\n";
+    assert(build(journal::parse(twice).unwrap()).is_err());
+    let mut big = String::new();
+    big.push_str("2026-01-01 | a | 92233720368547758.07 | x\n");
+    big.push_str("2026-01-02 | b | 0.01 | y\n");
+    match build(journal::parse(big.as_str()).unwrap()) {
+        Ok(_r) => panic("an overflowing total must be refused"),
+        Err(e) => assert_eq(e.message, "total overflows"),
+    }
+}

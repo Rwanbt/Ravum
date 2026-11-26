@@ -22,7 +22,11 @@ fn copy_app(name: &str) -> PathBuf {
             fs::copy(src.join(f), dst.join(f)).unwrap();
         }
     }
-    fs::copy(src.join("src/main.rv"), dst.join("src/main.rv")).unwrap();
+    // Every module of the package, not only `main.rv`.
+    for e in fs::read_dir(src.join("src")).unwrap() {
+        let e = e.unwrap();
+        fs::copy(e.path(), dst.join("src").join(e.file_name())).unwrap();
+    }
     dst
 }
 
@@ -99,5 +103,67 @@ fn log_report_app_works_end_to_end() {
     let gone = run(&dir, &[dir.join("missing.log").to_str().unwrap()]);
     assert_eq!(gone.status.code(), Some(1));
     assert!(!out(&gone).contains("error: "));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// `apps/ledger` (docs/reports/LEDGER-APP.md) : the language-coverage trial
+/// app. Its unit tests, its report on the sample journal, its exit codes,
+/// and the programs of `rejects/` that the checker must refuse.
+#[test]
+fn ledger_app_works_end_to_end() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/ledger");
+    let dir = copy_app("ledger");
+    unit_tests_pass(&dir);
+    let sample = src.join("sample.journal");
+    let o = run(&dir, &[sample.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(1), "budgets are exceeded: exit 1");
+    let want = fs::read_to_string(src.join("sample.expected")).unwrap();
+    assert_eq!(out(&o), want);
+
+    // Negative: a bad journal is refused with its line, before any output.
+    let bad = dir.join("bad.journal");
+    fs::write(&bad, "2026-11-01 | a | -1 | ok\n2026-02-30 | a | -1 | x\n").unwrap();
+    let o = run(&dir, &[bad.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(out(&o).is_empty(), "{}", out(&o));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("line 2: day out of range"));
+    // A journal within budget exits 0; no argument is a usage error.
+    fs::write(&bad, "budget a 5\n2026-11-01 | a/b | -4.99 | ok\n").unwrap();
+    assert_eq!(run(&dir, &[bad.to_str().unwrap()]).status.code(), Some(0));
+    assert_eq!(run(&dir, &[]).status.code(), Some(2));
+
+    // Adversarial: each program of `rejects/` is refused with its code.
+    let expected = fs::read_to_string(src.join("rejects/expected.txt")).unwrap();
+    let mut n = 0;
+    for line in expected
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+    {
+        let (name, code) = line.split_once(' ').unwrap();
+        let file = src.join("rejects").join(format!("{name}.rv"));
+        let o = Command::new(bin())
+            .args(["check", file.to_str().unwrap(), "--json"])
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(1), "{name} must be refused");
+        assert!(
+            out(&o).contains(&format!("\"code\":\"{code}\"")),
+            "{name}: expected {code}, got {}",
+            out(&o)
+        );
+        n += 1;
+    }
+    let files = fs::read_dir(src.join("rejects"))
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|x| x == "rv")
+        })
+        .count();
+    assert_eq!(n, files, "every reject has an expected code");
+    assert!(n >= 20);
     let _ = fs::remove_dir_all(&dir);
 }

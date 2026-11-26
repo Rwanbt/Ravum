@@ -1,0 +1,258 @@
+//! Arbre des catégories (`courses/alimentation/bio`) : nœuds dans une
+//! `Arena`, liens parent par `Handle`, index par chemin dans une `Map`.
+//! Un nœud retiré rend ses handles périmés : tout accès échoue proprement.
+use crate::money;
+
+pub struct Cat {
+    pub name: String,
+    pub parent: Option<Handle<Cat>>,
+    /// Mouvements directement imputés à ce nœud (centimes).
+    pub own: i64,
+    /// Budget (centimes), s'il est déclaré.
+    pub budget: Option<i64>,
+}
+
+pub struct Tree {
+    pub nodes: Arena<Cat>,
+    /// Chemin complet → nœud.
+    pub index: Map<String, Handle<Cat>>,
+}
+
+/// Profondeur maximale d'un chemin (garde-fou contre un journal abusif).
+pub const MAX_DEPTH: usize = 8;
+
+impl Tree {
+    pub fn new() -> Tree {
+        Tree {
+            nodes: Arena::new(),
+            index: Map::new(),
+        }
+    }
+
+    /// Rend le nœud du chemin, en créant ses ancêtres manquants.
+    /// Refus : chemin vide, segment vide (`a//b`, `/a`, `a/`), segment
+    /// entouré de blancs, profondeur au-delà de `MAX_DEPTH`.
+    pub fn ensure(&mut self, path: &str) -> Result<Handle<Cat>, Error> {
+        let parts = path.split("/");
+        if parts.len() > MAX_DEPTH {
+            return Err(Error::new("category too deep"));
+        }
+        let mut full = String::new();
+        let mut parent: Option<Handle<Cat>> = None;
+        for part in &parts {
+            if part.is_empty() {
+                return Err(Error::new("empty category segment"));
+            }
+            if part.trim() != part.as_str() {
+                return Err(Error::new("category segment has surrounding spaces"));
+            }
+            if !full.is_empty() {
+                full.push('/');
+            }
+            full.push_str(part);
+            let found = match self.index.get(&full) {
+                Some(h) => Some(*h),
+                None => None,
+            };
+            let h = match found {
+                Some(h) => h,
+                None => {
+                    let h = self.nodes.insert(Cat {
+                        name: part.clone(),
+                        parent: parent,
+                        own: 0,
+                        budget: None,
+                    });
+                    let _old = self.index.insert(full.clone(), h);
+                    h
+                }
+            };
+            parent = Some(h);
+        }
+        parent.ok_or(Error::new("empty category"))
+    }
+
+    pub fn post(&mut self, h: Handle<Cat>, cents: i64) -> Result<(), Error> {
+        match self.nodes.get_mut(h) {
+            Some(c) => {
+                c.own = money::add(c.own, cents)?;
+                Ok(())
+            }
+            None => Err(Error::new("stale category")),
+        }
+    }
+
+    pub fn set_budget(&mut self, h: Handle<Cat>, cents: i64) -> Result<(), Error> {
+        match self.nodes.get_mut(h) {
+            Some(c) => {
+                if c.budget.is_some() {
+                    return Err(Error::new("budget declared twice"));
+                }
+                c.budget = Some(cents);
+                Ok(())
+            }
+            None => Err(Error::new("stale category")),
+        }
+    }
+
+    /// Total d'un nœud et de tous ses descendants.
+    pub fn total(&self, h: Handle<Cat>) -> Result<i64, Error> {
+        if !self.nodes.contains(h) {
+            return Err(Error::new("stale category"));
+        }
+        let mut sum: i64 = 0;
+        for (k, c) in &self.nodes {
+            if self.is_within(k, h) {
+                sum = money::add(sum, c.own)?;
+            }
+        }
+        Ok(sum)
+    }
+
+    /// `k` est `h` ou l'un de ses descendants. La remontée est bornée par
+    /// `MAX_DEPTH` : même un arbre corrompu ne peut pas boucler.
+    fn is_within(&self, k: Handle<Cat>, h: Handle<Cat>) -> bool {
+        let mut cur = Some(k);
+        let mut steps: usize = 0;
+        while steps <= MAX_DEPTH {
+            match cur {
+                Some(c) => {
+                    if c == h {
+                        return true;
+                    }
+                    cur = match self.nodes.get(c) {
+                        Some(n) => n.parent,
+                        None => None,
+                    };
+                }
+                None => return false,
+            }
+            steps += 1;
+        }
+        false
+    }
+
+    /// Retire une feuille. Refus si elle a des enfants ou des mouvements.
+    pub fn remove_leaf(&mut self, path: &str) -> Result<(), Error> {
+        let h = match self.index.get(&String::from(path)) {
+            Some(h) => *h,
+            None => return Err(Error::new("unknown category")),
+        };
+        let mut children: usize = 0;
+        for (_k, c) in &self.nodes {
+            // Pas de `==` sur `Option<Handle>` : on compare le contenu.
+            match c.parent {
+                Some(p) => {
+                    if p == h {
+                        children += 1;
+                    }
+                }
+                None => {}
+            }
+        }
+        if children > 0 {
+            return Err(Error::new("category has children"));
+        }
+        let own = match self.nodes.get(h) {
+            Some(c) => c.own,
+            None => 0,
+        };
+        if own != 0 {
+            return Err(Error::new("category has movements"));
+        }
+        let _gone = self.index.remove(&String::from(path));
+        let _node = self.nodes.remove(h);
+        Ok(())
+    }
+}
+
+test fn paths_build_a_shared_tree() {
+    let mut t = Tree::new();
+    let a = t.ensure("courses/alimentation").unwrap();
+    let b = t.ensure("courses/hygiène").unwrap();
+    let c = t.ensure("courses").unwrap();
+    assert_eq(t.nodes.len(), 3);
+    assert_eq(t.index.len(), 3);
+    assert(t.ensure("courses/alimentation").unwrap() == a);
+    t.post(a, 1000).unwrap();
+    t.post(b, -250).unwrap();
+    t.post(c, 1).unwrap();
+    assert_eq(t.total(c).unwrap(), 751);
+    assert_eq(t.total(a).unwrap(), 1000);
+}
+
+test fn bad_paths_are_refused() {
+    let mut t = Tree::new();
+    assert(t.ensure("").is_err());
+    assert(t.ensure("a//b").is_err());
+    assert(t.ensure("/a").is_err());
+    assert(t.ensure("a/").is_err());
+    assert(t.ensure("a/ b").is_err());
+    assert(t.ensure("1/2/3/4/5/6/7/8/9").is_err());
+    assert(t.ensure("1/2/3/4/5/6/7/8").is_ok());
+    // Un refus en cours de chemin peut avoir créé des ancêtres valides,
+    // jamais un nœud invalide.
+    for (k, _v) in &t.index {
+        assert(!k.contains("//"));
+        assert(!k.ends_with("/"));
+    }
+}
+
+test fn unicode_names_are_distinct_keys() {
+    let mut t = Tree::new();
+    // é précomposé
+    let e1 = t.ensure("café").unwrap();
+    // e + accent combinant
+    let e2 = t.ensure("cafe\u{301}").unwrap();
+    // pas de normalisation : deux catégories
+    assert(e1 != e2);
+    assert_eq(t.index.len(), 2);
+    // Ordre des clés : octets UTF-8. "cafe\u{301}" < "café".
+    let mut first = String::new();
+    for (k, _v) in &t.index {
+        if first.is_empty() {
+            first = k.clone();
+        }
+    }
+    assert_eq(first.chars().len(), 5);
+}
+
+test fn removed_categories_leave_stale_handles() {
+    let mut t = Tree::new();
+    let leaf = t.ensure("a/b").unwrap();
+    // a des enfants
+    assert(t.remove_leaf("a").is_err());
+    t.post(leaf, 5).unwrap();
+    // a des mouvements
+    assert(t.remove_leaf("a/b").is_err());
+    t.post(leaf, -5).unwrap();
+    t.remove_leaf("a/b").unwrap();
+    assert(!t.nodes.contains(leaf));
+    assert(t.post(leaf, 1).is_err());
+    assert(t.total(leaf).is_err());
+    assert(t.set_budget(leaf, 1).is_err());
+    // La place est réutilisée, mais l'ancien handle reste périmé.
+    let again = t.ensure("a/b").unwrap();
+    assert(again != leaf);
+    assert(t.post(leaf, 1).is_err());
+    assert(t.post(again, 1).is_ok());
+    assert(t.remove_leaf("nope").is_err());
+}
+
+test fn a_budget_is_declared_once() {
+    let mut t = Tree::new();
+    let h = t.ensure("loisirs").unwrap();
+    t.set_budget(h, 10000).unwrap();
+    assert(t.set_budget(h, 1).is_err());
+}
+
+test fn totals_report_overflow_instead_of_panicking() {
+    let mut t = Tree::new();
+    let a = t.ensure("x/a").unwrap();
+    let b = t.ensure("x/b").unwrap();
+    t.post(a, 9223372036854775807).unwrap();
+    t.post(b, 1).unwrap();
+    let x = t.ensure("x").unwrap();
+    assert(t.total(x).is_err());
+    assert(t.post(a, 1).is_err());
+}

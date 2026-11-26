@@ -1,0 +1,40 @@
+// Application d'essai du langage : un petit gestionnaire de budget.
+//
+//   ledger <journal>
+//
+// Lit un journal (voir `journal.rv`), affiche soldes par catégorie et par
+// mois, la plus grosse dépense et les budgets dépassés.
+// Codes de sortie : 0 tout va bien, 1 un budget est dépassé, 2 usage ou
+// journal refusé (le message dit pourquoi, avec la ligne).
+mod money;
+mod category;
+mod journal;
+mod report;
+use std::env;
+use std::fs;
+use std::io;
+use std::process;
+
+fn run(path: &str) -> Result<bool, Error> {
+    let text = fs::read_to_string(path)?;
+    let r = report::build(journal::parse(text.as_str())?)?;
+    io::print(&report::render(&r)?);
+    let over = report::overruns(&r)?;
+    Ok(over.is_empty())
+}
+
+fn main() {
+    let args = env::args();
+    if args.len() != 2 {
+        io::eprintln("usage: ledger <journal>");
+        process::exit(2);
+    }
+    match run(args[1].as_str()) {
+        Ok(true) => {}
+        Ok(false) => process::exit(1),
+        Err(e) => {
+            io::eprintln(&e.message);
+            process::exit(2);
+        }
+    }
+}

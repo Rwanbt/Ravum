@@ -1,0 +1,21 @@
+mouvements : 7
+solde : 1771.75
+
+par catégorie
+  courses : -262.75
+  courses/alimentation : -243.85
+  courses/hygiène : -18.90
+  loisirs : -65.50
+  loisirs/cinéma : -11.50
+  loisirs/livres : -54.00
+  salaire : 2100.00
+
+par mois
+  2026-10 : 2017.60
+  2026-11 : -245.85
+
+plus grosse dépense : Épicerie fine (97.30)
+
+budgets dépassés
+  courses : 262.75 / 250.00
+  loisirs : 65.50 / 60.00

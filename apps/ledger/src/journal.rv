@@ -1,0 +1,264 @@
+//! Lecture du journal, ligne par ligne :
+//!
+//! ```text
+//! # commentaire
+//! budget courses 300.00
+//! 2026-11-01 | courses/alimentation | -45.20 | Supermarché « Été »
+//! ```
+//!
+//! Fail-closed : la première ligne fautive arrête tout, avec son numéro ;
+//! aucun mouvement partiel n'est rendu.
+use crate::money;
+
+pub struct Date {
+    pub year: u32,
+    pub month: u32,
+    pub day: u32,
+}
+
+pub enum Entry {
+    Budget {
+        path: String,
+        cents: i64
+    },
+    Move {
+        date: Date,
+        path: String,
+        cents: i64,
+        label: String
+    },
+}
+
+/// Longueur maximale d'un libellé, en points de code.
+pub const MAX_LABEL: usize = 80;
+
+fn is_leap(y: u32) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+fn days_in(y: u32, m: u32) -> u32 {
+    match m {
+        2 => {
+            if is_leap(y) {
+                29
+            } else {
+                28
+            }
+        }
+        // Pas de motif `a | b` en Core 1.0 (F-UNS-018).
+        4 => 30,
+        6 => 30,
+        9 => 30,
+        11 => 30,
+        _ => 31,
+    }
+}
+
+fn number(text: &str, width: usize) -> Result<u32, Error> {
+    let cs = text.chars();
+    if cs.len() != width {
+        return Err(Error::new("bad date field width"));
+    }
+    let mut n: u32 = 0;
+    for c in cs {
+        if c < '0' || c > '9' {
+            return Err(Error::new("bad date digit"));
+        }
+        n = n * 10 + (c as u32 - '0' as u32);
+    }
+    Ok(n)
+}
+
+/// `AAAA-MM-JJ`, calendrier grégorien, années 1..=9999.
+pub fn parse_date(text: &str) -> Result<Date, Error> {
+    let parts = text.split("-");
+    if parts.len() != 3 {
+        return Err(Error::new("date is not YYYY-MM-DD"));
+    }
+    let year = number(parts[0].as_str(), 4)?;
+    let month = number(parts[1].as_str(), 2)?;
+    let day = number(parts[2].as_str(), 2)?;
+    if year == 0 || month == 0 || month > 12 {
+        return Err(Error::new("date out of range"));
+    }
+    if day == 0 || day > days_in(year, month) {
+        return Err(Error::new("day out of range"));
+    }
+    Ok(Date {
+        year: year,
+        month: month,
+        day: day,
+    })
+}
+
+/// Clé de mois triable : `202611`.
+pub fn month_key(d: &Date) -> u32 {
+    d.year * 100 + d.month
+}
+
+fn at(line: usize, why: &str) -> Error {
+    let mut m = String::from("line ");
+    m.push_str(&line.to_string());
+    m.push_str(": ");
+    m.push_str(why);
+    Error::new(m.as_str())
+}
+
+fn parse_line(raw: &str) -> Result<Option<Entry>, Error> {
+    let line = raw.trim();
+    if line.is_empty() || line.starts_with("#") {
+        return Ok(None);
+    }
+    match line.strip_prefix("budget ") {
+        Some(rest) => {
+            let r = rest.trim();
+            let cut = r.find(" ").ok_or(Error::new("budget needs a category and an amount"))?;
+            let path = r.substring(0, cut);
+            let cents = money::parse(r.substring(cut + 1, r.len()).as_str())?;
+            if cents < 0 {
+                return Err(Error::new("budget must not be negative"));
+            }
+            return Ok(Some(Entry::Budget {
+                path: path,
+                cents: cents,
+            }));
+        }
+        None => {}
+    }
+    let f = line.split("|");
+    if f.len() != 4 {
+        return Err(Error::new("a movement has 4 fields separated by |"));
+    }
+    let date = parse_date(f[0].trim().as_str())?;
+    let cents = money::parse(f[2].as_str())?;
+    if cents == 0 {
+        return Err(Error::new("a movement of zero is not a movement"));
+    }
+    let label = f[3].trim();
+    if label.is_empty() {
+        return Err(Error::new("empty label"));
+    }
+    if label.chars().len() > MAX_LABEL {
+        return Err(Error::new("label too long"));
+    }
+    Ok(Some(Entry::Move {
+        date: date,
+        path: f[1].trim(),
+        cents: cents,
+        label: label,
+    }))
+}
+
+/// Tout le journal, ou la première erreur avec son numéro de ligne.
+pub fn parse(text: &str) -> Result<Vec<Entry>, Error> {
+    let mut out: Vec<Entry> = Vec::new();
+    let mut n: usize = 0;
+    for raw in text.lines() {
+        n += 1;
+        match parse_line(raw.as_str()) {
+            Ok(Some(e)) => out.push(e),
+            Ok(None) => {}
+            Err(e) => return Err(at(n, e.message.as_str())),
+        }
+    }
+    Ok(out)
+}
+
+/// Coupe un libellé à `n` points de code (jamais au milieu d'un
+/// caractère), en ajoutant `…` s'il a été coupé.
+pub fn shorten(label: &str, n: usize) -> String {
+    let cs = label.chars();
+    if cs.len() <= n {
+        return String::from(label);
+    }
+    let mut s = String::new();
+    for i in 0usize..n {
+        s.push(cs[i]);
+    }
+    s.push('…');
+    s
+}
+
+test fn dates_follow_the_calendar() {
+    assert(parse_date("2024-02-29").is_ok());
+    assert(parse_date("2023-02-29").is_err());
+    // divisible par 400
+    assert(parse_date("2000-02-29").is_ok());
+    // divisible par 100
+    assert(parse_date("1900-02-29").is_err());
+    assert(parse_date("2026-04-31").is_err());
+    assert(parse_date("2026-12-31").is_ok());
+    assert(parse_date("2026-13-01").is_err());
+    assert(parse_date("2026-00-10").is_err());
+    assert(parse_date("0000-01-01").is_err());
+    assert(parse_date("2026-1-01").is_err());
+    assert(parse_date("2026-01-01-").is_err());
+    assert(parse_date("2026/01/01").is_err());
+    assert(parse_date("２０２６-01-01").is_err());
+    assert_eq(month_key(&parse_date("9999-12-31").unwrap()), 999912);
+}
+
+test fn a_journal_is_read_with_comments_and_crlf() {
+    let text = "# en-tête\r\nbudget courses 300\r\n\r\n2026-11-01 | courses/alimentation | -45.20 | Supermarché « Été »\r\n   # indenté\n2026-11-02|salaire|2500.00|Paie";
+    let es = parse(text).unwrap();
+    assert_eq(es.len(), 3);
+    match &es[2] {
+        Entry::Move {
+            date,
+            path,
+            cents,
+            label
+        }
+        => {
+            assert_eq(date.day, 2);
+            // Liaison `&String` (match sur référence) : `==` veut `String` ou `&str`.
+            assert(path.as_str() == "salaire");
+            assert_eq(*cents, 250000);
+            assert(label.as_str() == "Paie");
+        }
+        Entry::Budget {
+            path,
+            cents
+        }
+        => panic("expected a movement"),
+    }
+}
+
+fn error_of(text: &str) -> String {
+    match parse(text) {
+        Ok(_es) => String::from("accepted"),
+        Err(e) => e.message,
+    }
+}
+
+test fn errors_carry_the_line_number() {
+    assert_eq(error_of("\n\n2026-11-01 | a | 1 |"), "line 3: empty label");
+    assert_eq(error_of("2026-11-01 | a | 0.00 | x"), "line 1: a movement of zero is not a movement");
+    assert_eq(error_of("2026-11-01 | a | 1 | x | y"), "line 1: a movement has 4 fields separated by |");
+    assert_eq(error_of("budget courses"), "line 1: budget needs a category and an amount");
+    assert_eq(error_of("budget courses -1"), "line 1: budget must not be negative");
+    assert_eq(error_of("ok\n"), "line 1: a movement has 4 fields separated by |");
+    assert_eq(error_of("2026-02-30 | a | 1 | x"), "line 1: day out of range");
+    assert_eq(error_of(""), "accepted");
+}
+
+test fn labels_are_bounded_in_code_points() {
+    // 80 « é » font 160 octets mais 80 points de code : accepté.
+    let mut ok = String::from("2026-11-01 | a | 1 | ");
+    let mut too_long = String::from("2026-11-01 | a | 1 | ");
+    for _i in 0..80 {
+        ok.push('é');
+        too_long.push('é');
+    }
+    too_long.push('x');
+    assert(parse(ok.as_str()).is_ok());
+    assert_eq(error_of(too_long.as_str()), "line 1: label too long");
+}
+
+test fn labels_are_shortened_on_char_boundaries() {
+    assert_eq(shorten("Été", 2), "Ét…");
+    assert_eq(shorten("Été", 3), "Été");
+    assert_eq(shorten("", 0), "");
+    assert_eq(shorten("ab", 0), "…");
+    assert_eq(shorten("🎵🎶x", 1), "🎵…");
+}

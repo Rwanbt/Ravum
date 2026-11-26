@@ -1,0 +1,2 @@
+fn f(v: &Vec<i64>) -> i64 { let s = &v[0..1]; 0 }
+fn main() {}
