@@ -906,7 +906,7 @@ impl Arena<T> {
 | STD-21.9 | Limites, communes aux deux voies : au plus `2^20 - 1` arènes créées par run, au-delà `panic: too many arenas in this run` ; au plus `2^20` places par arène, au-delà `panic: arena is full`. | MUST |
 | STD-21.10 | Une valeur `Arena` touche le tas : elle est refusée sous les profils `pure` et `rt` (`E-EFF-PROFILE`) et dans un module temps réel (INV-05), comme `Vec` et `Map` (HDL-8). | MUST |
 | STD-21.11 | `Handle<T>` est une clé de `Map` (HDL-9, UI-D20) : l'ordre des clés est l'ordre lexicographique sur (identifiant d'arène, indice de place, génération). Cet ordre n'est exposé que par le parcours d'une `Map`. | MUST |
-| STD-21.12 | Voies : la voie B (rustc) implémente §21 en entier. La voie C (IR et JIT) **refuse** pour l'instant un programme qui utilise `Arena` ou `Handle` (`unsupported in IR`), sans approximation ; sa prise en charge, avec parité B/C, est l'étape P2 de RFC-UI-LANG-2. | MUST |
+| STD-21.12 | Voies : la voie B (rustc) et la voie C (IR v1.8, interpréteur et JIT) implémentent §21 avec les **mêmes** handles et les mêmes limites ; un même programme y donne la même sortie (parité B/C vérifiée par différentiel). Comme tout programme `std::thread`, un programme qui envoie des handles entre threads reste sur la voie B. | MUST |
 | STD-21.13 | Une `Arena` ne traverse jamais les threads (RFC-UI-LANG-2 §7) : un paramètre ou un résultat de `thread::spawn`, ou le type d'un canal, qui contient une `Arena` (directement, en argument de type, ou dans un champ ou une variante d'un type utilisateur) est `E-CONC-NOT-TRANSFERABLE`. Un `Handle<T>`, lui, traverse les threads comme toute valeur. | MUST |
 
 > **Compatibilité.** `Arena` et `Handle` deviennent des noms de types

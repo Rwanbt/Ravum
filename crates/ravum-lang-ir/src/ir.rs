@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.7";
+pub const IR_VERSION: &str = "ravum-ir-1.8";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -233,11 +233,21 @@ pub enum HeapOp {
     StrIsCharBoundary,
     /// A new string: the strings of vector `a` joined by string `b`.
     StrJoin,
+    /// IR v1.8 (RFC-UI-LANG-2, STD-21): a new empty arena with the next
+    /// identifier of the run (panic `too many arenas in this run`). The
+    /// `Map*` operations and instructions also apply to an arena, keyed by
+    /// handles: `MapLen`, `MapKeys` (live handles in slot order), `MapVals`,
+    /// `MapSetVals`, `MapClone` (a new identifier), `MapGet`, `MapRemove`,
+    /// and `MapInsert` (write back into a live slot only).
+    ArenaNew,
+    /// `a.insert(b)`, `b` the element's raw word: the packed handle (panic
+    /// `arena is full`).
+    ArenaInsert,
 }
 
 impl HeapOp {
     /// Every operation, in declaration order (`op as u32` is its index).
-    pub const ALL: [HeapOp; 26] = [
+    pub const ALL: [HeapOp; 28] = [
         HeapOp::StrNew,
         HeapOp::StrClone,
         HeapOp::StrPush,
@@ -264,6 +274,8 @@ impl HeapOp {
         HeapOp::StrChars,
         HeapOp::StrIsCharBoundary,
         HeapOp::StrJoin,
+        HeapOp::ArenaNew,
+        HeapOp::ArenaInsert,
     ];
 }
 

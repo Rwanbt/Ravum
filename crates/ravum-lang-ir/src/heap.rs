@@ -24,6 +24,54 @@ pub enum Object {
     Map(MapKind, std::collections::BTreeMap<MapKey, u64>),
     /// Elements as raw 64-bit words (scalars only in IR v1.3).
     Vec(Vec<u64>),
+    /// IR v1.8 (RFC-UI-LANG-2, STD-21): an arena of raw words. The `Map*`
+    /// operations also apply to it, with handles as keys (see [`Arena`]).
+    Arena(Arena),
+}
+
+/// STD-21.9: limits shared with the rustc path (`RV_ARENA_*` of the
+/// prelude): a handle packs into one word, arena 20 bits, slot 20 bits,
+/// generation 24 bits, so its numeric order is (arena, slot, generation)
+/// (STD-21.11).
+pub const ARENA_ID_MAX: u64 = (1 << 20) - 1;
+pub const ARENA_SLOT_MAX: u64 = (1 << 20) - 1;
+pub const ARENA_GEN_MAX: u64 = (1 << 24) - 1;
+
+pub fn pack_handle(arena: u64, slot: u64, generation: u64) -> u64 {
+    (arena << 44) | (slot << 24) | generation
+}
+
+pub fn unpack_handle(h: u64) -> (u64, u64, u64) {
+    (h >> 44, (h >> 24) & ARENA_SLOT_MAX, h & ARENA_GEN_MAX)
+}
+
+/// An arena (STD-21.3..21.5): slots of (generation, element word); free
+/// slots, the smallest reused first; a slot at the last generation is
+/// retired (never in `free`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Arena {
+    pub id: u64,
+    pub slots: Vec<(u64, Option<u64>)>,
+    pub free: std::collections::BTreeSet<u64>,
+    pub len: usize,
+}
+
+impl Arena {
+    /// The slot of a live handle of this arena (STD-21.3).
+    fn live(&self, h: u64) -> Option<usize> {
+        let (id, slot, g) = unpack_handle(h);
+        let i = slot as usize;
+        (id == self.id && i < self.slots.len() && self.slots[i].0 == g && self.slots[i].1.is_some())
+            .then_some(i)
+    }
+
+    /// Live handles and words, in increasing slot order (STD-21.6).
+    fn live_entries(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (g, x))| x.map(|w| (pack_handle(self.id, i as u64, *g), w)))
+    }
 }
 
 /// How the keys of a map are read from their raw word (fixed at creation).
@@ -72,6 +120,9 @@ pub enum HeapStop {
     /// A language trap: `index out of bounds: the len is {len} but the index
     /// is {index}` (EXPR-7.6, the text rustc prints).
     IndexOutOfBounds { len: u64, index: u64 },
+    /// IR v1.8: a language panic with a fixed text (STD-21.9: `too many
+    /// arenas in this run`, `arena is full`).
+    Panic(&'static str),
     /// A fault: invalid handle (a compiler bug) or the heap limit.
     Fault(&'static str),
 }
@@ -80,6 +131,8 @@ pub enum HeapStop {
 pub struct Heap {
     objects: Vec<Object>,
     bytes: usize,
+    /// STD-21.5: arenas created in this run (`ArenaNew` and clones).
+    arenas: u64,
 }
 
 impl HeapStop {
@@ -89,7 +142,7 @@ impl HeapStop {
             HeapStop::IndexOutOfBounds { len, index } => {
                 format!("index out of bounds: the len is {len} but the index is {index}")
             }
-            HeapStop::Fault(m) => m.to_string(),
+            HeapStop::Panic(m) | HeapStop::Fault(m) => m.to_string(),
         }
     }
 }
@@ -108,6 +161,7 @@ impl Heap {
             Object::Str(s) => s.len(),
             Object::Vec(v) => v.len() * 8,
             Object::Map(_, m) => m.len() * 24,
+            Object::Arena(a) => a.slots.len() * 16 + a.free.len() * 8,
         };
         self.charge(n + 32)?;
         self.objects.push(o);
@@ -193,6 +247,68 @@ impl Heap {
             MapNew => {
                 let kind = MapKind::from_code(a).ok_or(HeapStop::Fault("invalid map kind"))?;
                 self.alloc(Object::Map(kind, Default::default()))?
+            }
+            ArenaNew => {
+                let id = self.next_arena()?;
+                self.alloc(Object::Arena(Arena {
+                    id,
+                    slots: Vec::new(),
+                    free: Default::default(),
+                    len: 0,
+                }))?
+            }
+            ArenaInsert => {
+                // STD-21.5: the smallest free slot, else a new one. Only a
+                // new slot is allocated memory: reusing a freed slot is not
+                // charged (a long run of insert/remove stays within the heap
+                // limit, as on the rustc path).
+                let reuse = self.arena(a)?.free.first().copied();
+                if reuse.is_none() {
+                    if self.arena(a)?.slots.len() as u64 > ARENA_SLOT_MAX {
+                        return Err(HeapStop::Panic("arena is full"));
+                    }
+                    self.charge(16)?;
+                }
+                let ar = self.arena_mut(a)?;
+                let slot = match reuse {
+                    Some(s) => {
+                        ar.free.remove(&s);
+                        s
+                    }
+                    None => {
+                        ar.slots.push((0, None));
+                        ar.slots.len() as u64 - 1
+                    }
+                };
+                ar.slots[slot as usize].1 = Some(b);
+                ar.len += 1;
+                pack_handle(ar.id, slot, ar.slots[slot as usize].0)
+            }
+            MapLen if self.is_arena(a) => self.arena(a)?.len as u64,
+            MapKeys if self.is_arena(a) => {
+                let v: Vec<u64> = self.arena(a)?.live_entries().map(|e| e.0).collect();
+                self.alloc(Object::Vec(v))?
+            }
+            MapVals if self.is_arena(a) => {
+                let v: Vec<u64> = self.arena(a)?.live_entries().map(|e| e.1).collect();
+                self.alloc(Object::Vec(v))?
+            }
+            MapSetVals if self.is_arena(a) => {
+                let v = self.vec(b)?.clone();
+                let ar = self.arena_mut(a)?;
+                if ar.len != v.len() {
+                    return Err(HeapStop::Fault("arena values of a different length"));
+                }
+                for (slot, x) in ar.slots.iter_mut().filter_map(|s| s.1.as_mut()).zip(v) {
+                    *slot = x;
+                }
+                0
+            }
+            MapClone if self.is_arena(a) => {
+                // STD-21.8: same slots and generations, a new identifier.
+                let mut copy = self.arena(a)?.clone();
+                copy.id = self.next_arena()?;
+                self.alloc(Object::Arena(copy))?
             }
             MapLen => self.map(a)?.1.len() as u64,
             MapKeys => {
@@ -292,6 +408,12 @@ impl Heap {
                     Object::Str(_) => Object::Str(String::new()),
                     Object::Vec(_) => Object::Vec(Vec::new()),
                     Object::Map(k, _) => Object::Map(*k, Default::default()),
+                    Object::Arena(_) => Object::Arena(Arena {
+                        id: 0,
+                        slots: Vec::new(),
+                        free: Default::default(),
+                        len: 0,
+                    }),
                 };
                 if std::mem::discriminant(self.get(a)?) != std::mem::discriminant(&empty) {
                     return Err(HeapStop::Fault("replace between different kinds"));
@@ -339,6 +461,33 @@ impl Heap {
         }
     }
 
+    fn is_arena(&self, h: u64) -> bool {
+        matches!(self.get(h), Ok(Object::Arena(_)))
+    }
+
+    fn arena(&self, h: u64) -> Result<&Arena, HeapStop> {
+        match self.get(h)? {
+            Object::Arena(a) => Ok(a),
+            _ => Err(HeapStop::Fault("not an arena")),
+        }
+    }
+
+    fn arena_mut(&mut self, h: u64) -> Result<&mut Arena, HeapStop> {
+        match self.get_mut(h)? {
+            Object::Arena(a) => Ok(a),
+            _ => Err(HeapStop::Fault("not an arena")),
+        }
+    }
+
+    /// STD-21.5 / STD-21.9: the next arena identifier of this run.
+    fn next_arena(&mut self) -> Result<u64, HeapStop> {
+        if self.arenas >= ARENA_ID_MAX {
+            return Err(HeapStop::Panic("too many arenas in this run"));
+        }
+        self.arenas += 1;
+        Ok(self.arenas)
+    }
+
     /// The key of `map` that raw word `w` stands for.
     fn key(&self, map: u64, w: u64) -> Result<MapKey, HeapStop> {
         Ok(match self.map(map)?.0 {
@@ -350,6 +499,14 @@ impl Heap {
 
     /// `MapGet`: `(present, value)` (value 0 when absent).
     pub fn map_get(&self, h: u64, k: u64) -> Result<(bool, u64), HeapStop> {
+        if self.is_arena(h) {
+            // STD-21.3: a stale or foreign handle is absent.
+            let ar = self.arena(h)?;
+            return Ok(match ar.live(k) {
+                Some(i) => (true, ar.slots[i].1.unwrap_or(0)),
+                None => (false, 0),
+            });
+        }
         let key = self.key(h, k)?;
         Ok(match self.map(h)?.1.get(&key) {
             Some(v) => (true, *v),
@@ -359,12 +516,25 @@ impl Heap {
 
     /// `MapInsert`: inserts or replaces; `(present, old value)`.
     pub fn map_insert(&mut self, h: u64, k: u64, v: u64) -> Result<(bool, u64), HeapStop> {
+        if self.is_arena(h) {
+            // On an arena: write back into a live slot (a `get_mut` view);
+            // a stale handle changes nothing.
+            let ar = self.arena_mut(h)?;
+            return Ok(match ar.live(k) {
+                Some(i) => (true, ar.slots[i].1.replace(v).unwrap_or(0)),
+                None => (false, 0),
+            });
+        }
         let key = self.key(h, k)?;
-        let extra = match &key {
-            MapKey::Text(t) => t.len(),
-            _ => 0,
-        };
-        self.charge(24 + extra)?;
+        // Only a new entry allocates; replacing a value does not (as on the
+        // rustc path, where a long run of replacements never grows memory).
+        if !self.map(h)?.1.contains_key(&key) {
+            let extra = match &key {
+                MapKey::Text(t) => t.len(),
+                _ => 0,
+            };
+            self.charge(24 + extra)?;
+        }
         Ok(match self.map_mut(h)?.insert(key, v) {
             Some(old) => (true, old),
             None => (false, 0),
@@ -373,6 +543,20 @@ impl Heap {
 
     /// `MapRemove`: `(present, old value)`.
     pub fn map_remove(&mut self, h: u64, k: u64) -> Result<(bool, u64), HeapStop> {
+        if self.is_arena(h) {
+            // STD-21.4: the generation goes up; the last one retires the slot.
+            let ar = self.arena_mut(h)?;
+            let Some(i) = ar.live(k) else {
+                return Ok((false, 0));
+            };
+            let old = ar.slots[i].1.take().unwrap_or(0);
+            ar.len -= 1;
+            ar.slots[i].0 += 1;
+            if ar.slots[i].0 < ARENA_GEN_MAX {
+                ar.free.insert(i as u64);
+            }
+            return Ok((true, old));
+        }
         let key = self.key(h, k)?;
         Ok(match self.map_mut(h)?.remove(&key) {
             Some(old) => (true, old),
