@@ -14,7 +14,8 @@ fenêtre viendront avec la pile choisie.
   génération dépassée → `Stale`.
 - Layout déterministe : rangée, colonne, `Fixed`, `Fill` (poids), `Auto`,
   marge interne, écart, décalage relatif ; texte mesuré en monospace fixe
-  (8 × 16 px), substitut assumé.
+  (8 × 16 px) par défaut ; la pile fournit la vraie mesure
+  (`set_measure`, U2 : Parley, voir [`U2-SHELL.md`](U2-SHELL.md)).
 - Événements : clic sur le nœud le plus profond **visible** (découpage par
   les ancêtres), focus au clic et au clavier dans l'ordre de l'arbre,
   défilement borné.
@@ -117,7 +118,7 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : spectrogramme, graphe de nœuds, canevas, vidéo, 3D, textures
   GPU partagées (demandent le rendu).
 
-## Tests (`cargo test -p ui-core`, 41 tests)
+## Tests (`cargo test -p ui-core`, 43 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |

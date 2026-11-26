@@ -398,3 +398,59 @@ fn focus_cycles_in_tree_order() {
         ]
     );
 }
+
+#[test]
+fn a_stack_measure_drives_layout_and_verify() {
+    let d = Desc::new(1, fixed(100.0, 40.0)).with(vec![Desc::text(2, "abcdef")]);
+    // The root takes the viewport: make it the 100 × 40 box.
+    let mut ui = Ui::new(d.clone(), (100.0, 40.0)).unwrap();
+    // Monospace: 6 × 8 = 48 px (auto width = measured width), fits.
+    assert_eq!(ui.rect(&[1, 2]).unwrap().w, 48.0);
+    assert!(ui.verify().is_empty());
+    // A wider font: 6 × 20 = 120 px > 100: the same tree now overflows.
+    assert!(ui.set_measure(std::rc::Rc::new(|t: &str| (
+        t.chars().count() as f32 * 20.0,
+        18.0
+    ))));
+    assert_eq!(ui.rect(&[1, 2]).unwrap().w, 120.0);
+    assert_eq!(ui.verify().len(), 1, "{:?}", ui.verify());
+    // Auto height follows the measured line height.
+    let auto = Desc::new(
+        1,
+        Style {
+            width: Len::Fixed(300.0),
+            ..Style::default()
+        },
+    )
+    .with(vec![Desc::text(2, "abc")]);
+    let g = ui.generation();
+    ui.patch(g, auto).unwrap();
+    assert_eq!(ui.rect(&[1, 2]).unwrap().h, 18.0);
+}
+
+#[test]
+fn a_bad_measure_is_refused_and_changes_nothing() {
+    let d = Desc::new(1, fixed(100.0, 40.0)).with(vec![Desc::text(2, "abc")]);
+    let mut ui = Ui::new(d, (200.0, 100.0)).unwrap();
+    let before = ui.rects().clone();
+    for bad in [f32::NAN, f32::INFINITY, -1.0] {
+        assert!(!ui.set_measure(std::rc::Rc::new(move |_: &str| (bad, 16.0))));
+        assert!(!ui.set_measure(std::rc::Rc::new(move |_: &str| (8.0, bad))));
+    }
+    assert_eq!(ui.rects(), &before);
+    // A measure that breaks only on some text: refused when that text
+    // arrives by patch, and the active tree stays.
+    assert!(ui.set_measure(std::rc::Rc::new(|t: &str| if t == "boom" {
+        (f32::NAN, 16.0)
+    } else {
+        (8.0, 16.0)
+    })));
+    let g = ui.generation();
+    let bad = Desc::new(1, fixed(100.0, 40.0)).with(vec![Desc::text(2, "boom")]);
+    assert_eq!(
+        ui.patch(g, bad),
+        Err(PatchError::InvalidSize { path: vec![1, 2] })
+    );
+    assert_eq!(ui.generation(), g);
+    assert_eq!(ui.find(&[1, 2]).unwrap().text.as_deref(), Some("abc"));
+}

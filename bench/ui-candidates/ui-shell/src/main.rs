@@ -10,7 +10,9 @@
 //!
 //! `UI_SHELL_EXIT_FRAMES=n` : quitte après `n` frames (essai automatique).
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use ui_core::Event;
 use ui_shell::{paint, Op, Shell};
@@ -78,6 +80,33 @@ fn warm() -> Warm {
     }
 }
 
+/// Moteur de texte partagé entre la mesure (layout de `ui-core`) et le
+/// dessin : une seule mise en forme par (texte, échelle).
+struct Text {
+    fcx: parley::FontContext,
+    lcx: parley::LayoutContext<()>,
+    /// Mise en forme gardée par texte et échelle (retained) ; vidée si elle
+    /// grossit.
+    layouts: HashMap<(String, u32), parley::Layout<()>>,
+}
+
+impl Text {
+    fn layout(&mut self, text: &str, scale: f32) -> &parley::Layout<()> {
+        let k = (text.to_string(), scale.to_bits());
+        if !self.layouts.contains_key(&k) {
+            if self.layouts.len() > 4096 {
+                self.layouts.clear();
+            }
+            let mut b = self.lcx.ranged_builder(&mut self.fcx, text, scale, true);
+            b.push_default(parley::StyleProperty::FontSize(FONT_SIZE));
+            let mut l = b.build(text);
+            l.break_all_lines(None);
+            self.layouts.insert(k.clone(), l);
+        }
+        &self.layouts[&k]
+    }
+}
+
 struct Gfx {
     window: Arc<dyn Window>,
     surface: RenderSurface<'static>,
@@ -88,10 +117,7 @@ struct App {
     shell: Shell,
     warm: Option<std::thread::JoinHandle<Warm>>,
     cx: Option<RenderContext>,
-    fcx: Option<parley::FontContext>,
-    lcx: parley::LayoutContext<()>,
-    /// Mise en forme gardée par texte (retained) ; vidée si elle grossit.
-    layouts: HashMap<(String, u32), parley::Layout<()>>,
+    text: Option<Rc<RefCell<Text>>>,
     gfx: Option<Gfx>,
     pointer: (f64, f64),
     frames: u64,
@@ -108,25 +134,11 @@ impl App {
         self.gfx.as_ref().map_or(1.0, |g| g.window.scale_factor())
     }
 
-    fn layout(&mut self, text: &str, scale: f32) -> &parley::Layout<()> {
-        let k = (text.to_string(), scale.to_bits());
-        if !self.layouts.contains_key(&k) {
-            if self.layouts.len() > 4096 {
-                self.layouts.clear();
-            }
-            let fcx = self.fcx.as_mut().expect("fonts");
-            let mut b = self.lcx.ranged_builder(fcx, text, scale, true);
-            b.push_default(parley::StyleProperty::FontSize(FONT_SIZE));
-            let mut l = b.build(text);
-            l.break_all_lines(None);
-            self.layouts.insert(k.clone(), l);
-        }
-        &self.layouts[&k]
-    }
-
     fn draw(&mut self) {
         let s = self.scale();
         let ops = paint(&self.shell.ui);
+        let engine = self.text.clone().expect("text engine");
+        let mut engine = engine.borrow_mut();
         let mut sc = vello::Scene::new();
         let px = |r: &ui_core::Rect| {
             KRect::new(
@@ -155,7 +167,7 @@ impl App {
                 Op::Text { at, clip, text } => {
                     let (x, y) = (at.0 as f64 * s, at.1 as f64 * s);
                     let clip = px(clip);
-                    let l = self.layout(text, s as f32);
+                    let l = engine.layout(text, s as f32);
                     sc.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &clip);
                     for line in l.lines() {
                         for item in line.items() {
@@ -254,7 +266,21 @@ impl ApplicationHandler for App {
             .join()
             .expect("warm-up thread");
         let cx = self.cx.insert(cx);
-        self.fcx = Some(fcx);
+        let text = Rc::new(RefCell::new(Text {
+            fcx,
+            lcx: parley::LayoutContext::new(),
+            layouts: HashMap::new(),
+        }));
+        // From here on, `ui-core` lays text out with Parley's real metrics
+        // (in logical pixels) instead of the monospace stand-in.
+        let m = text.clone();
+        let measured = self.shell.ui.set_measure(Rc::new(move |t: &str| {
+            let mut m = m.borrow_mut();
+            let l = m.layout(t, 1.0);
+            (l.width(), l.height())
+        }));
+        assert!(measured, "Parley gave an invalid text size");
+        self.text = Some(text);
         let surface = pollster::block_on(cx.create_render_surface(
             cx.instance.create_surface(window.clone()).expect("surface"),
             size.width,
@@ -347,9 +373,7 @@ fn main() {
         shell: Shell::new((1024.0, 700.0)),
         warm: Some(warm),
         cx: None,
-        fcx: None,
-        lcx: parley::LayoutContext::new(),
-        layouts: HashMap::new(),
+        text: None,
         gfx: None,
         pointer: (0.0, 0.0),
         frames: 0,

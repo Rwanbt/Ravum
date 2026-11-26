@@ -13,6 +13,12 @@ Rien n'entre dans un crate Ravum.
   30 tâches défilante, ajout, bascule d'une tâche. Vue = fonction pure de
   l'état ; chaque clic → patch par clé ; une vue refusée laisse l'arbre
   actif intact (fail-closed).
+- Mesure du texte : `ui-core` accepte une mesure fournie par la pile
+  (`Ui::set_measure`) ; la coquille lui donne celle de Parley, en pixels
+  logiques, avec la même mise en forme que le dessin. Fail-closed : une
+  mesure qui rend une taille négative ou non finie est refusée (rien ne
+  change), et un patch dont un texte se mesure mal est refusé (`InvalidSize`).
+  Sans pile, la mesure reste le monospace déterministe.
 - Fenêtre winit, rendu Vello sur wgpu, texte Parley (mise en forme gardée
   en cache par texte et échelle) ; souris, molette (lignes et pixels),
   Tab, redimensionnement, facteur d'échelle de l'écran.
@@ -34,14 +40,15 @@ Rien n'entre dans un crate Ravum.
 Essai réel (Xvfb, lavapipe, entrées X11 par `xdotool`) : la fenêtre
 s'ouvre, trois clics sur +1 et un sur −1 donnent « compteur : 2 », la
 molette fait défiler la liste avec découpage, le clic sur « ajouter » lui
-donne le focus. Captures : [avant](img/u2-app0.png),
-[après](img/u2-app0-input.png).
+donne le focus ; avec la mesure Parley, le clic sur une tâche la coche et
+lui donne le focus. Captures : [avant](img/u2-app0.png),
+[après](img/u2-app0-input.png), [mesure Parley](img/u2-app0-parley.png).
+
+Tests ajoutés à `ui-core` (43 au total) : `a_stack_measure_drives_layout_and_verify`,
+`a_bad_measure_is_refused_and_changes_nothing` (négatif).
 
 ## Pas encore (critère de sortie d'U2 non atteint)
 - Windows et macOS : jamais lancés.
-- Texte : `ui-core` mesure en monospace fixe (8 × 16 px) alors que Parley
-  dessine une police proportionnelle ; le layout doit utiliser la mesure de
-  Parley (prochaine étape).
 - Le focus clavier ne fait pas défiler son nœud dans la vue.
 - Pas d'IME, de bidi, d'accessibilité (AccessKit), de survol ni d'état
   pressé ; pas de styles issus des jetons U5.
