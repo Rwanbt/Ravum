@@ -343,3 +343,24 @@ impl Motion {
         }
     }
 }
+
+/// Axe d'une liaison animation → nœud.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis {
+    X,
+    Y,
+}
+
+/// Recopie les valeurs courantes des animations dans les décalages des
+/// nœuds liés : layout, test de frappe et Verify voient la position animée.
+pub fn drive(m: &Motion, bindings: &[(u64, crate::Path, Axis)], ui: &mut crate::Ui) {
+    for (key, path, axis) in bindings {
+        if let Some(v) = m.value(*key) {
+            let off = match axis {
+                Axis::X => (v, 0.0),
+                Axis::Y => (0.0, v),
+            };
+            ui.set_motion_offset(path, off);
+        }
+    }
+}

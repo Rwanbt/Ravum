@@ -250,3 +250,58 @@ fn trajectories_are_deterministic() {
         assert_eq!(run(), first);
     }
 }
+
+/// U7 : pendant une transition, la zone cliquable suit la position animée.
+#[test]
+fn hit_zones_follow_the_animation() {
+    use ui_core::*;
+    let fixed = |w: f32, h: f32| Style {
+        width: Len::Fixed(w),
+        height: Len::Fixed(h),
+        ..Style::default()
+    };
+    let root = Desc::new(
+        1,
+        Style {
+            dir: Dir::Row,
+            ..fixed(400.0, 50.0)
+        },
+    )
+    .with(vec![Desc::new(
+        2,
+        Style {
+            focusable: true,
+            ..fixed(100.0, 50.0)
+        },
+    )]);
+    let mut ui = Ui::new(root, (400.0, 50.0)).unwrap();
+    let mut m = Motion::default();
+    // Le panneau entre en glissant de x = 300 vers x = 0.
+    m.set(7, 300.0);
+    m.animate(7, Role::Transition, Curve::Linear { ms: 300 }, 0.0)
+        .unwrap();
+    let binds = [(7u64, vec![1u64, 2], Axis::X)];
+    let hits = |ui: &mut Ui, x: f32| {
+        ui.dispatch(&Event::Click { x, y: 10.0 });
+        ui.take_clicks().iter().any(|p| p == &vec![1, 2])
+    };
+    drive(&m, &binds, &mut ui);
+    assert_eq!(ui.rect(&[1, 2]).unwrap().x, 300.0);
+    assert!(
+        !hits(&mut ui, 50.0),
+        "final position is not clickable before arrival"
+    );
+    assert!(hits(&mut ui, 350.0), "current position is clickable");
+    m.advance(150);
+    drive(&m, &binds, &mut ui);
+    assert_eq!(ui.rect(&[1, 2]).unwrap().x, 150.0);
+    assert!(hits(&mut ui, 160.0) && !hits(&mut ui, 50.0) && !hits(&mut ui, 300.0));
+    m.advance(150);
+    drive(&m, &binds, &mut ui);
+    assert!(hits(&mut ui, 50.0) && !hits(&mut ui, 350.0));
+    assert!(ui.verify().is_empty());
+    // Entrées invalides : rien ne change.
+    assert!(!ui.set_motion_offset(&[1, 9], (1.0, 0.0)));
+    assert!(!ui.set_motion_offset(&[1, 2], (f32::NAN, 0.0)));
+    assert_eq!(ui.rect(&[1, 2]).unwrap().x, 0.0);
+}
