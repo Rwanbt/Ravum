@@ -18,6 +18,7 @@
 //! Aucune dépendance. Rien ici n'est adopté par un crate Ravum.
 
 pub mod hot;
+pub mod motion;
 pub mod plugin;
 
 use std::collections::{BTreeMap, BTreeSet};

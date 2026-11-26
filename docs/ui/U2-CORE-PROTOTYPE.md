@@ -46,7 +46,19 @@ fenêtre viendront avec la pile choisie.
 - Pas d'isolation des plugins non fiables (WASM ou processus) : dépend du
   runtime retenu.
 
-## Tests (`cargo test -p ui-core`, 16 tests)
+## Motion Contracts U7 (`ui-core/src/motion.rs`)
+- Rôles (`Feedback`, `Transition`, `Emphasis`) avec contrat : durée et
+  amplitude maximales, interruptible ou non, dépassement maximal.
+- Courbes : linéaire, Bézier cubique, ressort amorti (intégré au pas de
+  1 ms) ; durée du ressort = temps de stabilisation.
+- Refus avant démarrage : trop long, trop ample, dépassement hors borne,
+  courbe invalide, animation non interruptible, budget d'animations
+  simultanées ; un refus ne change rien.
+- Reciblage continu en valeur **et** en vitesse ; réduction du mouvement
+  (cible atteinte tout de suite, contrat toujours vérifié) ; suspension hors
+  écran ; horloge virtuelle, trajectoires déterministes.
+
+## Tests (`cargo test -p ui-core`, 22 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -61,6 +73,9 @@ fenêtre viendront avec la pile choisie.
 | U4 : un plugin ajoute, modifie et retire un panneau dans l'application ouverte | `plugin::a_plugin_adds_updates_and_removes_a_panel_in_a_running_app` |
 | services, dépendances, cycles | `plugin::services_and_dependencies`, `plugin::dependency_cycles_are_refused` |
 | refus sans effet (9 causes) | `plugin::refusals_change_nothing` |
+| U7 : trajectoires vérifiées (états intermédiaires, dépassement d'un ressort) | `motion::tweens_follow_their_curve_on_the_virtual_clock`, `motion::springs_settle_and_respect_the_overshoot_bound` |
+| U7 : contrats, reciblage, réduction, hors écran, budget | `motion::contracts_refuse_and_change_nothing`, `motion::retargeting_keeps_value_and_velocity_continuous`, `motion::interruption_budget_reduced_motion_and_offscreen` |
+| U7 : déterminisme | `motion::trajectories_are_deterministic` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
@@ -73,6 +88,8 @@ de scène aux tests.
   d'accessibilité : ils dépendent de la pile.
 - Le comportement L2 est une table de fonctions Rust compilées : le
   rechargement de code réel passera par le hot swap Ravum (IR/JIT).
+- U7 : la cohérence des zones interactives pendant une transition n'est
+  pas encore reliée au layout.
 - Le critère de sortie d'U2 (application interactive sous Linux, Windows,
   macOS) et celui d'U3 (hot reload L0 à L2) ne sont **pas** atteints : ce
   prototype n'en couvre que la partie logique.
