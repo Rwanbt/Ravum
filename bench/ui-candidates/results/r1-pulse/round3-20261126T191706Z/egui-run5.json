@@ -1,0 +1,1 @@
+{"schema":"ravum.ui.round3/v1","stack":"egui","rows":10000,"frames":600,"first_frame_ms":165.510,"interval_ms":{"p50":4.170,"p95":4.275,"p99":4.753,"max":11.117},"os":"linux","arch":"x86_64"}
