@@ -1,0 +1,8 @@
+enum T { A(&str), B }
+fn f(t: &mut T, p: &str) -> () effects() {
+    match t {
+        T::A(x) => { *x = p; }
+        T::B => {}
+    }
+}
+fn main() {}

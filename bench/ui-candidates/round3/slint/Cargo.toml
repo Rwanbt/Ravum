@@ -1,0 +1,10 @@
+[package]
+name = "r3-slint"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Reference only (UI-D12: not a foundation candidate, licence).
+[dependencies]
+r3-common = { path = "../common" }
+slint = "=1.19.1"

@@ -1,0 +1,6 @@
+{
+  "id": "run/match-mut-vec-aggregate-all-exits",
+  "mode": "run-pass",
+  "stdout_contains": "err\n103\n2\n3\n11\n0\n3\n",
+  "notes": "OWN-6.9/6.10 (L-OWN-020-1 lifted): a match on &mut v[i] and &mut v[i].f of a Vec of aggregates; writes through the bindings survive every exit of the match (end of arm, continue, break, return, ?). Same output on the rustc path and the IR path (ir_corpus_oracle)."
+}

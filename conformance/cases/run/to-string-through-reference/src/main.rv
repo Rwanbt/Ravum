@@ -1,0 +1,26 @@
+use std::io;
+enum P { Pair(i64, f64), Flag(bool) }
+fn show(x: &i64) -> String effects(alloc) { return x.to_string(); }
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<i64> = Vec::new();
+    v.push(3);
+    v.push(-4);
+    for x in &v {
+        io::println(&x.to_string());
+    }
+    let p = P::Pair(7, 2.5);
+    match &p {
+        P::Pair(a, b) => {
+            io::println(&a.to_string());
+            io::println(b.to_string().as_str());
+        }
+        P::Flag(f) => io::println(&f.to_string()),
+    }
+    let q = P::Flag(true);
+    match &q {
+        P::Pair(_, _) => {}
+        P::Flag(f) => io::println(&f.to_string()),
+    }
+    let n: i64 = 42;
+    io::println(show(&n).as_str());
+}

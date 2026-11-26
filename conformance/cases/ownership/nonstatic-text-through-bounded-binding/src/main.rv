@@ -1,0 +1,6 @@
+fn f(p: &str) -> &str effects() {
+    match &p {
+        y => *y,
+    }
+}
+fn main() {}

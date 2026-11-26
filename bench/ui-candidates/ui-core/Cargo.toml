@@ -1,0 +1,8 @@
+[package]
+name = "ui-core"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Prototype U2/U3 indépendant de la pile graphique : arbre retained, réconciliation par clé, layout, événements, Verify minimal. Aucune dépendance."
+
+[dependencies]
