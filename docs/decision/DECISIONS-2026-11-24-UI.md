@@ -190,5 +190,17 @@ contredit).
   choix de la pile graphique suivra le rapport.
 - Fusion : le responsable a demandé d'« enchaîner toutes les étapes du plan
   en autonomie » (2026-11-26). Les PR d'implémentation de RFC-UI-LANG-2 sont
-  fusionnées vers `dev` aux **mêmes conditions** qu'UI-D19 ; à confirmer ou
-  restreindre par le responsable.
+  fusionnées vers `dev` aux **mêmes conditions** qu'UI-D19 (`main` et releases
+  exclus). **Validé par le responsable** le 2026-11-26.
+
+## UI-D21 — Pile graphique (2026-11-26, décision du responsable)
+
+- Décision du responsable, au vu du tour 3
+  ([`BENCH-U1B-ROUND3.md`](../ui/BENCH-U1B-ROUND3.md)). Pile retenue pour le long terme : **modulaire** (winit,
+  wgpu, Vello, Parley), runtime retained propre à Ravum (`ui-core`).
+- Condition posée par le responsable : **optimiser le délai jusqu'à la
+  première frame** et comprendre pourquoi il est plus long que celui des
+  autres piles (≈ 215 ms contre 171 ms pour egui et 87 ms pour Slint sur
+  r1-pulse), pour trouver une solution.
+- Risques suivis : maturité de Vello ; accessibilité (AccessKit), IME et
+  bidi à construire (tour 4) ; Windows et macOS non encore mesurés.

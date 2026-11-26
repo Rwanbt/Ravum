@@ -1,0 +1,436 @@
+{
+  "schema": "ravum.ui.round3.campaign/v1",
+  "date": "20261126T154119Z",
+  "host": {
+    "os": "Linux 7.0.0-44-generic x86_64",
+    "cpu": "inconnu",
+    "python": "3.14.4",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "commit": "fcb53bb5b89adb26f0b01d52828adfc46de92a21",
+    "dirty": false,
+    "gpu": "0000:00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)\n0000:01:00.0 VGA compatible controller: NVIDIA Corporation AD106M [GeForce RTX 4070 Max-Q / Mobile] (rev a1)",
+    "session": "wayland"
+  },
+  "note": "Intel Raptor Lake-P UHD Graphics (iGPU, Mesa 26.0.8, Vulkan 1.4.335) ; NVIDIA RTX 4070 Laptop 8 Go (pilote 595.99.02) presente mais non utilisee ; ecran interne Sharp LQ156T1JW04 2560x1440 @ 239.97 Hz, echelle 100% ; secteur branche (ADP1 online, batterie 96%)",
+  "params": {
+    "runs": 5,
+    "frames": 600,
+    "rows": 10000
+  },
+  "stacks": {
+    "egui": {
+      "runs": [
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7989219589981076,
+          "cpu_user_s": 0.365376,
+          "cpu_sys_s": 0.255552,
+          "peak_rss_kib": 189236,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "egui",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 220.238,
+            "interval_ms": {
+              "p50": 4.166,
+              "p95": 4.297,
+              "p99": 4.637,
+              "max": 10.7
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0348799999999998
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7522546040017914,
+          "cpu_user_s": 0.368257,
+          "cpu_sys_s": 0.209845,
+          "peak_rss_kib": 189292,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "egui",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 191.695,
+            "interval_ms": {
+              "p50": 4.163,
+              "p95": 4.286,
+              "p99": 4.492,
+              "max": 9.794
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 0.9635033333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.731796125000983,
+          "cpu_user_s": 0.366359,
+          "cpu_sys_s": 0.21181799999999998,
+          "peak_rss_kib": 189724,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "egui",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 168.348,
+            "interval_ms": {
+              "p50": 4.168,
+              "p95": 4.26,
+              "p99": 4.457,
+              "max": 9.095
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 0.9636283333333332
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7538021389991627,
+          "cpu_user_s": 0.362268,
+          "cpu_sys_s": 0.21240099999999998,
+          "peak_rss_kib": 189864,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "egui",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 170.854,
+            "interval_ms": {
+              "p50": 4.161,
+              "p95": 4.309,
+              "p99": 4.453,
+              "max": 12.766
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 0.9577816666666666
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7516502319995197,
+          "cpu_user_s": 0.359037,
+          "cpu_sys_s": 0.213341,
+          "peak_rss_kib": 189768,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "egui",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 169.768,
+            "interval_ms": {
+              "p50": 4.161,
+              "p95": 4.316,
+              "p99": 4.598,
+              "max": 13.634
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 0.9539633333333334
+        }
+      ],
+      "build_s": 7.833220040000015,
+      "binary_bytes": 23373824,
+      "verdict": "PASS",
+      "reason": "5 valid run(s)"
+    },
+    "slint": {
+      "runs": [
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.6408442379979533,
+          "cpu_user_s": 1.188958,
+          "cpu_sys_s": 0.096745,
+          "peak_rss_kib": 135580,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "slint",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 97.853,
+            "interval_ms": {
+              "p50": 4.158,
+              "p95": 4.428,
+              "p99": 5.9,
+              "max": 14.7
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 2.142838333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.6150871660029225,
+          "cpu_user_s": 1.240449,
+          "cpu_sys_s": 0.097976,
+          "peak_rss_kib": 136008,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "slint",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 89.752,
+            "interval_ms": {
+              "p50": 4.161,
+              "p95": 4.443,
+              "p99": 5.759,
+              "max": 15.547
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 2.2307083333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.6131342370026687,
+          "cpu_user_s": 1.214782,
+          "cpu_sys_s": 0.09111999999999999,
+          "peak_rss_kib": 136228,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "slint",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 84.886,
+            "interval_ms": {
+              "p50": 4.16,
+              "p95": 4.483,
+              "p99": 5.655,
+              "max": 14.006
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 2.1765033333333332
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.635405992001324,
+          "cpu_user_s": 1.234603,
+          "cpu_sys_s": 0.097651,
+          "peak_rss_kib": 135820,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "slint",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 86.549,
+            "interval_ms": {
+              "p50": 4.161,
+              "p95": 4.57,
+              "p99": 5.725,
+              "max": 13.792
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 2.220423333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.630285315997753,
+          "cpu_user_s": 1.176477,
+          "cpu_sys_s": 0.103728,
+          "peak_rss_kib": 136080,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "slint",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 87.23,
+            "interval_ms": {
+              "p50": 4.162,
+              "p95": 4.351,
+              "p99": 4.868,
+              "max": 18.734
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 2.1336749999999998
+        }
+      ],
+      "build_s": 31.92275366100148,
+      "binary_bytes": 29781600,
+      "verdict": "PASS",
+      "reason": "5 valid run(s)"
+    },
+    "modular": {
+      "runs": [
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.8760597629989206,
+          "cpu_user_s": 0.393651,
+          "cpu_sys_s": 0.274512,
+          "peak_rss_kib": 196296,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 293.065,
+            "interval_ms": {
+              "p50": 4.166,
+              "p95": 4.261,
+              "p99": 4.363,
+              "max": 35.272
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.1136049999999997
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.775708223001857,
+          "cpu_user_s": 0.402925,
+          "cpu_sys_s": 0.21576099999999998,
+          "peak_rss_kib": 195784,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 214.682,
+            "interval_ms": {
+              "p50": 4.166,
+              "p95": 4.25,
+              "p99": 4.33,
+              "max": 22.024
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0311433333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.775136495998595,
+          "cpu_user_s": 0.399679,
+          "cpu_sys_s": 0.248391,
+          "peak_rss_kib": 196020,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 222.943,
+            "interval_ms": {
+              "p50": 4.165,
+              "p95": 4.276,
+              "p99": 4.352,
+              "max": 13.284
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0801166666666668
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7931608459985,
+          "cpu_user_s": 0.380228,
+          "cpu_sys_s": 0.24387299999999998,
+          "peak_rss_kib": 196648,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 209.295,
+            "interval_ms": {
+              "p50": 4.163,
+              "p95": 4.279,
+              "p99": 4.402,
+              "max": 15.224
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0401683333333334
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7781178439981886,
+          "cpu_user_s": 0.40399399999999996,
+          "cpu_sys_s": 0.224491,
+          "peak_rss_kib": 195740,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 210.31,
+            "interval_ms": {
+              "p50": 4.168,
+              "p95": 4.279,
+              "p99": 4.331,
+              "max": 14.636
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.047475
+        }
+      ],
+      "build_s": 32.93267137799921,
+      "binary_bytes": 17577304,
+      "verdict": "PASS",
+      "reason": "5 valid run(s)"
+    }
+  }
+}

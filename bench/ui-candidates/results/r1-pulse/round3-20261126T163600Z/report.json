@@ -1,0 +1,160 @@
+{
+  "schema": "ravum.ui.round3.campaign/v1",
+  "date": "20261126T163600Z",
+  "host": {
+    "os": "Linux 7.0.0-44-generic x86_64",
+    "cpu": "inconnu",
+    "python": "3.14.4",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "commit": "86dc42e6ccf762787b465f2ff23e3878d082e2d7",
+    "dirty": true,
+    "gpu": "0000:00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)\n0000:01:00.0 VGA compatible controller: NVIDIA Corporation AD106M [GeForce RTX 4070 Max-Q / Mobile] (rev a1)",
+    "session": "wayland"
+  },
+  "note": "Intel Raptor Lake-P UHD Graphics (iGPU, Mesa 26.0.8, Vulkan 1.4.335) ; NVIDIA RTX 4070 non utilisee (PRIME ne redirige pas Vulkan) ; ecran Sharp LQ156T1JW04 2560x1440 @ 239.97 Hz, echelle 133% ; secteur branche",
+  "params": {
+    "runs": 5,
+    "frames": 600,
+    "rows": 10000
+  },
+  "stacks": {
+    "modular": {
+      "runs": [
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.8365080160001526,
+          "cpu_user_s": 0.378158,
+          "cpu_sys_s": 0.272895,
+          "peak_rss_kib": 194772,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 259.262,
+            "interval_ms": {
+              "p50": 4.165,
+              "p95": 4.258,
+              "p99": 4.383,
+              "max": 33.981
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0850883333333334
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7552713490003953,
+          "cpu_user_s": 0.397034,
+          "cpu_sys_s": 0.213425,
+          "peak_rss_kib": 195100,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 212.331,
+            "interval_ms": {
+              "p50": 4.168,
+              "p95": 4.273,
+              "p99": 4.63,
+              "max": 9.484
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0174316666666665
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.774997264998092,
+          "cpu_user_s": 0.395817,
+          "cpu_sys_s": 0.209815,
+          "peak_rss_kib": 195224,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 209.991,
+            "interval_ms": {
+              "p50": 4.166,
+              "p95": 4.266,
+              "p99": 4.793,
+              "max": 12.626
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0093866666666667
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.756007922002027,
+          "cpu_user_s": 0.391644,
+          "cpu_sys_s": 0.220517,
+          "peak_rss_kib": 193176,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 212.755,
+            "interval_ms": {
+              "p50": 4.166,
+              "p95": 4.271,
+              "p99": 4.364,
+              "max": 11.419
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0202683333333333
+        },
+        {
+          "exit": 0,
+          "timeout": false,
+          "wall_s": 2.7554890799983696,
+          "cpu_user_s": 0.372463,
+          "cpu_sys_s": 0.232092,
+          "peak_rss_kib": 195252,
+          "verdict": "PASS",
+          "reason": "",
+          "app": {
+            "schema": "ravum.ui.round3/v1",
+            "stack": "modular",
+            "rows": 10000,
+            "frames": 600,
+            "first_frame_ms": 204.88,
+            "interval_ms": {
+              "p50": 4.169,
+              "p95": 4.272,
+              "p99": 4.337,
+              "max": 20.331
+            },
+            "os": "linux",
+            "arch": "x86_64"
+          },
+          "cpu_ms_per_frame": 1.0075916666666667
+        }
+      ],
+      "build_s": 0.2635491759974684,
+      "binary_bytes": 17602848,
+      "verdict": "PASS",
+      "reason": "5 valid run(s)"
+    }
+  }
+}
