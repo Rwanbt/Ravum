@@ -90,15 +90,31 @@ fn ravum_lang_ir_heap_kind(c: u64) -> u64 {
     c
 }
 
-/// `Map<K, V>` of the prelude (RFC-UI-LANG-1 P3).
+/// A keyed heap object of the prelude: `Map<K, V>` (RFC-UI-LANG-1 P3) or
+/// `Arena<T>` (RFC-UI-LANG-2, IR v1.8), which the `Map*` operations serve
+/// with handles as keys.
 fn is_map(t: &Type) -> bool {
-    matches!(t, Type::Nominal { def, .. } if *def == ravum_lang_sema::builtins::PRELUDE_MAP_DEF)
+    use ravum_lang_sema::builtins::{PRELUDE_ARENA_DEF, PRELUDE_MAP_DEF};
+    matches!(t, Type::Nominal { def, .. } if *def == PRELUDE_MAP_DEF || *def == PRELUDE_ARENA_DEF)
 }
 
-/// Key and value types of a `Map<K, V>` (or of a reference to one).
+/// `Arena<T>` (or a reference to one).
+fn is_arena(t: &Type) -> bool {
+    match t {
+        Type::Ref { inner, .. } => is_arena(inner),
+        t => ravum_lang_sema::builtins::is_arena_type(t),
+    }
+}
+
+/// Key and value types of a `Map<K, V>`, or `(Handle<T>, T)` for an
+/// `Arena<T>` (or a reference to either).
 fn map_kv(t: &Type) -> Option<(Type, Type)> {
     match t {
         Type::Ref { inner, .. } => map_kv(inner),
+        Type::Nominal { args, .. } if is_arena(t) && args.len() == 1 => Some((
+            ravum_lang_sema::builtins::handle_type(args[0].clone()),
+            args[0].clone(),
+        )),
         Type::Nominal { args, .. } if is_map(t) && args.len() == 2 => {
             Some((args[0].clone(), args[1].clone()))
         }
@@ -107,6 +123,10 @@ fn map_kv(t: &Type) -> Option<(Type, Type)> {
 }
 
 pub fn map_ty(t: &Type) -> R<Ty> {
+    // STD-21.9: a handle is one packed word.
+    if ravum_lang_sema::builtins::is_handle_type(t) {
+        return Ok(Ty::U64);
+    }
     if is_map(t) {
         return Ok(Ty::Obj);
     }
@@ -174,8 +194,9 @@ impl<'a> Layouts<'a> {
     }
 
     fn is_agg(t: &Type) -> bool {
-        // `Map<K, V>` is a heap object (a handle), not an aggregate.
-        if is_map(t) {
+        // `Map<K, V>` / `Arena<T>` are heap objects, `Handle<T>` a scalar
+        // word: none is an aggregate.
+        if is_map(t) || ravum_lang_sema::builtins::is_handle_type(t) {
             return false;
         }
         matches!(
@@ -421,38 +442,7 @@ impl<'a> Layouts<'a> {
 }
 
 /// Lower every function of `checked` into an IR module.
-/// STD-21.12 (RFC-UI-LANG-2 P1): `Arena<T>` / `Handle<T>` are not in the IR
-/// yet. A program that mentions them anywhere is refused here, by name,
-/// before any layout is computed (fail-closed, nothing approximated).
-fn mentions_arena(t: &Type) -> bool {
-    use ravum_lang_sema::builtins::{PRELUDE_ARENA_DEF, PRELUDE_HANDLE_DEF};
-    match t {
-        Type::Nominal { def, args, .. } => {
-            *def == PRELUDE_ARENA_DEF
-                || *def == PRELUDE_HANDLE_DEF
-                || args.iter().any(mentions_arena)
-        }
-        Type::Ref { inner, .. }
-        | Type::Vec(inner)
-        | Type::Option(inner)
-        | Type::Slice(inner)
-        | Type::Array { elem: inner, .. } => mentions_arena(inner),
-        Type::Result(a, b) => mentions_arena(a) || mentions_arena(b),
-        Type::Tuple(items) => items.iter().any(mentions_arena),
-        _ => false,
-    }
-}
-
 pub fn lower(checked: &CheckedProgram) -> R<Module> {
-    let f = &checked.facts;
-    if f.expr_types
-        .values()
-        .chain(f.type_nodes.values())
-        .chain(f.pat_types.values())
-        .any(mentions_arena)
-    {
-        return unsupported("`Arena` / `Handle` (RFC-UI-LANG-2: path C is step P2)");
-    }
     let mut fns: Vec<(&ast::Item, &FnItem)> = Vec::new();
     let mut invariants: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
     let mut method_owner: BTreeMap<NodeId, NodeId> = BTreeMap::new();
@@ -3171,6 +3161,9 @@ impl<'a> FnLower<'a> {
     /// RFC-UI-LANG-1 P3: the `Map` methods (STD-20). `Ok(None)` for any
     /// other path.
     fn map_method(&mut self, recv: &Expr, path: &str, args: &[Expr]) -> R<Option<Local>> {
+        if path.starts_with("Arena::") {
+            return self.arena_method(recv, path, args).map(Some);
+        }
         if !path.starts_with("Map::") {
             return Ok(None);
         }
@@ -3282,6 +3275,110 @@ impl<'a> FnLower<'a> {
         }))
     }
 
+    /// RFC-UI-LANG-2 (STD-21): the `Arena` methods, on the `Map*` operations
+    /// of the heap with packed handles as keys (IR v1.8).
+    fn arena_method(&mut self, recv: &Expr, path: &str, args: &[Expr]) -> R<Local> {
+        let (_, v) = map_kv(&self.type_of(recv)?)
+            .ok_or_else(|| LowerError::MissingFact("receiver of an `Arena` method".into()))?;
+        let h = self.expr(recv)?;
+        let vword = if Layouts::is_agg(&v) {
+            Ty::Obj
+        } else {
+            map_ty(&v)?
+        };
+        Ok(match (path, args) {
+            ("Arena::len", []) => {
+                let n = self.new_local(Ty::Usize);
+                self.heap(Some(n), HeapOp::MapLen, Some(h), None);
+                n
+            }
+            ("Arena::is_empty", []) => {
+                let n = self.new_local(Ty::Usize);
+                self.heap(Some(n), HeapOp::MapLen, Some(h), None);
+                let z = self.int_const(Ty::Usize, 0)?;
+                let b = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: b,
+                    op: BinOp::Eq,
+                    ty: Ty::Usize,
+                    lhs: n,
+                    rhs: z,
+                });
+                b
+            }
+            ("Arena::insert", [xa]) => {
+                let val = self.map_val_of(xa, &v)?;
+                let dst = self.new_local(Ty::U64);
+                self.heap(Some(dst), HeapOp::ArenaInsert, Some(h), Some(val));
+                dst
+            }
+            ("Arena::remove", [ka]) => {
+                let key = self.expr(ka)?;
+                let (present, old) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapRemove {
+                    h,
+                    key,
+                    present,
+                    old,
+                });
+                self.map_option(present, old, &v, None)?
+            }
+            ("Arena::contains", [ka]) => {
+                let key = self.expr(ka)?;
+                let (present, value) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapGet {
+                    h,
+                    key,
+                    present,
+                    value,
+                });
+                present
+            }
+            ("Arena::get" | "Arena::get_mut", [ka]) => {
+                let mutable = path == "Arena::get_mut";
+                let key = self.expr(ka)?;
+                let (present, value) = (self.new_local(Ty::Bool), self.new_local(vword));
+                self.emit(Inst::MapGet {
+                    h,
+                    key,
+                    present,
+                    value,
+                });
+                let opt = self.map_option(present, value, &v, Some(mutable))?;
+                let heap_v = vword == Ty::Obj && !Layouts::is_agg(&v);
+                if mutable && !heap_v {
+                    // The view is a copy, written back into the live slot
+                    // when it ends, on every exit (`MapInsert` on an arena).
+                    let opt_ty = Type::Option(Box::new(Type::Ref {
+                        mutable: true,
+                        inner: Box::new(v.clone()),
+                    }));
+                    let (off, _) = self.layouts.variant_fields(&opt_ty, 1)?[0];
+                    let addr = self.new_local(Ty::Ptr);
+                    self.emit(Inst::Load {
+                        dst: addr,
+                        ty: Ty::Ptr,
+                        addr: opt,
+                        offset: off,
+                    });
+                    self.loop_wb.push(LoopWriteBack {
+                        h,
+                        i: key,
+                        ty: v.clone(),
+                        addr,
+                        agg: None,
+                        base: 0,
+                        map: Some((key, present)),
+                        commit: None,
+                        stmt: true,
+                    });
+                }
+                opt
+            }
+            _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
+        })
+    }
+
     /// P3: store back and forget the `get_mut` views that end with the
     /// current statement (those no `match` consumed).
     fn end_stmt_views(&mut self) -> R<()> {
@@ -3301,6 +3398,8 @@ impl<'a> FnLower<'a> {
             Type::String => ravum_lang_ir_heap_kind(2),
             t if t.is_signed_int() => ravum_lang_ir_heap_kind(0),
             t if t.is_int() || matches!(t, Type::Bool | Type::Char) => ravum_lang_ir_heap_kind(1),
+            // STD-21.11: a packed handle orders as (arena, slot, generation).
+            t if ravum_lang_sema::builtins::is_handle_type(t) => ravum_lang_ir_heap_kind(1),
             _ => return unsupported(format!("`Map` key type `{k}`")),
         })
     }
@@ -3470,10 +3569,12 @@ impl<'a> FnLower<'a> {
         });
         self.switch_to(bodyb);
         let base = self.loop_wb.len();
-        // The key: a string handle, or the address of a copy.
+        // The key: a string handle, or the address of a copy; for an arena,
+        // the handle itself, a copied value (STD-21.6).
+        let arena = is_arena(&self.type_of(iter)?);
         let kword = self.new_local(map_ty(&k)?);
         self.heap(Some(kword), HeapOp::VecGet, Some(keys), Some(i));
-        let kvar = if matches!(k, Type::String) {
+        let kvar = if matches!(k, Type::String) || arena {
             kword
         } else {
             let slot = self.alloc(&k)?;
@@ -3529,9 +3630,13 @@ impl<'a> FnLower<'a> {
             }
             slot
         };
-        let kt = Type::Ref {
-            mutable: false,
-            inner: Box::new(k.clone()),
+        let kt = if arena {
+            k.clone()
+        } else {
+            Type::Ref {
+                mutable: false,
+                inner: Box::new(k.clone()),
+            }
         };
         let vt = Type::Ref {
             mutable,
@@ -5060,6 +5165,7 @@ impl<'a> FnLower<'a> {
                         | "Vec::new"
                         | "Vec::with_capacity"
                         | "Map::new"
+                        | "Arena::new"
                 ) =>
             {
                 let dst = self.new_local(Ty::Obj);
@@ -5070,6 +5176,7 @@ impl<'a> FnLower<'a> {
                         let code = self.u64_const(Self::map_kind(&k)?);
                         self.heap(Some(dst), HeapOp::MapNew, Some(code), None)
                     }
+                    ("Arena::new", []) => self.heap(Some(dst), HeapOp::ArenaNew, None, None),
                     ("String::new", []) => self.heap(Some(dst), HeapOp::StrNew, None, None),
                     ("String::from" | "std::string::from", [a]) => {
                         let s = self.expr(a)?;

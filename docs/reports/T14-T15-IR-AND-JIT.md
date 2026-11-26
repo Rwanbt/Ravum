@@ -361,3 +361,32 @@ JIT) :
   l'interpréteur et le JIT. Les cas limites et les cinq panics sont comparés
   entre l'interpréteur et le JIT (`crates/ravum-lang-jit/tests/text_primitives.rs`),
   et ont été vérifiés à la main avec rustc.
+
+## IR v1.8 (2026-11-26) — `Arena<T>` / `Handle<T>` (RFC-UI-LANG-2 P2)
+
+- **Tas** : objet `Arena` (places, générations, places libres triées) ; un
+  compteur d'arènes par run (STD-21.5). Handle compacté en un mot `u64`
+  (arène 20 bits, place 20 bits, génération 24 bits), donc ordonné comme
+  (arène, place, génération) : clé de `Map` de type `Unsigned` (STD-21.11).
+- **Opérations** : `ArenaNew`, `ArenaInsert` (nouvelles) ; `MapLen`,
+  `MapKeys`, `MapVals`, `MapSetVals`, `MapClone` (nouvel identifiant),
+  `MapGet`, `MapRemove`, `MapInsert` (réécriture d'une place vivante)
+  servent aussi une arène. Les vues `get_mut` et les parcours `&mut` passent
+  par le même mécanisme de réécriture que `Map`.
+- **Arrêts** : `HeapStop::Panic` (`too many arenas in this run`, `arena is
+  full`, STD-21.9), même texte dans l'interpréteur et le JIT
+  (`CODE_HEAP_PANIC`).
+- **Correctif** trouvé par le test adversarial : un `insert` qui réutilise
+  une place, et `Map::insert` qui remplace une valeur, ne sont plus comptés
+  comme des allocations. Avant, un long programme valide finissait en
+  `heap limit` sur la voie C et pas sur la voie B.
+- **INV-05** : une arène touche le tas ; un module temps réel qui en utilise
+  une est refusé (`touches_heap_or_io`), donc aucun état migré ne contient
+  d'arène (RFC-UI-LANG-2 §2.2).
+- **Preuves** (`TESTED`) : `jit/tests/arena_parity.rs` (cas de conformance
+  `arena-*` : sortie attendue par rustc = interpréteur = JIT),
+  `jit/tests/arena_fuzz.rs` (fuzz différentiel B = interpréteur = JIT,
+  20 programmes en mode rapide, 300 en mode long), `ir/tests/arena_heap.rs`
+  (retrait d'une place à la génération `2^24 - 1` avec les vraies limites).
+- Hors IR : les programmes à threads (comme `run/arena-handle-in-message`)
+  restent refusés par l'IR, comme tout programme `std::thread`.

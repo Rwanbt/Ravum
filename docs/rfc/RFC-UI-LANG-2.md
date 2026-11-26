@@ -74,8 +74,10 @@ jamais une place vidée en silence.
 
 **Suivi.** P1 (2026-11-26) : spec `stdlib.md` §21 (STD-21.1 à STD-21.13),
 vérificateur, voie B (rustc) et conformance ; la voie C refuse ces programmes
-par leur nom (STD-21.12). P2 : voie C (IR, interpréteur, JIT), parité B/C et
-migration à chaud des arènes (§2.2). Limites fixées par P1 pour que les deux
+par leur nom (STD-21.12). P2 (2026-11-26) : voie C (IR v1.8, interpréteur,
+JIT) avec parité B/C par différentiel ; la migration à chaud (§2.2) est
+refusée par construction, car un module temps réel ne peut pas toucher le
+tas (INV-05) : aucun état migré ne contient d'arène. Limites fixées par P1 pour que les deux
 voies donnent les mêmes handles : un handle tient en 64 bits (arène 20 bits,
 place 20 bits, génération 24 bits ; STD-21.4, STD-21.9).
 

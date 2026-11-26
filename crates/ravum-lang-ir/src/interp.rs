@@ -250,7 +250,9 @@ pub fn from_word(ty: Ty, w: u64) -> Val {
 
 fn heap_stop(e: crate::heap::HeapStop) -> Stop {
     match e {
-        e @ crate::heap::HeapStop::IndexOutOfBounds { .. } => Stop::Panic(e.message()),
+        e @ (crate::heap::HeapStop::IndexOutOfBounds { .. } | crate::heap::HeapStop::Panic(_)) => {
+            Stop::Panic(e.message())
+        }
         crate::heap::HeapStop::Fault(m) => Stop::Fault(m.to_string()),
     }
 }

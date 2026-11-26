@@ -83,6 +83,10 @@ pub(crate) const CODE_BAD_HANDLE: u32 = u32::MAX - 1;
 pub(crate) const CODE_NO_HEAP: u32 = u32::MAX - 2;
 /// `index out of bounds: the len is {scratch} but the index is {scratch2}`.
 pub(crate) const CODE_VEC_OOB: u32 = u32::MAX - 3;
+/// IR v1.8: a heap panic with a fixed text, `HEAP_PANICS[scratch]`
+/// (STD-21.9).
+pub(crate) const CODE_HEAP_PANIC: u32 = u32::MAX - 4;
+pub(crate) const HEAP_PANICS: [&str; 2] = ["too many arenas in this run", "arena is full"];
 
 /// A compiled IR module, ready to run.
 pub struct Compiled {
@@ -1356,6 +1360,13 @@ pub(crate) mod exec {
                 ctx.scratch2 = index;
                 0
             }
+            Err(HeapStop::Panic(m)) => {
+                ctx.code = super::CODE_HEAP_PANIC;
+                // An unlisted text cannot happen (the heap only panics with
+                // these); it would be reported as the first one, never lost.
+                ctx.scratch = super::HEAP_PANICS.iter().position(|t| *t == m).unwrap_or(0) as u64;
+                0
+            }
             Err(HeapStop::Fault(m)) => {
                 ctx.code = if m == "heap limit" {
                     super::CODE_HEAP_LIMIT
@@ -1495,6 +1506,9 @@ pub(crate) fn call_nullary(
             }
             .message(),
         ),
+        CODE_HEAP_PANIC => {
+            RunOutcome::Panic(HEAP_PANICS[ctx.scratch as usize % HEAP_PANICS.len()].to_string())
+        }
         CODE_BAD_HANDLE => RunOutcome::Fault("invalid object handle".into()),
         CODE_NO_HEAP => RunOutcome::Fault("heap use in a real-time entry".into()),
         c => RunOutcome::Panic(messages[(c - CODE_TRAP0) as usize].clone()),
