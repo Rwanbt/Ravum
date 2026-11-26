@@ -220,6 +220,35 @@ sont complètes sur les capacités techniques qu'elles qualifient.
 - Aucune supériorité sur egui ou un autre framework n'est revendiquée sans
   banc comparable.
 
+### 7.1 Première frame : chantier fermé, reprise différée
+
+Fermé par le responsable le 2026-11-26 (UI-D21), à reprendre **une fois le
+plan Ravum UI entièrement réalisé**. État et chiffres :
+[`BENCH-U1B-ROUND3.md`](BENCH-U1B-ROUND3.md), section « Première frame ».
+
+- Acquis (r1-pulse, Intel iGPU, à chaud) : 199 → **124 ms** ; préparation
+  du GPU, des pipelines et des polices en parallèle de la fenêtre ; instance
+  wgpu sur l'API native seule ; anticrénelage « zone » seul ; cache de
+  pipelines wgpu sur disque. À reporter dans le runtime réel.
+- Reste, par gain attendu :
+  1. **Froid réel** (≈ 620 ms après installation ou mise à jour du pilote,
+     dont ≈ 410 ms de compilation par le pilote) : première image légère
+     (fond et cadre, sans les shaders de calcul de Vello) affichée pendant
+     la compilation, ou compilation des pipelines Vello en arrière-plan
+     après une première frame dessinée autrement.
+  2. **Compilation différée au premier rendu** (≈ 48 ms) : le
+     préchauffage hors écran est une perte tant que le thread de préparation
+     est le chemin critique ; à revoir si l'instance et le device
+     deviennent plus courts.
+  3. **Instance et device wgpu** (≈ 64 ms) : ouvrir directement l'adaptateur
+     retenu la fois précédente au lieu d'énumérer ; vérifier le coût du
+     chargement des pilotes Vulkan de toutes les cartes.
+  4. Shaders précompilés à la construction (supprime naga du démarrage ;
+     demande une modification de Vello ou un fork).
+- À mesurer d'abord : Windows (DX12), macOS (Metal), GPU dédié (non
+  sélectionnable sous Linux sur r1-pulse), machines modestes.
+- Écart de référence : Slint 89 ms, egui 176 ms (échelle 100 %).
+
 ## 8. Gouvernance
 
 Pour chaque étape :
