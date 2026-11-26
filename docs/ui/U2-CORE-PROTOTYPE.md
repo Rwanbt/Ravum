@@ -86,7 +86,8 @@ fenêtre viendront avec la pile choisie.
   ±1 px ; couverture publiée (largeurs testées) et sous-score (fraction
   sans échec), déterministe.
 - Pas encore : orientation, DPI physique, taille de texte appliquée à la
-  mesure (le texte est en monospace fixe).
+  mesure (la mesure vient de la pile, mais l'échelle du texte des profils
+  ne lui est pas encore transmise).
 
 ## Verify complet U8 (`ui-core/src/verify.rs`)
 - Registre de 8 règles (layout, design, accessibilité), chacune avec
