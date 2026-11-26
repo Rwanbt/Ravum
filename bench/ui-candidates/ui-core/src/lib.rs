@@ -17,6 +17,8 @@
 //!
 //! Aucune dépendance. Rien ici n'est adopté par un crate Ravum.
 
+pub mod hot;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const CHAR_W: f32 = 8.0;
@@ -312,6 +314,21 @@ impl Ui {
     /// Nœuds cliqués, dans l'ordre (la « logique » de l'application les lit).
     pub fn take_clicks(&mut self) -> Vec<Path> {
         std::mem::take(&mut self.clicks)
+    }
+
+    pub fn viewport(&self) -> (f32, f32) {
+        self.viewport
+    }
+
+    /// Reprend focus et défilement d'une autre instance (mêmes chemins).
+    pub fn copy_states_from(&mut self, other: &Ui) {
+        for (p, st) in &other.states {
+            if let Some(mine) = self.states.get_mut(p) {
+                *mine = st.clone();
+            }
+        }
+        self.focus = other.focus.clone().filter(|f| self.states.contains_key(f));
+        self.relayout();
     }
 
     pub fn resize(&mut self, viewport: (f32, f32)) {
