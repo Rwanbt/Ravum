@@ -141,6 +141,11 @@ impl<S> Session<S> {
     pub fn ui(&self) -> &Ui {
         &self.ui
     }
+    /// Mesure du texte fournie par la pile (voir [`Ui::set_measure`]) ;
+    /// le gate Verify mesure les candidats de la même façon.
+    pub fn set_measure(&mut self, m: crate::Measure) -> bool {
+        self.ui.set_measure(m)
+    }
     pub fn behavior_version(&self) -> u64 {
         self.behavior.version
     }
@@ -178,6 +183,11 @@ impl<S> Session<S> {
         if self.verify_gate {
             let mut probe =
                 Ui::new(view.clone(), self.ui.viewport()).map_err(ReloadError::Patch)?;
+            // Même mesure du texte que la vue active : sinon Verify jugerait
+            // le candidat sur d'autres métriques que celles affichées.
+            if !probe.set_measure(self.ui.measure()) {
+                return Err(ReloadError::Patch(PatchError::InvalidSize { path: Vec::new() }));
+            }
             probe.copy_states_from(&self.ui);
             let ctx = crate::verify::Context {
                 tokens: None,

@@ -9,11 +9,18 @@
 //! fenêtre se crée ; instance wgpu sur l'API native seule.
 //!
 //! `UI_SHELL_EXIT_FRAMES=n` : quitte après `n` frames (essai automatique).
+//!
+//! `UI_SHELL_SKIN=fichier` : habillage rechargé à chaud (U3, L0/L1). Le
+//! fichier est relu toutes les 250 ms ; un contenu nouveau passe par
+//! [`Shell::reload_skin`] (lecture fail-closed, gate Verify). Un refus ou un
+//! fichier illisible laisse l'habillage actif en place et s'affiche sur
+//! stderr.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use ui_core::Event;
 use ui_shell::{paint, Op, Shell};
 use vello::kurbo::{Affine, Rect as KRect, RoundedRect, Stroke};
@@ -22,7 +29,7 @@ use vello::util::{DeviceHandle, RenderContext, RenderSurface};
 use vello::{AaConfig, AaSupport, Renderer, RendererOptions};
 use winit::application::ApplicationHandler;
 use winit::event::{ButtonSource, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
@@ -122,7 +129,20 @@ struct App {
     pointer: (f64, f64),
     frames: u64,
     exit_after: Option<u64>,
+    skin: Option<SkinWatch>,
 }
+
+/// Surveillance d'un fichier d'habillage par relecture périodique : pas de
+/// dépendance de notification, et un éditeur qui remplace le fichier
+/// (renommage) est vu comme une simple écriture.
+struct SkinWatch {
+    path: std::path::PathBuf,
+    /// Dernier contenu traité (accepté ou refusé), pour ne pas répéter.
+    last: Option<Result<String, String>>,
+    next: Instant,
+}
+
+const SKIN_POLL: Duration = Duration::from_millis(250);
 
 fn shade(level: usize) -> Color {
     let v = 28 + 8 * (level.min(4) as u8);
@@ -244,7 +264,45 @@ impl App {
     }
 }
 
+impl App {
+    fn poll_skin(&mut self) {
+        let Some(w) = &mut self.skin else { return };
+        let now = Instant::now();
+        if now < w.next {
+            return;
+        }
+        w.next = now + SKIN_POLL;
+        let read = std::fs::read_to_string(&w.path).map_err(|e| e.to_string());
+        if w.last.as_ref() == Some(&read) {
+            return;
+        }
+        w.last = Some(read.clone());
+        match read {
+            Err(e) => eprintln!("habillage illisible ({e}) : l'actif reste en place"),
+            Ok(text) => match self.shell.reload_skin(&text) {
+                Ok(level) => {
+                    eprintln!("habillage activé : {level:?}");
+                    if let Some(g) = &self.gfx {
+                        g.window.request_redraw();
+                    }
+                }
+                Err(e) => eprintln!("habillage refusé : {e:?} ; l'actif reste en place"),
+            },
+        }
+    }
+}
+
 impl ApplicationHandler for App {
+    fn about_to_wait(&mut self, el: &dyn ActiveEventLoop) {
+        // Pas avant la mesure Parley : le gate jugerait sur la mauvaise.
+        if self.text.is_some() {
+            self.poll_skin();
+        }
+        if let Some(w) = &self.skin {
+            el.set_control_flow(ControlFlow::WaitUntil(w.next));
+        }
+    }
+
     fn can_create_surfaces(&mut self, el: &dyn ActiveEventLoop) {
         if self.gfx.is_some() {
             return;
@@ -380,6 +438,11 @@ fn main() {
         exit_after: std::env::var("UI_SHELL_EXIT_FRAMES")
             .ok()
             .and_then(|v| v.parse().ok()),
+        skin: std::env::var_os("UI_SHELL_SKIN").map(|p| SkinWatch {
+            path: p.into(),
+            last: None,
+            next: Instant::now(),
+        }),
     };
     EventLoop::new()
         .expect("event loop")
