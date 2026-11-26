@@ -16,10 +16,72 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 const VISIBLE: usize = 50;
 
+static T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// `R3_PHASES=1`: elapsed time since `main` at each startup phase, on stderr.
+fn phase(name: &str) {
+    if std::env::var_os("R3_PHASES").is_some() {
+        let ms = T0.get().map_or(0.0, |t| t.elapsed().as_secs_f64() * 1e3);
+        eprintln!("phase {name} {ms:.1}");
+    }
+}
+
 struct Gfx {
     window: Arc<dyn Window>,
     surface: RenderSurface<'static>,
     renderer: Renderer,
+    cache: Option<PipelineCacheFile>,
+}
+
+/// Driver pipeline cache kept on disk between runs (`R3_NO_PIPELINE_CACHE`
+/// turns it off). Only where wgpu supports it (Vulkan); elsewhere `None`.
+struct PipelineCacheFile {
+    cache: wgpu::PipelineCache,
+    path: std::path::PathBuf,
+}
+
+impl PipelineCacheFile {
+    fn open(adapter: &wgpu::Adapter, device: &wgpu::Device) -> Option<Self> {
+        if std::env::var_os("R3_NO_PIPELINE_CACHE").is_some()
+            || !device.features().contains(wgpu::Features::PIPELINE_CACHE)
+        {
+            return None;
+        }
+        let key = wgpu::util::pipeline_cache_key(&adapter.get_info())?;
+        let dir = std::env::var_os("XDG_CACHE_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".cache")))?
+            .join("ravum-ui-bench");
+        let path = dir.join(key);
+        let data = std::fs::read(&path).ok();
+        // SAFETY: wgpu requires the data to come from `PipelineCache::get_data`
+        // on a compatible adapter. The file is only written by `save` below,
+        // under a name that encodes the adapter and driver
+        // (`pipeline_cache_key`), and `fallback: true` makes the driver
+        // discard data it rejects instead of failing.
+        let cache = unsafe {
+            device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                label: Some("vello"),
+                data: data.as_deref(),
+                fallback: true,
+            })
+        };
+        Some(Self { cache, path })
+    }
+
+    /// Written after the first frame, off the critical path; atomic rename.
+    fn save(&self) {
+        let Some(data) = self.cache.get_data() else {
+            return;
+        };
+        if let Some(dir) = self.path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let tmp = self.path.with_extension("tmp");
+        if std::fs::write(&tmp, data).is_ok() {
+            let _ = std::fs::rename(&tmp, &self.path);
+        }
+    }
 }
 
 struct App {
@@ -49,8 +111,12 @@ impl App {
     /// Renders one frame; `false` when no frame was presented (skipped).
     fn draw(&mut self) -> bool {
         self.scene.step();
+        let first = self.layouts.iter().all(Option::is_none);
         for i in 0..VISIBLE.min(self.scene.params.len()) {
             self.layout_row(i);
+        }
+        if first {
+            phase("text_layout");
         }
         let gfx = self.gfx.as_mut().expect("surface");
         let mut sc = vello::Scene::new();
@@ -144,6 +210,12 @@ impl App {
             .copy(&dev.device, &mut enc, &gfx.surface.target_view, &view);
         dev.queue.submit([enc.finish()]);
         dev.queue.present(frame);
+        if first {
+            phase("first_present");
+            if let Some(c) = &gfx.cache {
+                c.save();
+            }
+        }
         true
     }
 }
@@ -156,7 +228,9 @@ impl ApplicationHandler for App {
         let attrs = WindowAttributes::default()
             .with_title("r3-modular")
             .with_surface_size(winit::dpi::PhysicalSize::new(1280u32, 800u32));
+        phase("event_loop_ready");
         let window: Arc<dyn Window> = Arc::from(el.create_window(attrs).expect("window"));
+        phase("window");
         let size = window.surface_size();
         let surface = pollster::block_on(self.cx.create_surface(
             window.clone(),
@@ -165,16 +239,31 @@ impl ApplicationHandler for App {
             wgpu::PresentMode::AutoVsync,
         ))
         .expect("surface");
+        phase("gpu_device_surface");
+        let dev = &self.cx.devices[surface.dev_id];
+        let cache = PipelineCacheFile::open(dev.adapter(), &dev.device);
         let renderer = Renderer::new(
-            &self.cx.devices[surface.dev_id].device,
-            RendererOptions::default(),
+            &dev.device,
+            RendererOptions {
+                // Only `AaConfig::Area` is drawn: compiling the MSAA 8 and
+                // 16 permutations too was startup time for nothing.
+                antialiasing_support: if std::env::var_os("R3_AA_ALL").is_some() {
+                    vello::AaSupport::all()
+                } else {
+                    vello::AaSupport::area_only()
+                },
+                pipeline_cache: cache.as_ref().map(|c| c.cache.clone()),
+                ..RendererOptions::default()
+            },
         )
         .expect("renderer");
+        phase("vello_pipelines");
         window.request_redraw();
         self.gfx = Some(Gfx {
             window,
             surface,
             renderer,
+            cache,
         });
     }
 
@@ -195,6 +284,7 @@ impl ApplicationHandler for App {
 
 fn main() {
     let rec = Recorder::new("modular");
+    T0.get_or_init(std::time::Instant::now);
     let scene = Scene::new();
     let n = scene.params.len();
     let app = App {

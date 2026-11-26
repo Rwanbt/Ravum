@@ -36,3 +36,42 @@ Linux 7.0 x86_64, Wayland ; rendu sur l'iGPU Intel Raptor Lake-P UHD
 - Pas mesurés : repos (CPU et réveils), latence d'entrée, VRAM, temps GPU
   (protocole §5) ; texte long, IME, bidi, accessibilité (tour 4).
 - La pile modulaire du banc est un runtime minimal écrit pour le banc.
+
+## Première frame de la pile modulaire (UI-D21) : analyse
+
+`R3_PHASES=1` écrit sur stderr le temps écoulé depuis `main` à chaque phase
+du démarrage. Essai dans le conteneur (Xvfb, Vulkan **logiciel** lavapipe :
+ordres de grandeur seulement, médiane de 3 exécutions, en ms) :
+
+| Phase (cumul) | Avant | `area_only` |
+|---|---|---|
+| boucle d'événements prête | 37 | 37 |
+| fenêtre | 38 | 38 |
+| GPU : instance, adaptateur, device, surface | 72 | 55 |
+| **pipelines Vello** (compilation des shaders) | **290** | **183** |
+| mise en forme du texte (50 lignes) | 292 | 186 |
+| premier rendu présenté | 451 | 316 |
+
+Causes, par poids :
+1. **Compilation des shaders de Vello** : la pile compilait les trois
+   variantes d'anticrénelage (zone, MSAA 8, MSAA 16) alors que seule la
+   zone sert. Corrigé : `AaSupport::area_only()` (≈ −110 ms ici).
+   La traduction WGSL → SPIR-V par naga reste sur le chemin critique.
+2. **Premier rendu** (≈ 130 ms ici) : premières soumissions au GPU ;
+   à mesurer sur matériel réel.
+3. **Démarrage à froid** : sur r1-pulse, la 1re exécution (293 ms) était
+   plus lente que les suivantes (≈ 210 ms), signe du cache de shaders du
+   pilote. Ajouté : cache de pipelines wgpu sur disque
+   (`~/.cache/ravum-ui-bench/`, Vulkan seulement, écrit après la première
+   frame ; `R3_NO_PIPELINE_CACHE` le coupe). lavapipe ne cache rien
+   (fichier de 96 octets) : son effet n'est mesurable que sur un vrai pilote.
+4. Texte, fenêtre et GPU : faibles (≈ 50 ms au total).
+
+Pistes suivantes, à décider après la mesure sur r1-pulse : créer le device
+et les pipelines dans un thread pendant la création de la fenêtre (≈ 35 ms) ;
+shaders précompilés au build (supprime naga du démarrage, demande une
+modification de Vello ou un fork).
+
+`unsafe` : un bloc, `create_pipeline_cache`, justifié en commentaire
+(données écrites par le seul programme, clé = adaptateur et pilote,
+`fallback: true`). Code de banc, hors crates Ravum.
