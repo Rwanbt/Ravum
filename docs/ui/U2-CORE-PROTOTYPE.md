@@ -32,7 +32,21 @@ fenêtre viendront avec la pile choisie.
   (un rechargement qui **ajoute** des diagnostics est refusé).
 - L'état de l'application n'est jamais touché par un rechargement.
 
-## Tests (`cargo test -p ui-core`, 12 tests)
+## Plugins U4 (`ui-core/src/plugin.rs`)
+- Services nommés, dépendances, ordre d'activation (fournisseur d'abord),
+  cycle de vie journalisé (activation, désactivation).
+- Permissions déclarées par ce que le plugin apporte (panneau, commande,
+  service fourni ou utilisé) ; tout ce qui n'est pas accordé est refusé.
+- Panneaux montés dans un emplacement de l'application, commandes préfixées
+  par le plugin ; tout disparaît avec le plugin (nettoyage automatique).
+- Installation, mise à jour et retrait **transactionnels** : l'ensemble
+  candidat est validé en entier (service manquant ou en double, cycle,
+  collision de clé, gate Verify, vue cassée) ; un refus ne change rien.
+  Retrait refusé tant qu'un autre plugin utilise un service du plugin.
+- Pas d'isolation des plugins non fiables (WASM ou processus) : dépend du
+  runtime retenu.
+
+## Tests (`cargo test -p ui-core`, 16 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -44,6 +58,9 @@ fenêtre viendront avec la pile choisie.
 | L0/L1/L2 classés, état conservé | `hot::levels_are_classified`, `hot::l0_l1_l2_keep_state_and_focus` |
 | rechargement refusé → version active intacte (5 causes) | `hot::refused_reloads_keep_the_whole_active_version` |
 | 20 rechargements L2 et 10 000 événements sans perte | `hot::twenty_reloads_and_ten_thousand_events_lose_nothing` |
+| U4 : un plugin ajoute, modifie et retire un panneau dans l'application ouverte | `plugin::a_plugin_adds_updates_and_removes_a_panel_in_a_running_app` |
+| services, dépendances, cycles | `plugin::services_and_dependencies`, `plugin::dependency_cycles_are_refused` |
+| refus sans effet (9 causes) | `plugin::refusals_change_nothing` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
