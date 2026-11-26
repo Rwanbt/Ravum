@@ -75,3 +75,27 @@ modification de Vello ou un fork).
 `unsafe` : un bloc, `create_pipeline_cache`, justifié en commentaire
 (données écrites par le seul programme, clé = adaptateur et pilote,
 `fallback: true`). Code de banc, hors crates Ravum.
+
+### Mesures r1-pulse (commit `86dc42e`) et deuxième étape
+
+[`first-frame-2026-11-26.md`](../../bench/ui-candidates/results/r1-pulse/first-frame-2026-11-26.md)
+corrige l'analyse ci-dessus : sur Mesa/Intel, les pipelines Vello coûtent
+6 à 9 ms ; `area_only` ne gagne que ≈ 2 ms. À chaud, les 199 ms se
+répartissent en trois postes **en série** : démarrage → boucle d'événements
+(70 ms, dont l'instance wgpu), fenêtre (15), adaptateur + device + surface
+(56), puis premier rendu (47, compilation différée des pipelines par le
+pilote, confirmée ici : le rendu de préchauffage la déplace).
+
+Deuxième étape (ce commit) : tout ce qui ne demande pas la fenêtre est
+préparé **dans un thread dès `main`**, pendant que la boucle d'événements et
+la fenêtre se créent : instance, adaptateur et device wgpu, pipelines Vello,
+un rendu de préchauffage hors écran (64 × 64), et la base de polices sur un
+second thread. Au moment de la fenêtre, il ne reste que la surface.
+Fail-closed : si le device préparé ne peut pas présenter sur la fenêtre, un
+device et un renderer compatibles sont créés à la place.
+Variables pour A/B : `R3_SERIAL_INIT` (même travail, sans parallélisme),
+`R3_NO_PREWARM`. Nouvelles phases : `w_instance`, `w_device`,
+`w_pipelines`, `w_prewarm`, `w_fonts`, `warm_joined`, `surface`.
+Sous lavapipe (CPU), le gain est faible : le thread est le chemin critique.
+Il est attendu sur un vrai GPU, où la boucle et la fenêtre (≈ 85 ms)
+recouvrent le GPU et les polices ; à mesurer.
