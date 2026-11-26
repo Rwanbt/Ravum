@@ -120,3 +120,19 @@ Troisième étape (ce commit) :
 Sans effet mesurable dans le conteneur (aucun pilote GL) ; à mesurer.
 Reste ouvert : le froid réel (≈ 410 ms de compilation par le pilote, une
 fois par installation ou mise à jour du pilote).
+
+### Passe 3 sur r1-pulse (commit `68055ef`) : bilan
+
+[`first-frame-3-2026-11-26.md`](../../bench/ui-candidates/results/r1-pulse/first-frame-3-2026-11-26.md) :
+première frame de la pile modulaire, médiane à chaud, **124 ms** (119,7 à
+131,1) avec le réglage par défaut, contre 199 ms au départ (passe 1) et
+211 ms avec l'ancien ensemble d'API (série E). L'API native seule gagne
+≈ 73 ms (instance et device) ; le préchauffage reste une perte (+15 ms).
+Tour complet à l'échelle 100 % : modulaire 144 ms, egui 176 ms, Slint 89 ms.
+
+Ce qui reste sur le chemin critique (F) : thread de préparation 71 ms
+(instance 45, device 19, pipelines 6), puis ≈ 48 ms de compilation différée
+par le pilote au premier rendu. Non résolu : le froid réel (≈ 410 ms de
+compilation par le pilote après installation ou mise à jour du pilote).
+Les blocs de lignes brutes de ce fichier sont vides : seules les médianes
+et les plages min–max ont été transmises.
