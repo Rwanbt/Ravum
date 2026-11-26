@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-UI-LANG-2` |
-| Statut | **DRAFT** — rien n'est ratifié ; aucune implémentation tant que le responsable n'a pas tranché §8 |
+| Statut | **ACCEPTED** par le responsable le 2026-11-26 (UI-D20, [`DECISIONS-2026-11-24-UI.md`](../decision/DECISIONS-2026-11-24-UI.md)) ; implémentation en cours |
 | Date | 2026-11-25 |
 | Auteur | agent de développement |
 | Cadre | étape U1 de [`docs/ui/PLAN.md`](../ui/PLAN.md) ; jalon fixé par [`RFC-UI-LANG-1`](RFC-UI-LANG-1.md) §4 (« avant U5 ») |
@@ -47,9 +47,9 @@ impl Arena<T> {
 Parcours : `for (h, x) in &a` et `for (h, x) in &mut a` (`h: Handle<T>`
 copié, `x` emprunt borné, comme OWN-6.13 et STD-20.6).
 
-### 2.1 Règles normatives proposées (à ratifier)
+### 2.1 Règles normatives (ratifiées, UI-D20)
 
-| ID proposé | Règle |
+| ID | Règle |
 |---|---|
 | HDL-1 | `Handle<T>` est un type **valeur** `Copy`, opaque : un identifiant d'arène, un indice de place et une génération. Il n'est **pas** une référence : il est stockable partout (champ, `Vec`, `Map` comme valeur, message), retournable et transmissible entre fonctions. |
 | HDL-2 | `get`, `get_mut`, `contains` et `remove` rendent `None` / `false` pour un handle **périmé** (sa place a été libérée ou réutilisée) ou **étranger** (créé par une autre arène). Jamais un autre élément, jamais de panic. |
@@ -59,7 +59,7 @@ copié, `x` emprunt borné, comme OWN-6.13 et STD-20.6).
 | HDL-6 | `get`/`get_mut` sont des vues d'instruction (OWN-6.8) : stocker ou retourner `Option<&T>` est `E-OWN-REF-ESCAPE`, comme `Map::get` (STD-20.3). |
 | HDL-7 | Classification de clone (OWN-6.14) : `Handle<T>` est *valeur* (copie) ; `Arena<T>` est *valeur* si `T` l'est, et son clone garde les **mêmes** indices et générations mais reçoit un **nouvel** identifiant d'arène : un handle de l'original est étranger pour la copie (HDL-2). |
 | HDL-8 | Effets : `new` et `insert` ont `alloc` ; les autres n'ont aucun effet, mais touchent le tas : refusés dans un module temps réel (INV-05, `Inst::touches_heap_or_io`), comme `Vec` et `Map`. |
-| HDL-9 | `==` sur `Handle<T>` compare les trois composants. `Handle<T>` n'est pas ordonné et n'est **pas** une clé de `Map` dans cette RFC (STD-20.1 inchangé ; voir §8, question 3). |
+| HDL-9 | `==` sur `Handle<T>` compare les trois composants. `Handle<T>` est une **clé de `Map`** (UI-D20, question 3) : l'ordre total de la clé est l'ordre lexicographique sur (identifiant d'arène, indice de place, génération). Il n'y a pas d'opérateur `<` sur `Handle<T>` dans le langage ; seul l'ordre interne de `Map` l'utilise. |
 
 ### 2.2 Hot reload
 
@@ -123,7 +123,12 @@ mesurer sur le banc U1-B avant toute conclusion ; aucun chiffre ici.
 - Pas de partage entre threads (CONC inchangé) : une arène n'est pas
   `Send` dans cette RFC.
 
-## 8. Décisions demandées au responsable
+## 8. Décisions du responsable (2026-11-26, UI-D20)
+
+Réponses : 1 **oui** ; 2 **oui** (HDL-2 à HDL-4 ratifiés) ; 3 **maintenant**
+(HDL-9 amendé ci-dessus) ; 4 **nouvel identifiant** (HDL-7 tel qu'écrit).
+
+Questions telles que posées :
 
 1. Accepter le **principe** : `Arena<T>` et `Handle<T>` comme seuls moyens
    de désignation durable en Core (pas de références stockables).

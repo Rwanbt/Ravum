@@ -176,3 +176,19 @@ contredit).
     incertaine ne vaut jamais exemption.
   - Le carburant mesure du travail selon un modèle ; ce n'est **pas** une
     preuve de temps d'exécution maximal.
+
+## RFC-UI-LANG-2 (2026-11-26, réponses du responsable)
+
+- **UI-D20 — RFC-UI-LANG-2 acceptée.** Réponses aux quatre questions du §8 :
+  1. principe accepté : `Arena<T>` et `Handle<T>` sont les seuls moyens de
+     désignation durable en Core ;
+  2. HDL-2 à HDL-4 ratifiés ;
+  3. `Handle<T>` devient une clé de `Map` **dans cette RFC** (ordre total sur
+     identifiant d'arène, indice, génération ; pas d'opérateur `<`) ;
+  4. le clone d'une arène reçoit un **nouvel** identifiant (HDL-7).
+- Mesures du tour 3 (U1-B) : le responsable les lance sur ses machines ; le
+  choix de la pile graphique suivra le rapport.
+- Fusion : le responsable a demandé d'« enchaîner toutes les étapes du plan
+  en autonomie » (2026-11-26). Les PR d'implémentation de RFC-UI-LANG-2 sont
+  fusionnées vers `dev` aux **mêmes conditions** qu'UI-D19 ; à confirmer ou
+  restreindre par le responsable.
