@@ -227,3 +227,44 @@ fn twenty_reloads_and_ten_thousand_events_lose_nothing() {
     assert_eq!(s.behavior_version(), 21);
     assert_eq!(s.ui().focus(), None);
 }
+
+/// Le gate d'activation est le Verify complet (U8) : un avertissement ne
+/// bloque pas, un contournement et une cible tactile trop petite si.
+#[test]
+fn reloads_go_through_the_full_verify_gate() {
+    let mut s = session();
+    // Texte vide : avertissement seulement, rechargement accepté.
+    let mut v = view("n", 40.0, false);
+    v.children[1].children[0].text = Some(String::new());
+    let g = s.ui().generation();
+    s.reload(g, v, binds(false), None).unwrap();
+
+    // Contenu caché dans une boîte de largeur nulle : refusé.
+    let g = s.ui().generation();
+    let e = s
+        .reload(g, view("n", 0.0, false), binds(false), None)
+        .unwrap_err();
+    assert!(
+        matches!(&e, ReloadError::VerifyRegression(f) if f.iter().any(|f| f.rule == "layout.hidden-content")),
+        "{e:?}"
+    );
+
+    // En tactile, une nouvelle cible de 20 px de haut est refusée ; la
+    // cible existante, déjà signalée dans la version active, ne bloque pas.
+    s.input = ui_core::responsive::Input::Touch;
+    let mut v = view("n", 40.0, false);
+    v.children.push(Desc::new(
+        5,
+        Style {
+            focusable: true,
+            ..fixed(20.0, 20.0)
+        },
+    ));
+    let g = s.ui().generation();
+    let e = s.reload(g, v, binds(false), None).unwrap_err();
+    assert!(
+        matches!(&e, ReloadError::VerifyRegression(f) if f.len() == 1 && f[0].rule == "a11y.touch-target" && f[0].path == vec![1, 5]),
+        "{e:?}"
+    );
+    assert_eq!(s.ui().generation(), g);
+}

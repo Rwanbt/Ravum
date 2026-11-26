@@ -97,8 +97,11 @@ fenêtre viendront avec la pile choisie.
 - Gate d'activation : refus si le candidat ajoute une **erreur** ; les
   avertissements et les constats déjà présents ne bloquent pas.
 - Pas encore : contraste des couleurs (demande le rendu), ordre de lecture
-  pour l'accessibilité, branchement de ce gate à la place du gate minimal
-  dans `hot` et `plugin`.
+  pour l'accessibilité.
+- Ce gate est **branché** dans le hot reload (`hot`) et les plugins
+  (`plugin`) à la place du gate minimal : avertissements non bloquants,
+  contournements refusés, entrée tactile prise en compte, et rechargement
+  refusé si le ruleset a été modifié sans son empreinte.
 
 ## Surfaces U9, côté données (`ui-core/src/surfaces.rs`)
 - File audio → UI à un producteur et un consommateur, capacité fixe :
@@ -111,7 +114,7 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : spectrogramme, graphe de nœuds, canevas, vidéo, 3D, textures
   GPU partagées (demandent le rendu).
 
-## Tests (`cargo test -p ui-core`, 38 tests)
+## Tests (`cargo test -p ui-core`, 40 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -138,6 +141,7 @@ fenêtre viendront avec la pile choisie.
 | U8 : anti-contournement du ruleset | `verify::ruleset_lock_matches`, `verify::a_silently_weakened_rule_is_refused` |
 | U8 : sorties identiques sur N exécutions, gate | `verify::scores_gate_and_reports_are_deterministic` |
 | U9 : audio indépendant de l'UI, `push` sans allocation (allocateur compteur) | `surfaces::ring_push_never_allocates_and_drops_when_full`, `surfaces::ring_crosses_threads_in_order` |
+| U8 : gate complet branché au hot reload et aux plugins | `hot::reloads_go_through_the_full_verify_gate`, `plugin::plugins_cannot_hide_content_to_pass_the_gate` |
 | U9 : forme d'onde et timeline | `surfaces::peaks_match_a_direct_scan_at_every_zoom`, `surfaces::timeline_zoom_keeps_the_cursor_time_fixed` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 

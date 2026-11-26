@@ -369,3 +369,17 @@ fn level(s: Severity) -> &'static str {
         Severity::Warning => "warning",
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GateError {
+    Tampered(VerifyError),
+    Regression(Vec<Finding>),
+}
+
+/// Gate d'activation à chaud : Verify complet sur la version active et sur
+/// le candidat, refus si le candidat ajoute une erreur.
+pub fn activation_gate(active: &Ui, candidate: &Ui, ctx: &Context) -> Result<(), GateError> {
+    let a = run(active, ctx).map_err(GateError::Tampered)?;
+    let c = run(candidate, ctx).map_err(GateError::Tampered)?;
+    gate(&a, &c).map_err(GateError::Regression)
+}

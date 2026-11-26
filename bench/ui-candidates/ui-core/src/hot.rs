@@ -6,7 +6,7 @@
 //! version reste active en entier (vue, liaisons, comportement), et l'état
 //! de l'application n'est jamais touché par un rechargement.
 
-use crate::{Desc, Diagnostic, Event, PatchError, Path, Ui};
+use crate::{Desc, Event, PatchError, Path, Ui};
 use std::collections::BTreeMap;
 
 /// Niveau d'un changement de vue, du moins coûteux au plus coûteux.
@@ -63,7 +63,9 @@ pub enum ReloadError {
     },
     /// Le gate Verify refuse : diagnostics nouveaux par rapport à la
     /// version active.
-    VerifyRegression(Vec<Diagnostic>),
+    VerifyRegression(Vec<crate::verify::Finding>),
+    /// Le ruleset de Verify a été modifié sans mise à jour de son empreinte.
+    RulesetTampered,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +82,8 @@ pub struct Session<S> {
     pub state: S,
     /// Refuser un rechargement qui ajoute des diagnostics Verify.
     pub verify_gate: bool,
+    /// Type d'entrée transmis à Verify (cibles tactiles).
+    pub input: crate::responsive::Input,
 }
 
 fn check<S>(
@@ -130,6 +134,7 @@ impl<S> Session<S> {
             behavior,
             state,
             verify_gate: true,
+            input: crate::responsive::Input::Pointer,
         })
     }
 
@@ -171,17 +176,21 @@ impl<S> Session<S> {
         // tous les contrôles.
         let level = classify(&self.view, &view);
         if self.verify_gate {
-            let before = self.ui.verify();
             let mut probe =
                 Ui::new(view.clone(), self.ui.viewport()).map_err(ReloadError::Patch)?;
             probe.copy_states_from(&self.ui);
-            let new: Vec<Diagnostic> = probe
-                .verify()
-                .into_iter()
-                .filter(|d| !before.contains(d))
-                .collect();
-            if !new.is_empty() {
-                return Err(ReloadError::VerifyRegression(new));
+            let ctx = crate::verify::Context {
+                tokens: None,
+                input: self.input,
+            };
+            match crate::verify::activation_gate(&self.ui, &probe, &ctx) {
+                Ok(()) => {}
+                Err(crate::verify::GateError::Regression(new)) => {
+                    return Err(ReloadError::VerifyRegression(new))
+                }
+                Err(crate::verify::GateError::Tampered(_)) => {
+                    return Err(ReloadError::RulesetTampered)
+                }
             }
         }
         self.ui
