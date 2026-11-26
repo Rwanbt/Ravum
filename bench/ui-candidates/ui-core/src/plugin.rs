@@ -12,7 +12,7 @@
 //! elle dépend du runtime retenu.
 
 use crate::hot::Handler;
-use crate::{Desc, Diagnostic, PatchError, Ui};
+use crate::{Desc, PatchError, Ui};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -82,7 +82,9 @@ pub enum PluginError {
         by: Vec<String>,
     },
     Patch(PatchError),
-    VerifyRegression(Vec<Diagnostic>),
+    VerifyRegression(Vec<crate::verify::Finding>),
+    /// Le ruleset de Verify a été modifié sans mise à jour de son empreinte.
+    RulesetTampered,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +105,8 @@ pub struct Host<S> {
     ui: Ui,
     pub state: S,
     pub verify_gate: bool,
+    /// Type d'entrée transmis à Verify (cibles tactiles).
+    pub input: crate::responsive::Input,
     pub log: Vec<Lifecycle>,
 }
 
@@ -189,6 +193,7 @@ impl<S> Host<S> {
             ui,
             state,
             verify_gate: true,
+            input: crate::responsive::Input::Pointer,
             log: Vec::new(),
         })
     }
@@ -343,17 +348,21 @@ impl<S> Host<S> {
             let ord = order(&candidate)?;
             let view = self.compose(&candidate, &ord)?;
             if self.verify_gate {
-                let before = self.ui.verify();
                 let mut probe =
                     Ui::new(view.clone(), self.ui.viewport()).map_err(PluginError::Patch)?;
                 probe.copy_states_from(&self.ui);
-                let new: Vec<Diagnostic> = probe
-                    .verify()
-                    .into_iter()
-                    .filter(|d| !before.contains(d))
-                    .collect();
-                if !new.is_empty() {
-                    return Err(PluginError::VerifyRegression(new));
+                let ctx = crate::verify::Context {
+                    tokens: None,
+                    input: self.input,
+                };
+                match crate::verify::activation_gate(&self.ui, &probe, &ctx) {
+                    Ok(()) => {}
+                    Err(crate::verify::GateError::Regression(new)) => {
+                        return Err(PluginError::VerifyRegression(new))
+                    }
+                    Err(crate::verify::GateError::Tampered(_)) => {
+                        return Err(PluginError::RulesetTampered)
+                    }
                 }
             }
             self.ui

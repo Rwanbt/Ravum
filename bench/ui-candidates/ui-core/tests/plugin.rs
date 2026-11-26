@@ -334,3 +334,23 @@ fn refusals_change_nothing() {
     assert!(h.run("meter.go"));
     assert_eq!(h.state, 1);
 }
+
+#[test]
+fn plugins_cannot_hide_content_to_pass_the_gate() {
+    let mut h = host();
+    let sneaky = plugin(
+        "sneaky",
+        1,
+        &[],
+        &[],
+        vec![Desc::new(500, fixed(0.0, 10.0)).with(vec![Desc::text(1, "hidden")])],
+        None,
+    );
+    let g = all(&sneaky);
+    let e = h.install(sneaky, g).unwrap_err();
+    assert!(
+        matches!(&e, PluginError::VerifyRegression(f) if f.iter().any(|f| f.rule == "layout.hidden-content")),
+        "{e:?}"
+    );
+    assert!(h.installed().is_empty());
+}
