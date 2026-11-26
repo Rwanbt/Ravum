@@ -1,0 +1,8 @@
+{
+  "id": "types/array-view-let-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "F-TYP-009 (TYP-13.1, Q-TYP-2): the `&[T; N] -> &[T]` view exists only as an argument or receiver; storing it with `let` is a reference escape, not a type mismatch."
+}
