@@ -1,0 +1,6 @@
+{
+  "id": "ownership/arena-insert-during-iteration",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "STD-21.6 / HDL-5 (MUST): the arena stays borrowed during a for loop over &a; insert in the body is a conflict."
+}

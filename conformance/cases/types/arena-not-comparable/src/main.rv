@@ -1,0 +1,4 @@
+fn same(a: &Arena<i64>, b: &Arena<i64>) -> bool {
+    *a == *b
+}
+fn main() -> () {}

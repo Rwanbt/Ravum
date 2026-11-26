@@ -100,6 +100,7 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "Error::new" | "error::new" => FreeBuiltin::ErrorNew,
         "Vec::new" | "vec::new" => FreeBuiltin::RustPath("Vec::new"),
         "Map::new" => FreeBuiltin::RustPath("crate::Map::new"),
+        "Arena::new" => FreeBuiltin::RustPath("crate::Arena::new"),
         "string::join" | "std::string::join" => FreeBuiltin::RustPath("crate::rv_text_join"),
         "Vec::with_capacity" | "vec::with_capacity" => FreeBuiltin::RustPath("Vec::with_capacity"),
         "String::new" | "string::new" => FreeBuiltin::RustPath("String::new"),
@@ -236,6 +237,9 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "get",
         "get_mut",
     ];
+    const ARENA: &[&str] = &[
+        "len", "is_empty", "insert", "contains", "get", "get_mut", "remove",
+    ];
     const OPTION: &[&str] = &["is_some", "is_none", "unwrap", "unwrap_or", "ok_or"];
     const RESULT: &[&str] = &["is_ok", "is_err", "unwrap", "unwrap_or", "ok", "err"];
     const FLOAT: &[&str] = &[
@@ -266,6 +270,7 @@ pub(super) fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "str" => STR.contains(&method),
         "Vec" => VEC.contains(&method),
         "Map" => MAP.contains(&method),
+        "Arena" => ARENA.contains(&method),
         "slice" | "Slice" | "[T]" => SLICE.contains(&method),
         "Option" => OPTION.contains(&method),
         "Result" => RESULT.contains(&method),

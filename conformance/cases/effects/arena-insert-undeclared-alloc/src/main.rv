@@ -1,0 +1,4 @@
+fn add(a: &mut Arena<i64>) -> () effects() {
+    let _h = a.insert(1i64);
+}
+fn main() -> () {}

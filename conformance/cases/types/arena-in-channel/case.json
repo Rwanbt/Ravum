@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-in-channel",
+  "mode": "compile-fail",
+  "expect_codes": ["E-CONC-NOT-TRANSFERABLE"],
+  "notes": "STD-21.13 (MUST): a channel of Option<Arena<i64>> is refused."
+}

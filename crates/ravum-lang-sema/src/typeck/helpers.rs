@@ -187,6 +187,9 @@ pub(super) fn method_self_kind(ty: &Type) -> Option<MethodSelfKind> {
         Type::Nominal { def, .. } if *def == crate::builtins::PRELUDE_MAP_DEF => {
             MethodSelfKind::Map
         }
+        Type::Nominal { def, .. } if *def == crate::builtins::PRELUDE_ARENA_DEF => {
+            MethodSelfKind::Arena
+        }
         Type::Option(_) => MethodSelfKind::Option,
         Type::Result(_, _) => MethodSelfKind::Result,
         Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::I128 | Type::Isize => {
@@ -214,6 +217,11 @@ pub(super) fn method_env_for(ty: &Type) -> Vec<(&'static str, Type)> {
                 ("K", args[0].clone()),
                 ("V", args[1].clone()),
             ]
+        }
+        Type::Nominal { def, args, .. }
+            if *def == crate::builtins::PRELUDE_ARENA_DEF && args.len() == 1 =>
+        {
+            vec![("Self", ty.clone()), ("T", args[0].clone())]
         }
         Type::Option(inner) => vec![("Self", ty.clone()), ("T", (**inner).clone())],
         Type::Result(ok, err) => vec![
@@ -514,6 +522,18 @@ pub(super) fn clonability(
             }
             if *def == b::PRELUDE_ERROR_DEF {
                 return Ok(true);
+            }
+            // HDL-7: a handle is a value (copied, no allocation); an arena is
+            // clonable when its elements are (a new arena identifier).
+            if *def == b::PRELUDE_HANDLE_DEF {
+                return Ok(false);
+            }
+            if *def == b::PRELUDE_ARENA_DEF {
+                let mut alloc = true;
+                for a in args {
+                    alloc |= clonability(world, facts, a, seen)?;
+                }
+                return Ok(alloc);
             }
             if *def == b::PRELUDE_MAP_DEF {
                 let mut alloc = true;

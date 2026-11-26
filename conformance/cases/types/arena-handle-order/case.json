@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-handle-order",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-CMP"],
+  "notes": "STD-21.2 / HDL-9 (MUST): no order operator on a handle (the order only serves Map keys)."
+}

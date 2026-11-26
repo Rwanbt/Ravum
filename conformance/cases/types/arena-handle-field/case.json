@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-handle-field",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-FIELD"],
+  "notes": "STD-21.2 / HDL-1 (MUST): a handle is opaque."
+}

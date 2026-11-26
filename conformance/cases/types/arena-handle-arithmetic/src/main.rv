@@ -1,0 +1,4 @@
+fn next(h: Handle<i64>) -> Handle<i64> {
+    h + 1
+}
+fn main() -> () {}

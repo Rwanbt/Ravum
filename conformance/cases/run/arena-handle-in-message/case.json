@@ -1,0 +1,6 @@
+{
+  "id": "run/arena-handle-in-message",
+  "mode": "run-pass",
+  "stdout_contains": "true\nfalse\ny\n",
+  "notes": "STD-21.2 / HDL-1 (MUST): a Handle<T> is a Copy value sent in a message to another thread and back; it still designates its element."
+}

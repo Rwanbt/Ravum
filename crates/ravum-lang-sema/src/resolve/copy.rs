@@ -111,7 +111,8 @@ pub(crate) fn type_is_copy(
                 && type_is_copy(err, world, facts, state, stack, reported, diags)
         }
         Type::Nominal { def, .. } => {
-            if *def == builtins::PRELUDE_CHANDLE_DEF {
+            // HDL-1: `Handle<T>` is `Copy`; `Arena<T>` is mobile.
+            if *def == builtins::PRELUDE_CHANDLE_DEF || *def == builtins::PRELUDE_HANDLE_DEF {
                 return true;
             }
             if *def == builtins::PRELUDE_ERROR_DEF || world.nominal_kind(*def).is_none() {

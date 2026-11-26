@@ -121,6 +121,25 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         },
                     ])
                 }
+                // HDL-5 / STD-21: `for (h, x) in &a` / `&mut a` over an
+                // `Arena<T>`, in increasing slot order: `h: Handle<T>` is a
+                // copied value, `x` follows the borrow (`&T` / `&mut T`).
+                Type::Ref { mutable, inner }
+                    if matches!(&**inner, Type::Nominal { def, args, .. }
+                        if *def == crate::builtins::PRELUDE_ARENA_DEF && args.len() == 1) =>
+                {
+                    let Type::Nominal { args, .. } = &**inner else {
+                        unreachable!()
+                    };
+                    self.facts.ref_fors.insert(iter.id);
+                    Type::Tuple(vec![
+                        crate::builtins::handle_type(args[0].clone()),
+                        Type::Ref {
+                            mutable: *mutable,
+                            inner: Box::new(args[0].clone()),
+                        },
+                    ])
+                }
                 Type::Ref { mutable, inner } if matches!(**inner, Type::Vec(_)) => {
                     let Type::Vec(elem) = &**inner else {
                         unreachable!()
@@ -258,7 +277,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let map_view = matches!(&scrutinee.kind, ExprKind::MethodCall { .. })
             && matches!(
                 self.facts.methods.get(&scrutinee.id),
-                Some(MethodTarget::Builtin { path, .. }) if path == "Map::get" || path == "Map::get_mut"
+                Some(MethodTarget::Builtin { path, .. }) if crate::builtins::is_view_method(path)
             );
         if by_ref.is_some() || map_view {
             self.facts.ref_matches.insert(scrutinee.id);

@@ -1,0 +1,6 @@
+{
+  "id": "ownership/arena-view-stored",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-REF-ESCAPE"],
+  "notes": "STD-21.7 / HDL-6 (MUST): the Arena::get view cannot be stored."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/arena-handles",
+  "mode": "run-pass",
+  "stdout_contains": "4\nb\nc!\nb\nno\n<none>\nalready removed\nno\nno\ne\nyes\nroot\nno\ne\nno\nc!\nroot+\n1\n2\n3\nyes\nno\nyes\n<none>\n3\nno\nroot+\ne+\nc!+\nyes\n",
+  "notes": "STD-21 / RFC-UI-LANG-2: handles stored in fields, Vec and as Map keys (ordered by arena, slot, generation); get / get_mut in a match; stale handle after remove (None, false, never another element); smallest free slot reused with a new generation; iteration over &a and &mut a in slot order; a handle of another arena of the same type and of a clone is foreign. Path B (rustc); path C refuses Arena for now (STD-21.12)."
+}

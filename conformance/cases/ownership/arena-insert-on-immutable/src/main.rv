@@ -1,0 +1,4 @@
+fn main() -> () effects(alloc) {
+    let a: Arena<i64> = Arena::new();
+    let _h = a.insert(1i64);
+}

@@ -1,0 +1,8 @@
+fn main() -> () effects(alloc) {
+    let mut a: Arena<i64> = Arena::new();
+    let _h = a.insert(1i64);
+    for (h, x) in &a {
+        let _g = a.insert(*x);
+        drop(h);
+    }
+}

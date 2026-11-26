@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-not-comparable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-EQ"],
+  "notes": "STD-21.8 (MUST): an Arena is not comparable."
+}

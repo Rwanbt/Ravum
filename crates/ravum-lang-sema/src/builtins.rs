@@ -78,9 +78,58 @@ pub fn map_type(k: Type, v: Type) -> Type {
     }
 }
 
-/// STD-20.1 : types de clés admis (ordre total défini par la spec).
+/// STD-20.1 : types de clés admis (ordre total défini par la spec), plus
+/// `Handle<T>` (HDL-9, RFC-UI-LANG-2, UI-D20).
 pub fn is_map_key_type(t: &Type) -> bool {
-    t.is_int() || matches!(t, Type::Bool | Type::Char | Type::String)
+    t.is_int() || matches!(t, Type::Bool | Type::Char | Type::String) || is_handle_type(t)
+}
+
+/// `NodeId` réservé au type prélude `Arena<T>` (RFC-UI-LANG-2, STD-21).
+pub const PRELUDE_ARENA_DEF: NodeId = NodeId::MAX - 12;
+
+/// `NodeId` réservé au type prélude `Handle<T>` (RFC-UI-LANG-2, STD-21) :
+/// valeur `Copy` opaque (arène, place, génération), jamais une référence.
+pub const PRELUDE_HANDLE_DEF: NodeId = NodeId::MAX - 13;
+
+/// OWN-6.8 : méthodes qui rendent une **vue d'instruction** `Option<&V>` /
+/// `Option<&mut V>` (STD-20.3, HDL-6).
+pub fn is_view_method(path: &str) -> bool {
+    matches!(
+        path,
+        "Map::get" | "Map::get_mut" | "Arena::get" | "Arena::get_mut"
+    )
+}
+
+/// Vue exclusive (`Option<&mut V>`) : la table ou l'arène est empruntée en
+/// exclusivité pendant le bras.
+pub fn is_exclusive_view_method(path: &str) -> bool {
+    matches!(path, "Map::get_mut" | "Arena::get_mut")
+}
+
+/// Le type `Arena<T>`.
+pub fn arena_type(t: Type) -> Type {
+    Type::Nominal {
+        def: PRELUDE_ARENA_DEF,
+        name: "Arena".to_string(),
+        args: vec![t],
+    }
+}
+
+/// Le type `Handle<T>`.
+pub fn handle_type(t: Type) -> Type {
+    Type::Nominal {
+        def: PRELUDE_HANDLE_DEF,
+        name: "Handle".to_string(),
+        args: vec![t],
+    }
+}
+
+pub fn is_handle_type(t: &Type) -> bool {
+    matches!(t, Type::Nominal { def, .. } if *def == PRELUDE_HANDLE_DEF)
+}
+
+pub fn is_arena_type(t: &Type) -> bool {
+    matches!(t, Type::Nominal { def, .. } if *def == PRELUDE_ARENA_DEF)
 }
 
 /// Le type `CHandle`.
@@ -116,6 +165,12 @@ pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
     }
     if def == PRELUDE_MAP_DEF {
         return Some("Map");
+    }
+    if def == PRELUDE_ARENA_DEF {
+        return Some("Arena");
+    }
+    if def == PRELUDE_HANDLE_DEF {
+        return Some("Handle");
     }
     PRELUDE_GENERIC_OPAQUES
         .iter()
@@ -186,6 +241,8 @@ pub const PRELUDE_TYPES: &[&str] = &[
     "HttpResponse",
     "Future",
     "Map",
+    "Arena",
+    "Handle",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -906,6 +963,13 @@ pub static BUILTIN_ASSOC_FNS: &[BuiltinAssocFn] = &[
         effects: ALLOC,
     },
     BuiltinAssocFn {
+        path: "Arena::new",
+        generics: &["T"],
+        params: &[],
+        ret: "Arena<T>",
+        effects: ALLOC,
+    },
+    BuiltinAssocFn {
         path: "Map::new",
         generics: &["K", "V"],
         params: &[],
@@ -948,6 +1012,7 @@ pub enum MethodSelfKind {
     Slice,
     Vec,
     Map,
+    Arena,
     Option,
     Result,
     /// Entier signé ou non signé (les entrées marquées `Int` s'appliquent aux deux).
@@ -971,6 +1036,7 @@ pub fn builtin_method_takes_exclusive_receiver(kind: MethodSelfKind, name: &str)
         MethodSelfKind::String => matches!(name, "push_str" | "push"),
         MethodSelfKind::Vec => matches!(name, "push" | "pop" | "clear"),
         MethodSelfKind::Map => matches!(name, "insert" | "remove" | "get_mut"),
+        MethodSelfKind::Arena => matches!(name, "insert" | "remove" | "get_mut"),
         _ => false,
     }
 }
@@ -1003,6 +1069,7 @@ const STRING_KINDS: &[MethodSelfKind] = &[MethodSelfKind::String];
 const STR_KINDS: &[MethodSelfKind] = &[MethodSelfKind::StrRef];
 const VEC_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Vec];
 const MAP_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Map];
+const ARENA_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Arena];
 const SLICE_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Slice];
 const OPTION_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Option];
 const RESULT_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Result];
@@ -1292,6 +1359,51 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
         PURE
     ),
     method!(VEC_KINDS, "len", "Vec::len", [], "usize", PURE),
+    // STD-21 (RFC-UI-LANG-2): `Arena<T>`. `get` / `get_mut` rend une vue
+    // d'instruction (HDL-6, OWN-6.8) ; un handle périmé ou étranger rend
+    // `None` (HDL-2).
+    method!(ARENA_KINDS, "len", "Arena::len", [], "usize", PURE),
+    method!(ARENA_KINDS, "is_empty", "Arena::is_empty", [], "bool", PURE),
+    method!(
+        ARENA_KINDS,
+        "insert",
+        "Arena::insert",
+        ["T"],
+        "Handle<T>",
+        ALLOC
+    ),
+    method!(
+        ARENA_KINDS,
+        "contains",
+        "Arena::contains",
+        ["Handle<T>"],
+        "bool",
+        PURE
+    ),
+    method!(
+        ARENA_KINDS,
+        "get",
+        "Arena::get",
+        ["Handle<T>"],
+        "Option<&T>",
+        PURE
+    ),
+    method!(
+        ARENA_KINDS,
+        "get_mut",
+        "Arena::get_mut",
+        ["Handle<T>"],
+        "Option<&mut T>",
+        PURE
+    ),
+    method!(
+        ARENA_KINDS,
+        "remove",
+        "Arena::remove",
+        ["Handle<T>"],
+        "Option<T>",
+        PURE
+    ),
     // STD-20 (RFC-UI-LANG-1 P3): `Map<K, V>`. `get` / `get_mut` rend une
     // **vue d'instruction** (OWN-6.8) : bornée, jamais stockable.
     method!(MAP_KINDS, "len", "Map::len", [], "usize", PURE),
@@ -1611,6 +1723,12 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
             type_from_str(parts[0], env)?,
             type_from_str(parts[1], env)?,
         ));
+    }
+    if let Some(inner) = t.strip_prefix("Arena<").and_then(|s| s.strip_suffix('>')) {
+        return Some(arena_type(type_from_str(inner, env)?));
+    }
+    if let Some(inner) = t.strip_prefix("Handle<").and_then(|s| s.strip_suffix('>')) {
+        return Some(handle_type(type_from_str(inner, env)?));
     }
     for (name, _) in PRELUDE_GENERIC_OPAQUES {
         if let Some(inner) = t
@@ -1953,6 +2071,42 @@ mod tests {
     }
 
     #[test]
+    fn type_from_str_parses_arena_and_handle() {
+        // STD-21 (RFC-UI-LANG-2): the shapes of `Arena::new` and `insert`.
+        let env = [("T", Type::I64)];
+        assert_eq!(type_from_str("Arena<T>", &env), Some(arena_type(Type::I64)));
+        assert_eq!(
+            type_from_str("Handle<T>", &env),
+            Some(handle_type(Type::I64))
+        );
+        assert!(is_arena_type(&arena_type(Type::Bool)) && !is_arena_type(&Type::Bool));
+        assert!(
+            is_handle_type(&handle_type(Type::Bool)) && !is_handle_type(&arena_type(Type::Bool))
+        );
+        // HDL-9: a handle is a `Map` key; an arena is not.
+        assert!(is_map_key_type(&handle_type(Type::String)));
+        assert!(!is_map_key_type(&arena_type(Type::String)));
+        assert_eq!(prelude_opaque_name(PRELUDE_ARENA_DEF), Some("Arena"));
+        assert_eq!(prelude_opaque_name(PRELUDE_HANDLE_DEF), Some("Handle"));
+        for p in ["Map::get", "Map::get_mut", "Arena::get", "Arena::get_mut"] {
+            assert!(is_view_method(p), "{p}");
+        }
+        assert!(!is_view_method("Arena::remove") && !is_view_method("Vec::len"));
+        assert!(
+            is_exclusive_view_method("Arena::get_mut") && is_exclusive_view_method("Map::get_mut")
+        );
+        assert!(!is_exclusive_view_method("Arena::get"));
+        assert!(builtin_method_takes_exclusive_receiver(
+            MethodSelfKind::Arena,
+            "insert"
+        ));
+        assert!(!builtin_method_takes_exclusive_receiver(
+            MethodSelfKind::Arena,
+            "get"
+        ));
+    }
+
+    #[test]
     fn type_from_str_refuses_malformed_text() {
         for text in [
             "",
@@ -1969,6 +2123,8 @@ mod tests {
             "Map<i32>",
             "Map<i32, i32, i32>",
             "Map<i32, Inconnu>",
+            "Arena<Inconnu>",
+            "Handle<Inconnu>",
             "Inconnu",
             "[Inconnu]",
             "(i32, Inconnu)",

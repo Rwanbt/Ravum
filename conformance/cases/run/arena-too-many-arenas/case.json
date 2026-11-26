@@ -1,0 +1,6 @@
+{
+  "id": "run/arena-too-many-arenas",
+  "mode": "run-fail",
+  "stderr_contains": "panic: too many arenas in this run",
+  "notes": "STD-21.9 (MUST): at most 2^20 - 1 arenas per run."
+}

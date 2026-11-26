@@ -1,0 +1,4 @@
+fn show(h: Handle<i64>) -> String effects(alloc) {
+    h.to_string()
+}
+fn main() -> () {}

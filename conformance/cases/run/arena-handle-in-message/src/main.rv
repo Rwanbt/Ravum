@@ -1,0 +1,36 @@
+use std::io;
+use std::sync;
+use std::thread;
+
+// STD-21.2 / HDL-1: a handle is a value; it travels in a message. The arena
+// stays on the main thread (it is not sent, RFC-UI-LANG-2 §7).
+fn echo(pair: (Sender<Handle<String>>, Handle<String>)) -> () effects(thread) {
+    match pair {
+        (out, h) => {
+            let sent: bool = sync::send(&out, h);
+            drop(sent);
+        }
+    }
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let mut a: Arena<String> = Arena::new();
+    let x = a.insert(String::from("x"));
+    let y = a.insert(String::from("y"));
+    let c: Channel<Handle<String>> = sync::channel();
+    let tx: Sender<Handle<String>> = sync::sender(&c);
+    let rx: Receiver<Handle<String>> = sync::receiver(c);
+    let t: JoinHandle<()> = thread::spawn(echo, (tx, y));
+    match sync::recv(&rx) {
+        Some(h) => {
+            io::println(&(h == y).to_string());
+            io::println(&(h == x).to_string());
+            match a.get(h) {
+                Some(s) => io::println(s.as_str()),
+                None => io::println("none"),
+            }
+        }
+        None => io::println("closed"),
+    }
+    thread::join(t);
+}

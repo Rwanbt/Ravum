@@ -1,0 +1,5 @@
+use std::sync;
+fn main() -> () effects(thread, alloc) {
+    let c: Channel<Option<Arena<i64>>> = sync::channel();
+    drop(c);
+}
