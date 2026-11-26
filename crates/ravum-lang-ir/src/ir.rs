@@ -795,7 +795,7 @@ mod heap_op_tests {
         for (i, op) in HeapOp::ALL.iter().enumerate() {
             assert_eq!(*op as usize, i, "{op:?}");
         }
-        assert_eq!(HeapOp::StrJoin as usize + 1, HeapOp::ALL.len());
+        assert_eq!(HeapOp::ArenaInsert as usize + 1, HeapOp::ALL.len());
         assert!(HeapOp::ALL.len() < 64);
     }
 }
