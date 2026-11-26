@@ -22,6 +22,7 @@ pub mod motion;
 pub mod plugin;
 pub mod responsive;
 pub mod tokens;
+pub mod verify;
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -84,7 +84,23 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : orientation, DPI physique, taille de texte appliquée à la
   mesure (le texte est en monospace fixe).
 
-## Tests (`cargo test -p ui-core`, 30 tests)
+## Verify complet U8 (`ui-core/src/verify.rs`)
+- Registre de 8 règles (layout, design, accessibilité), chacune avec
+  version, sévérité et poids. L'empreinte du ruleset est **figée** dans le
+  code (`RULESET_LOCK`) : affaiblir, rétrograder ou retirer une règle sans
+  mettre l'empreinte à jour dans le même changement fait refuser l'analyse.
+- Anti-contournement : contenu caché dans une boîte de taille nulle,
+  contenu poussé hors de la fenêtre (hors conteneur défilant).
+- Sous-scores par catégorie (0 à 100, pénalité pondérée rapportée à la
+  taille de l'arbre), score total = le plus faible.
+- Rapports JSON et SARIF 2.1.0, triés, identiques d'une exécution à l'autre.
+- Gate d'activation : refus si le candidat ajoute une **erreur** ; les
+  avertissements et les constats déjà présents ne bloquent pas.
+- Pas encore : contraste des couleurs (demande le rendu), ordre de lecture
+  pour l'accessibilité, branchement de ce gate à la place du gate minimal
+  dans `hot` et `plugin`.
+
+## Tests (`cargo test -p ui-core`, 34 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -107,6 +123,9 @@ fenêtre viendront avec la pile choisie.
 | U5 : DTCG aller-retour et refus | `tokens::dtcg_round_trip_and_refusals` |
 | U6 : gates stricts sur les profils | `responsive::strict_gates_pass_on_every_profile`, `responsive::gates_catch_safe_area_touch_and_overflow` |
 | U6 : sous-score responsive sur le domaine déclaré | `responsive::bounded_sweep_publishes_coverage_and_score` |
+| U8 : un test positif et un négatif par règle | `verify::every_rule_has_a_positive_and_a_negative_case` |
+| U8 : anti-contournement du ruleset | `verify::ruleset_lock_matches`, `verify::a_silently_weakened_rule_is_refused` |
+| U8 : sorties identiques sur N exécutions, gate | `verify::scores_gate_and_reports_are_deterministic` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
