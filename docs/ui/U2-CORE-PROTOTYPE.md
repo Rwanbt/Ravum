@@ -58,7 +58,21 @@ fenêtre viendront avec la pile choisie.
   (cible atteinte tout de suite, contrat toujours vérifié) ; suspension hors
   écran ; horloge virtuelle, trajectoires déterministes.
 
-## Tests (`cargo test -p ui-core`, 22 tests)
+## Design Contract U5 (`ui-core/src/tokens.rs`)
+- Jetons couleur et dimension, références `{nom}`, thèmes qui remplacent
+  des jetons de base ; résolution refusée si jeton inconnu, cycle ou type
+  inattendu, dans la base comme dans chaque thème.
+- Styles de composant en **noms** de jetons, avec variantes : un panneau de
+  plugin hérite de la charte et du thème de l'hôte.
+- Audit (Verify) : toute marge, tout écart, toute largeur ou hauteur fixe
+  qui n'est pas une valeur de la charte est signalé ; sortie triée.
+- Import et export DTCG (sous-ensemble : `$type` `color` et `dimension`,
+  références, groupes de thèmes) ; sortie stable, aller-retour exact ;
+  import fail-closed (13 documents invalides refusés, profondeur bornée).
+- Pas encore : bordures, ombres, dégradés, transformations, masques et
+  filtres (ils demandent le rendu de la pile).
+
+## Tests (`cargo test -p ui-core`, 26 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -76,6 +90,9 @@ fenêtre viendront avec la pile choisie.
 | U7 : trajectoires vérifiées (états intermédiaires, dépassement d'un ressort) | `motion::tweens_follow_their_curve_on_the_virtual_clock`, `motion::springs_settle_and_respect_the_overshoot_bound` |
 | U7 : contrats, reciblage, réduction, hors écran, budget | `motion::contracts_refuse_and_change_nothing`, `motion::retargeting_keeps_value_and_velocity_continuous`, `motion::interruption_budget_reduced_motion_and_offscreen` |
 | U7 : déterminisme | `motion::trajectories_are_deterministic` |
+| U5 : un composant de plugin hérite de la charte ; écarts détectés | `tokens::a_plugin_component_inherits_the_charter_and_deviations_are_flagged` |
+| U5 : références, thèmes, chartes cassées refusées | `tokens::references_and_themes_resolve`, `tokens::broken_charters_are_refused` |
+| U5 : DTCG aller-retour et refus | `tokens::dtcg_round_trip_and_refusals` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
