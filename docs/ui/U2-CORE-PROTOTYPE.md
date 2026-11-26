@@ -72,7 +72,19 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : bordures, ombres, dégradés, transformations, masques et
   filtres (ils demandent le rendu de la pile).
 
-## Tests (`cargo test -p ui-core`, 26 tests)
+## Responsive U6 (`ui-core/src/responsive.rs`)
+- Profils PC, tablette, téléphone : taille logique, échelle du texte, zones
+  système (encoches, barres), type d'entrée ; points de rupture par largeur.
+- Gates stricts par profil : aucun diagnostic Verify, contenu de premier
+  niveau dans la zone sûre, cibles tactiles ≥ 44 px logiques en tactile.
+- Balayage **borné** (pas une analyse exacte) : pas fixe sur le domaine
+  déclaré, plus chaque frontière de point de rupture et ses voisines à
+  ±1 px ; couverture publiée (largeurs testées) et sous-score (fraction
+  sans échec), déterministe.
+- Pas encore : orientation, DPI physique, taille de texte appliquée à la
+  mesure (le texte est en monospace fixe).
+
+## Tests (`cargo test -p ui-core`, 30 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -93,6 +105,8 @@ fenêtre viendront avec la pile choisie.
 | U5 : un composant de plugin hérite de la charte ; écarts détectés | `tokens::a_plugin_component_inherits_the_charter_and_deviations_are_flagged` |
 | U5 : références, thèmes, chartes cassées refusées | `tokens::references_and_themes_resolve`, `tokens::broken_charters_are_refused` |
 | U5 : DTCG aller-retour et refus | `tokens::dtcg_round_trip_and_refusals` |
+| U6 : gates stricts sur les profils | `responsive::strict_gates_pass_on_every_profile`, `responsive::gates_catch_safe_area_touch_and_overflow` |
+| U6 : sous-score responsive sur le domaine déclaré | `responsive::bounded_sweep_publishes_coverage_and_score` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
