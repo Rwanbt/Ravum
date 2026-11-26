@@ -147,6 +147,9 @@ pub enum PatchError {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeState {
     pub scroll: f32,
+    /// Décalage d'animation (U7), appliqué au placement et donc au test de
+    /// frappe : la zone cliquable suit ce qui est affiché.
+    pub motion: (f32, f32),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -322,6 +325,22 @@ impl Ui {
         std::mem::take(&mut self.clicks)
     }
 
+    /// Fixe le décalage d'animation d'un nœud ; `false` si le nœud n'existe
+    /// pas ou si le décalage n'est pas fini (rien ne change alors).
+    pub fn set_motion_offset(&mut self, p: &[u64], off: (f32, f32)) -> bool {
+        if !(off.0.is_finite() && off.1.is_finite()) {
+            return false;
+        }
+        match self.states.get_mut(p) {
+            Some(st) => {
+                st.motion = off;
+                self.relayout();
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn viewport(&self) -> (f32, f32) {
         self.viewport
     }
@@ -438,7 +457,13 @@ impl Ui {
                 Len::Fill(wt) if weights > 0.0 => rest * wt / weights,
                 _ => 0.0,
             });
-            let (ox, oy) = c.style.offset;
+            path.push(c.key);
+            let (mx, my) = self
+                .states
+                .get(path.as_slice())
+                .map_or((0.0, 0.0), |st| st.motion);
+            path.pop();
+            let (ox, oy) = (c.style.offset.0 + mx, c.style.offset.1 + my);
             let cr_rect = if row {
                 Rect {
                     x: cursor + ox,

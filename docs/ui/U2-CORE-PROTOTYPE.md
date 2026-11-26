@@ -57,6 +57,9 @@ fenêtre viendront avec la pile choisie.
 - Reciblage continu en valeur **et** en vitesse ; réduction du mouvement
   (cible atteinte tout de suite, contrat toujours vérifié) ; suspension hors
   écran ; horloge virtuelle, trajectoires déterministes.
+- Zones interactives cohérentes pendant les transitions : `motion::drive`
+  recopie la valeur animée dans le décalage du nœud ; layout, test de
+  frappe et Verify voient la position affichée.
 
 ## Design Contract U5 (`ui-core/src/tokens.rs`)
 - Jetons couleur et dimension, références `{nom}`, thèmes qui remplacent
@@ -114,7 +117,7 @@ fenêtre viendront avec la pile choisie.
 - Pas encore : spectrogramme, graphe de nœuds, canevas, vidéo, 3D, textures
   GPU partagées (demandent le rendu).
 
-## Tests (`cargo test -p ui-core`, 40 tests)
+## Tests (`cargo test -p ui-core`, 41 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -131,6 +134,7 @@ fenêtre viendront avec la pile choisie.
 | refus sans effet (9 causes) | `plugin::refusals_change_nothing` |
 | U7 : trajectoires vérifiées (états intermédiaires, dépassement d'un ressort) | `motion::tweens_follow_their_curve_on_the_virtual_clock`, `motion::springs_settle_and_respect_the_overshoot_bound` |
 | U7 : contrats, reciblage, réduction, hors écran, budget | `motion::contracts_refuse_and_change_nothing`, `motion::retargeting_keeps_value_and_velocity_continuous`, `motion::interruption_budget_reduced_motion_and_offscreen` |
+| U7 : zones interactives cohérentes pendant une transition | `motion::hit_zones_follow_the_animation` |
 | U7 : déterminisme | `motion::trajectories_are_deterministic` |
 | U5 : un composant de plugin hérite de la charte ; écarts détectés | `tokens::a_plugin_component_inherits_the_charter_and_deviations_are_flagged` |
 | U5 : références, thèmes, chartes cassées refusées | `tokens::references_and_themes_resolve`, `tokens::broken_charters_are_refused` |
@@ -155,8 +159,6 @@ de scène aux tests.
   d'accessibilité : ils dépendent de la pile.
 - Le comportement L2 est une table de fonctions Rust compilées : le
   rechargement de code réel passera par le hot swap Ravum (IR/JIT).
-- U7 : la cohérence des zones interactives pendant une transition n'est
-  pas encore reliée au layout.
 - Le critère de sortie d'U2 (application interactive sous Linux, Windows,
   macOS) et celui d'U3 (hot reload L0 à L2) ne sont **pas** atteints : ce
   prototype n'en couvre que la partie logique.
