@@ -21,6 +21,7 @@ pub mod hot;
 pub mod motion;
 pub mod plugin;
 pub mod responsive;
+pub mod surfaces;
 pub mod tokens;
 pub mod verify;
 

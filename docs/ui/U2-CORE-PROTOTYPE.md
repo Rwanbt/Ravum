@@ -100,7 +100,18 @@ fenêtre viendront avec la pile choisie.
   pour l'accessibilité, branchement de ce gate à la place du gate minimal
   dans `hot` et `plugin`.
 
-## Tests (`cargo test -p ui-core`, 34 tests)
+## Surfaces U9, côté données (`ui-core/src/surfaces.rs`)
+- File audio → UI à un producteur et un consommateur, capacité fixe :
+  `push` n'alloue pas et ne bloque pas (INV-05), refuse et compte la perte
+  si la file est pleine ; sans `unsafe`.
+- Pyramide min/max pour la forme d'onde : plage en O(log n), colonnes par
+  pixel à tout zoom, égales au calcul direct.
+- Timeline temps ↔ pixels, zoom borné autour du curseur (le temps sous le
+  curseur ne bouge pas).
+- Pas encore : spectrogramme, graphe de nœuds, canevas, vidéo, 3D, textures
+  GPU partagées (demandent le rendu).
+
+## Tests (`cargo test -p ui-core`, 38 tests)
 | Critère du plan | Test |
 |---|---|
 | patch cassé refusé, état conservé | `broken_patches_are_refused_and_the_tree_is_kept` |
@@ -126,6 +137,8 @@ fenêtre viendront avec la pile choisie.
 | U8 : un test positif et un négatif par règle | `verify::every_rule_has_a_positive_and_a_negative_case` |
 | U8 : anti-contournement du ruleset | `verify::ruleset_lock_matches`, `verify::a_silently_weakened_rule_is_refused` |
 | U8 : sorties identiques sur N exécutions, gate | `verify::scores_gate_and_reports_are_deterministic` |
+| U9 : audio indépendant de l'UI, `push` sans allocation (allocateur compteur) | `surfaces::ring_push_never_allocates_and_drops_when_full`, `surfaces::ring_crosses_threads_in_order` |
+| U9 : forme d'onde et timeline | `surfaces::peaks_match_a_direct_scan_at_every_zoom`, `surfaces::timeline_zoom_keeps_the_cursor_time_fixed` |
 | découpage, ordre du focus | `clipped_children_are_not_hit`, `focus_cycles_in_tree_order` |
 
 L'application de qualification 0 (compteur et liste de tâches, PLAN §6) sert
