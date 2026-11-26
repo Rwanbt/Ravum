@@ -333,18 +333,42 @@ fn load_fonts() -> parley::FontContext {
     fcx
 }
 
+/// wgpu instance on the platform's native API only (Vulkan, Metal, DX12).
+/// `RenderContext::new` asks for every backend, GL included: initialising
+/// EGL loads every GL driver of the machine for an adapter we never pick.
+/// `WGPU_BACKEND` still overrides; `R3_ALL_BACKENDS` restores the old set.
+fn render_context() -> RenderContext {
+    let fallback = if std::env::var_os("R3_ALL_BACKENDS").is_some() {
+        wgpu::Backends::all()
+    } else {
+        wgpu::Backends::PRIMARY
+    };
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        display: None,
+        backends: wgpu::Backends::from_env().unwrap_or(fallback),
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        backend_options: wgpu::BackendOptions::from_env_or_default(),
+    });
+    RenderContext {
+        instance,
+        devices: Vec::new(),
+    }
+}
+
 fn warm() -> Warm {
     // The system font collection loads on its own thread, beside the GPU.
     let fonts = std::thread::spawn(load_fonts);
-    let mut cx = RenderContext::new();
+    let mut cx = render_context();
     phase("w_instance");
     let dev_id = pollster::block_on(cx.device(None)).expect("no GPU adapter");
     phase("w_device");
     let (mut renderer, cache) = make_renderer(&cx.devices[dev_id]);
     phase("w_pipelines");
     // One throw-away render: drivers that compile pipelines at first use
-    // (Mesa) do it here, off the critical path. `R3_NO_PREWARM` skips it.
-    if std::env::var_os("R3_NO_PREWARM").is_none() {
+    // (Mesa) do it here. Opt-in (`R3_PREWARM`): on r1-pulse the thread is the
+    // critical path and the warm-up cost more (+50 ms) than it saved (-43 ms).
+    if std::env::var_os("R3_PREWARM").is_some() {
         let dev = &cx.devices[dev_id];
         let tex = dev.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("prewarm"),

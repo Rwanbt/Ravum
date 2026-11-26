@@ -99,3 +99,24 @@ Variables pour A/B : `R3_SERIAL_INIT` (même travail, sans parallélisme),
 Sous lavapipe (CPU), le gain est faible : le thread est le chemin critique.
 Il est attendu sur un vrai GPU, où la boucle et la fenêtre (≈ 85 ms)
 recouvrent le GPU et les polices ; à mesurer.
+
+### Passe 2 sur r1-pulse (commit `2495f98`) et troisième étape
+
+[`first-frame-2-2026-11-26.md`](../../bench/ui-candidates/results/r1-pulse/first-frame-2-2026-11-26.md) :
+parallèle sans préchauffage (B) 172 ms contre 184 ms en série (A) ; la
+fenêtre est prête à 17 ms, mais le **thread de préparation** est désormais
+le chemin critique : instance wgpu 56 ms, adaptateur + device 50 ms. Le
+préchauffage (C) coûte 50 ms au thread et n'en rend que 43 : 188 ms.
+À froid réel (caches wgpu et Mesa vidés, D) : 619 ms, dont ≈ 410 ms de
+compilation de shaders par le pilote.
+
+Troisième étape (ce commit) :
+- instance wgpu limitée à l'API native (`Backends::PRIMARY` : Vulkan, Metal,
+  DX12) au lieu de toutes ; `RenderContext::new` demande aussi GL, dont
+  l'initialisation (EGL) charge les pilotes GL de toutes les cartes, NVIDIA
+  comprise, pour un adaptateur jamais choisi. `WGPU_BACKEND` garde la main ;
+  `R3_ALL_BACKENDS` rétablit l'ancien ensemble (A/B) ;
+- préchauffage désactivé par défaut (`R3_PREWARM` pour le mesurer).
+Sans effet mesurable dans le conteneur (aucun pilote GL) ; à mesurer.
+Reste ouvert : le froid réel (≈ 410 ms de compilation par le pilote, une
+fois par installation ou mise à jour du pilote).
