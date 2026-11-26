@@ -1,0 +1,6 @@
+{
+  "id": "effects/arena-insert-undeclared-alloc",
+  "mode": "compile-fail",
+  "expect_codes": ["E-EFF-UNDECLARED"],
+  "notes": "STD-21.1 / HDL-8 (MUST): insert allocates; refused in a function declared effects()."
+}

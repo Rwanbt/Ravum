@@ -1,0 +1,103 @@
+use std::io;
+
+struct Node {
+    name: String,
+    parent: Option<Handle<Node>>,
+}
+
+fn yes(b: bool) -> () effects(io) {
+    if b {
+        io::println("yes");
+    } else {
+        io::println("no");
+    }
+}
+
+fn name_of(a: &Arena<Node>, h: Handle<Node>) -> String effects(alloc) {
+    match a.get(h) {
+        Some(n) => n.name.clone(),
+        None => String::from("<none>"),
+    }
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut a: Arena<Node> = Arena::new();
+    let root = a.insert(Node { name: String::from("root"), parent: None });
+    let b = a.insert(Node { name: String::from("b"), parent: Some(root) });
+    let c = a.insert(Node { name: String::from("c"), parent: Some(root) });
+    let d = a.insert(Node { name: String::from("d"), parent: Some(b) });
+    io::println(&a.len().to_string());
+    // A handle stored in a field leads back to its parent.
+    match a.get(d) {
+        Some(n) => match n.parent {
+            Some(p) => io::println(name_of(&a, p).as_str()),
+            None => io::println("orphan"),
+        },
+        None => io::println("missing"),
+    }
+    // Writing through get_mut changes the element.
+    match a.get_mut(c) {
+        Some(n) => n.name.push_str("!"),
+        None => {}
+    }
+    io::println(name_of(&a, c).as_str());
+    // Remove b, then d: their slots 1 and 3 are free.
+    match a.remove(b) {
+        Some(n) => io::println(n.name.as_str()),
+        None => io::println("none"),
+    }
+    let gone = a.remove(d);
+    drop(gone);
+    // Stale handles: None and false, never another element, never a panic.
+    yes(a.contains(b));
+    io::println(name_of(&a, b).as_str());
+    match a.remove(b) {
+        Some(_) => io::println("removed twice"),
+        None => io::println("already removed"),
+    }
+    // The smallest free slot (1) is reused first, with a new generation.
+    let e = a.insert(Node { name: String::from("e"), parent: None });
+    yes(e == b);
+    yes(a.contains(b));
+    io::println(name_of(&a, e).as_str());
+    // Iteration in increasing slot order: root (0), e (1), c (2).
+    for (h, n) in &a {
+        yes(h == root);
+        io::println(n.name.as_str());
+    }
+    for (h, n) in &mut a {
+        n.name.push_str("+");
+        drop(h);
+    }
+    io::println(name_of(&a, root).as_str());
+    // Handles are values: in a Vec, as Map keys (ordered by arena, slot,
+    // generation), copied freely.
+    let mut order: Map<Handle<Node>, i64> = Map::new();
+    let _x = order.insert(c, 3i64);
+    let _y = order.insert(root, 1i64);
+    let _z = order.insert(e, 2i64);
+    for (h, v) in &order {
+        io::println(&v.to_string());
+        drop(h);
+    }
+    let mut keep: Vec<Handle<Node>> = Vec::new();
+    keep.push(root);
+    keep.push(root);
+    yes(keep[0] == keep[1]);
+    // A handle from another arena of the same type is foreign.
+    let mut other: Arena<Node> = Arena::new();
+    let o = other.insert(Node { name: String::from("o"), parent: None });
+    yes(a.contains(o));
+    yes(other.contains(o));
+    io::println(name_of(&a, o).as_str());
+    // A clone keeps the elements but gets a new identifier.
+    let copy = a.clone();
+    io::println(&copy.len().to_string());
+    yes(copy.contains(root));
+    for (h, n) in &copy {
+        io::println(n.name.as_str());
+        drop(h);
+    }
+    let empty: Arena<i64> = Arena::new();
+    yes(empty.is_empty());
+}

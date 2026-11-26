@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-handle-wrong-arena",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "STD-21.2 (MUST): a Handle<i64> is not a handle of an Arena<bool>."
+}

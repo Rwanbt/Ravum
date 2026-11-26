@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-handle-to-string",
+  "mode": "compile-fail",
+  "expect_codes": ["E-RES-UNKNOWN"],
+  "notes": "STD-21.1 (MUST): the method list is closed; a handle has no to_string."
+}

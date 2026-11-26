@@ -874,3 +874,58 @@ fn f(m: &Map<i64, i64>) -> i64 { let o = m.get(&1i64); 0 }
 // NÉGATIF — E-TYP-MISMATCH (clé flottante)
 fn g() { let m: Map<f64, i64> = Map::new(); }
 ```
+
+## 21. `Arena<T>` et `Handle<T>` (handles typés générationnels, RFC-UI-LANG-2)
+
+Types du prélude, sans `use` ([`RFC-UI-LANG-2`](../../docs/rfc/RFC-UI-LANG-2.md),
+acceptée par le responsable, UI-D20) :
+
+```rv
+impl Arena<T> {
+    pub fn new() -> Arena<T> effects(alloc)
+    pub fn len(&self) -> usize effects()
+    pub fn is_empty(&self) -> bool effects()
+    pub fn insert(&mut self, x: T) -> Handle<T> effects(alloc)
+    pub fn contains(&self, h: Handle<T>) -> bool effects()
+    pub fn get(&self, h: Handle<T>) -> Option<&T> effects()              // vue d'instruction (OWN-6.8)
+    pub fn get_mut(&mut self, h: Handle<T>) -> Option<&mut T> effects()  // vue d'instruction
+    pub fn remove(&mut self, h: Handle<T>) -> Option<T> effects()
+}
+```
+
+| ID | Règle | Niveau |
+|---|---|---|
+| STD-21.1 | `Arena` et `Handle` sont des noms de types réservés du prélude, chacun à **un** argument de type (`Arena<i64, i64>` est `E-TYP-ARITY`). `Arena::new` et `insert` ont l'effet `alloc`. Ces méthodes sont la liste fermée : toute autre (dont `to_string`) est `E-RES-UNKNOWN`. | MUST |
+| STD-21.2 | `Handle<T>` est un type **valeur** `Copy` et opaque (HDL-1) : un identifiant d'arène, un indice de place et une génération. Il est stockable partout (variable, champ, `Vec`, valeur ou clé de `Map`) et transmissible. Il n'a pas de champ accessible (`E-TYP-FIELD`), pas d'arithmétique (`E-TYP-MISMATCH`) ni d'opérateur d'ordre `< <= > >=` (`E-TYP-CMP`). `==` et `!=` comparent les trois composants. Un `Handle<A>` passé à une `Arena<B>` est `E-TYP-MISMATCH`. | MUST |
+| STD-21.3 | `get`, `get_mut`, `contains` et `remove` rendent `None` / `false` pour un handle **périmé** (sa place a été libérée, ou réutilisée depuis) ou **étranger** (créé par une autre arène, y compris un clone) : jamais un autre élément, jamais de panic (HDL-2). | MUST |
+| STD-21.4 | `remove` d'un handle valide rend l'élément, libère sa place et incrémente sa génération. Une place dont la génération atteint `2^24 - 1` est **retirée** : elle n'est plus jamais réutilisée, si bien qu'aucun handle ancien ne redevient valide (HDL-3). | MUST |
+| STD-21.5 | Réutilisation **déterministe** (HDL-4) : `insert` prend la place libre de plus petit indice, sinon ajoute une place à la fin. Les identifiants d'arène sont attribués par un compteur du run, dans l'ordre de création (`Arena::new` et `clone`). Un programme donne les mêmes handles à chaque exécution, dans chaque voie. | MUST |
+| STD-21.6 | `for (h, x) in &a` / `for (h, x) in &mut a` parcourt les éléments vivants dans l'**ordre croissant des indices de place** (HDL-5) ; `h: Handle<T>` est une copie, `x` un emprunt borné `&T` / `&mut T`. L'arène reste empruntée pendant toute la boucle : `insert`, `remove` ou un autre accès exclusif dans le corps est `E-OWN-BORROW-CONFLICT`. | MUST |
+| STD-21.7 | `get` / `get_mut` rendent une **vue d'instruction** (HDL-6, comme STD-20.3) : objet d'un `match` dont les liaisons sont bornées au bras, pendant lequel l'arène reste empruntée (partagée pour `get`, exclusive pour `get_mut` ; un `insert` dans le bras est `E-OWN-BORROW-CONFLICT`). La stocker ou la retourner est `E-OWN-REF-ESCAPE`. Une écriture à travers `get_mut` modifie l'élément de l'arène. | MUST |
+| STD-21.8 | `clone()` (OWN-6.14) d'une `Arena<T>` est disponible si `T` est clonable : copie profonde qui garde places et générations mais reçoit un **nouvel** identifiant d'arène (HDL-7, UI-D20) ; les handles de l'original y sont étrangers (STD-21.3). Une `Arena` n'est pas comparable (`==` est `E-TYP-EQ`) et n'a pas de `to_string`. | MUST |
+| STD-21.9 | Limites, communes aux deux voies : au plus `2^20 - 1` arènes créées par run, au-delà `panic: too many arenas in this run` ; au plus `2^20` places par arène, au-delà `panic: arena is full`. | MUST |
+| STD-21.10 | Une valeur `Arena` touche le tas : elle est refusée sous les profils `pure` et `rt` (`E-EFF-PROFILE`) et dans un module temps réel (INV-05), comme `Vec` et `Map` (HDL-8). | MUST |
+| STD-21.11 | `Handle<T>` est une clé de `Map` (HDL-9, UI-D20) : l'ordre des clés est l'ordre lexicographique sur (identifiant d'arène, indice de place, génération). Cet ordre n'est exposé que par le parcours d'une `Map`. | MUST |
+| STD-21.12 | Voies : la voie B (rustc) implémente §21 en entier. La voie C (IR et JIT) **refuse** pour l'instant un programme qui utilise `Arena` ou `Handle` (`unsupported in IR`), sans approximation ; sa prise en charge, avec parité B/C, est l'étape P2 de RFC-UI-LANG-2. | MUST |
+| STD-21.13 | Une `Arena` ne traverse jamais les threads (RFC-UI-LANG-2 §7) : un paramètre ou un résultat de `thread::spawn`, ou le type d'un canal, qui contient une `Arena` (directement, en argument de type, ou dans un champ ou une variante d'un type utilisateur) est `E-CONC-NOT-TRANSFERABLE`. Un `Handle<T>`, lui, traverse les threads comme toute valeur. | MUST |
+
+> **Compatibilité.** `Arena` et `Handle` deviennent des noms de types
+> réservés du prélude. Aucun programme du dépôt ni de la conformance n'en
+> définit.
+
+```rv
+// POSITIF
+struct Node { name: String, parent: Option<Handle<Node>> }
+fn tree() -> usize effects(alloc) {
+    let mut a: Arena<Node> = Arena::new();
+    let root = a.insert(Node { name: String::from("root"), parent: None });
+    let _c = a.insert(Node { name: String::from("child"), parent: Some(root) });
+    let gone = a.remove(root);
+    drop(gone);
+    if a.contains(root) { 0 } else { a.len() }   // 1 : `root` est périmé
+}
+// NÉGATIF — E-OWN-REF-ESCAPE (vue stockée)
+fn f(a: &Arena<i64>, h: Handle<i64>) -> i64 { let o = a.get(h); 0 }
+// NÉGATIF — E-TYP-CMP (pas d'ordre sur un handle)
+fn g(h: Handle<i64>, k: Handle<i64>) -> bool { h < k }
+```

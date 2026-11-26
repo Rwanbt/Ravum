@@ -273,7 +273,10 @@ pub fn is_copy_type(ty: &Type, facts: &Facts) -> bool {
         Type::Option(inner) => is_copy_type(inner, facts),
         Type::Result(ok, err) => is_copy_type(ok, facts) && is_copy_type(err, facts),
         Type::Nominal { def, .. } => {
-            if *def == crate::builtins::PRELUDE_CHANDLE_DEF {
+            // HDL-1: `Handle<T>` is a `Copy` value.
+            if *def == crate::builtins::PRELUDE_CHANDLE_DEF
+                || *def == crate::builtins::PRELUDE_HANDLE_DEF
+            {
                 true
             } else if let Some(info) = facts.structs.get(def) {
                 info.is_copy

@@ -870,7 +870,7 @@ impl<'a> OwnChecker<'a> {
         matches!(expr.kind, ExprKind::MethodCall { .. })
             && matches!(
                 self.facts.methods.get(&expr.id),
-                Some(MethodTarget::Builtin { path, .. }) if path == "Map::get" || path == "Map::get_mut"
+                Some(MethodTarget::Builtin { path, .. }) if crate::builtins::is_view_method(path)
             )
             && holds_nested_ref(&self.expr_type(expr))
     }

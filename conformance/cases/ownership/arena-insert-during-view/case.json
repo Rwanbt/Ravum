@@ -1,0 +1,6 @@
+{
+  "id": "ownership/arena-insert-during-view",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-BORROW-CONFLICT"],
+  "notes": "STD-21.7 (MUST): get_mut keeps the arena exclusively borrowed in the arm."
+}

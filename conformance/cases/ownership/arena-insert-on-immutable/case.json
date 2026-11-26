@@ -1,0 +1,6 @@
+{
+  "id": "ownership/arena-insert-on-immutable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-OWN-IMMUTABLE"],
+  "notes": "STD-21.1 (MUST): insert takes &mut self."
+}

@@ -1,0 +1,11 @@
+fn main() -> () effects(alloc) {
+    let mut a: Arena<i64> = Arena::new();
+    let h = a.insert(1i64);
+    match a.get_mut(h) {
+        Some(x) => {
+            let _g = a.insert(2i64);
+            *x = 3i64;
+        }
+        None => {}
+    }
+}

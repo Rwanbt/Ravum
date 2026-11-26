@@ -1,0 +1,4 @@
+fn peek(a: &Arena<i64>, h: Handle<i64>) -> Option<&i64> {
+    a.get(h)
+}
+fn main() -> () {}

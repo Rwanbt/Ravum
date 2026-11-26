@@ -1384,6 +1384,181 @@ mod rv_det {
 /// iteration is in increasing key order, the same in both backends.
 pub type Map<K, V> = std::collections::BTreeMap<K, V>;
 
+// --- Arena<T> / Handle<T> (RFC-UI-LANG-2, STD-21) ---
+
+/// STD-21.9: limits shared by both backends (a handle packs into 64 bits).
+pub const RV_ARENA_ID_MAX: u32 = (1 << 20) - 1;
+pub const RV_ARENA_SLOT_MAX: u32 = (1 << 20) - 1;
+pub const RV_ARENA_GEN_MAX: u32 = (1 << 24) - 1;
+
+static RV_ARENA_NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+
+fn rv_arena_new_id() -> u32 {
+    let id = RV_ARENA_NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if id > RV_ARENA_ID_MAX {
+        panic!("too many arenas in this run");
+    }
+    id
+}
+
+/// HDL-1: a copied value (arena, slot, generation); never a reference.
+pub struct Handle<T> {
+    arena: u32,
+    slot: u32,
+    generation: u32,
+    _elem: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> Copy for Handle<T> {}
+impl<T> PartialEq for Handle<T> {
+    fn eq(&self, o: &Self) -> bool {
+        self.key() == o.key()
+    }
+}
+impl<T> Eq for Handle<T> {}
+/// HDL-9: a `Map` key, ordered by (arena, slot, generation).
+impl<T> PartialOrd for Handle<T> {
+    fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(o))
+    }
+}
+impl<T> Ord for Handle<T> {
+    fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+        self.key().cmp(&o.key())
+    }
+}
+impl<T> std::fmt::Debug for Handle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Handle({}, {}, {})", self.arena, self.slot, self.generation)
+    }
+}
+impl<T> Handle<T> {
+    fn key(&self) -> (u32, u32, u32) {
+        (self.arena, self.slot, self.generation)
+    }
+}
+
+pub struct Arena<T> {
+    id: u32,
+    /// (generation, element); a retired slot keeps `None` forever.
+    slots: Vec<(u32, Option<T>)>,
+    /// HDL-4: free slots, the smallest one is reused first.
+    free: std::collections::BTreeSet<u32>,
+    len: usize,
+}
+
+impl<T> Arena<T> {
+    pub fn new() -> Arena<T> {
+        Arena { id: rv_arena_new_id(), slots: Vec::new(), free: std::collections::BTreeSet::new(), len: 0 }
+    }
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    fn handle(&self, slot: u32) -> Handle<T> {
+        Handle { arena: self.id, slot, generation: self.slots[slot as usize].0, _elem: std::marker::PhantomData }
+    }
+    pub fn insert(&mut self, x: T) -> Handle<T> {
+        let slot = match self.free.pop_first() {
+            Some(s) => {
+                self.slots[s as usize].1 = Some(x);
+                s
+            }
+            None => {
+                if self.slots.len() as u64 > RV_ARENA_SLOT_MAX as u64 {
+                    panic!("arena is full");
+                }
+                self.slots.push((0, Some(x)));
+                (self.slots.len() - 1) as u32
+            }
+        };
+        self.len += 1;
+        self.handle(slot)
+    }
+    /// HDL-2: a stale or foreign handle is never valid.
+    fn live(&self, h: Handle<T>) -> Option<usize> {
+        let i = h.slot as usize;
+        (h.arena == self.id && i < self.slots.len() && self.slots[i].0 == h.generation && self.slots[i].1.is_some())
+            .then_some(i)
+    }
+    pub fn contains(&self, h: Handle<T>) -> bool {
+        self.live(h).is_some()
+    }
+    pub fn get(&self, h: Handle<T>) -> Option<&T> {
+        self.live(h).and_then(|i| self.slots[i].1.as_ref())
+    }
+    pub fn get_mut(&mut self, h: Handle<T>) -> Option<&mut T> {
+        self.live(h).and_then(move |i| self.slots[i].1.as_mut())
+    }
+    /// HDL-3: the generation goes up; a slot at the last generation is
+    /// retired and never reused.
+    pub fn remove(&mut self, h: Handle<T>) -> Option<T> {
+        let i = self.live(h)?;
+        let x = self.slots[i].1.take();
+        self.len -= 1;
+        if self.slots[i].0 < RV_ARENA_GEN_MAX {
+            self.slots[i].0 += 1;
+            if self.slots[i].0 < RV_ARENA_GEN_MAX {
+                self.free.insert(i as u32);
+            }
+        }
+        x
+    }
+}
+
+// Generated structs derive `Debug` and `PartialEq`; Ravum itself has no
+// `==` on an arena (STD-21.8), so this equality is never reachable from a
+// Ravum program.
+impl<T: std::fmt::Debug> std::fmt::Debug for Arena<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Arena").field("id", &self.id).field("slots", &self.slots).finish()
+    }
+}
+impl<T: PartialEq> PartialEq for Arena<T> {
+    fn eq(&self, o: &Self) -> bool {
+        self.id == o.id && self.slots == o.slots
+    }
+}
+
+/// HDL-7: a clone keeps slots and generations but gets a new identifier:
+/// handles of the original are foreign to it.
+impl<T: Clone> Clone for Arena<T> {
+    fn clone(&self) -> Self {
+        Arena { id: rv_arena_new_id(), slots: self.slots.clone(), free: self.free.clone(), len: self.len }
+    }
+}
+
+/// HDL-5: iteration in increasing slot order.
+impl<'a, T> IntoIterator for &'a Arena<T> {
+    type Item = (Handle<T>, &'a T);
+    type IntoIter = Box<dyn Iterator<Item = (Handle<T>, &'a T)> + 'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        let id = self.id;
+        Box::new(self.slots.iter().enumerate().filter_map(move |(i, (g, x))| {
+            x.as_ref().map(|x| (Handle { arena: id, slot: i as u32, generation: *g, _elem: std::marker::PhantomData }, x))
+        }))
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Arena<T> {
+    type Item = (Handle<T>, &'a mut T);
+    type IntoIter = Box<dyn Iterator<Item = (Handle<T>, &'a mut T)> + 'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        let id = self.id;
+        Box::new(self.slots.iter_mut().enumerate().filter_map(move |(i, (g, x))| {
+            let g = *g;
+            x.as_mut().map(|x| (Handle { arena: id, slot: i as u32, generation: g, _elem: std::marker::PhantomData }, x))
+        }))
+    }
+}
+
 // --- Text primitives (RFC-UI-LANG-1 P4, STD-9.13..STD-9.19, STD-7.7) ---
 
 pub fn rv_text_split(s: &str, sep: &str) -> Vec<String> {

@@ -1,0 +1,4 @@
+fn slot(h: Handle<i64>) -> u32 {
+    h.slot
+}
+fn main() -> () {}

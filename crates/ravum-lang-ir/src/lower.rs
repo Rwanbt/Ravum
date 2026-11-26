@@ -421,7 +421,38 @@ impl<'a> Layouts<'a> {
 }
 
 /// Lower every function of `checked` into an IR module.
+/// STD-21.12 (RFC-UI-LANG-2 P1): `Arena<T>` / `Handle<T>` are not in the IR
+/// yet. A program that mentions them anywhere is refused here, by name,
+/// before any layout is computed (fail-closed, nothing approximated).
+fn mentions_arena(t: &Type) -> bool {
+    use ravum_lang_sema::builtins::{PRELUDE_ARENA_DEF, PRELUDE_HANDLE_DEF};
+    match t {
+        Type::Nominal { def, args, .. } => {
+            *def == PRELUDE_ARENA_DEF
+                || *def == PRELUDE_HANDLE_DEF
+                || args.iter().any(mentions_arena)
+        }
+        Type::Ref { inner, .. }
+        | Type::Vec(inner)
+        | Type::Option(inner)
+        | Type::Slice(inner)
+        | Type::Array { elem: inner, .. } => mentions_arena(inner),
+        Type::Result(a, b) => mentions_arena(a) || mentions_arena(b),
+        Type::Tuple(items) => items.iter().any(mentions_arena),
+        _ => false,
+    }
+}
+
 pub fn lower(checked: &CheckedProgram) -> R<Module> {
+    let f = &checked.facts;
+    if f.expr_types
+        .values()
+        .chain(f.type_nodes.values())
+        .chain(f.pat_types.values())
+        .any(mentions_arena)
+    {
+        return unsupported("`Arena` / `Handle` (RFC-UI-LANG-2: path C is step P2)");
+    }
     let mut fns: Vec<(&ast::Item, &FnItem)> = Vec::new();
     let mut invariants: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
     let mut method_owner: BTreeMap<NodeId, NodeId> = BTreeMap::new();

@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-handle-arithmetic",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "STD-21.2 / HDL-1 (MUST): a handle has no arithmetic."
+}

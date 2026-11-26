@@ -1,0 +1,9 @@
+use std::thread;
+struct Scene { items: Arena<i64> }
+enum Box2 { One(Scene), Two }
+fn work(s: Box2) -> () { drop(s); }
+fn main() -> () effects(thread, alloc) {
+    let s = Box2::One(Scene { items: Arena::new() });
+    let t: JoinHandle<()> = thread::spawn(work, s);
+    thread::join(t);
+}

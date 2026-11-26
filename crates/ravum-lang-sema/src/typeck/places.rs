@@ -53,7 +53,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
         match &base {
             // `Map<K, V>` is a prelude type with builtin methods (STD-20).
-            Type::Nominal { def, .. } if *def != crate::builtins::PRELUDE_MAP_DEF => {
+            Type::Nominal { def, .. }
+                if *def != crate::builtins::PRELUDE_MAP_DEF
+                    && *def != crate::builtins::PRELUDE_ARENA_DEF
+                    && *def != crate::builtins::PRELUDE_HANDLE_DEF =>
+            {
                 let entry = self.world.method(*def, name, false).cloned();
                 match entry {
                     Some(entry) => {
@@ -717,11 +721,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 // `f32`/`f64`, `bool`, `char`, et sur le texte (`String`, `&str`
                 // et tout mélange des deux). Les agrégats restent non
                 // comparables (`E-TYP-EQ`).
+                // HDL-9: `==` on `Handle<T>` compares its three components.
                 let same_scalar = l_ty == r_ty
                     && (l_ty.is_int()
                         || l_ty.is_float()
                         || l_ty == Type::Bool
-                        || l_ty == Type::Char);
+                        || l_ty == Type::Char
+                        || crate::builtins::is_handle_type(&l_ty));
                 if (is_text_like(&l_ty) && is_text_like(&r_ty)) || same_scalar {
                     Type::Bool
                 } else if l_ty.is_numeric() && r_ty.is_numeric() {

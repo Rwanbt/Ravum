@@ -435,6 +435,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         for (what, ty) in [("parameter", &param), ("result", &sig.ret)] {
+            if self.holds_arena(ty, &mut Vec::new()) {
+                self.error(
+                    "E-CONC-NOT-TRANSFERABLE",
+                    target.span,
+                    format!(
+                        "the {what} type `{ty}` of `{}` holds an `Arena`, which never crosses threads (STD-21.13)",
+                        sig.name
+                    ),
+                );
+            }
             if !is_transferable(ty) {
                 self.error(
                     "E-CONC-NOT-TRANSFERABLE",
@@ -507,6 +517,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             self.unify_pattern(&ret, expected, &mut subst);
         }
         let ret = self.resolve_vars(&ret);
+        // STD-21.13 (RFC-UI-LANG-2 §7): an arena is not sent to a thread.
+        if sig.path == "std::sync::channel" && self.holds_arena(&ret, &mut Vec::new()) {
+            self.error(
+                "E-CONC-NOT-TRANSFERABLE",
+                span,
+                format!("`{ret}` holds an `Arena`, which never crosses threads (STD-21.13)"),
+            );
+        }
         // CONC-4.1: a channel carries only transferable values.
         if sig.path == "std::sync::channel" && !is_transferable(&ret) {
             self.error(
@@ -894,6 +912,54 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 /// reference. A nominal type is transferable when its type arguments are: its
 /// own fields can only hold `&'static str`, the one reference that may be
 /// stored (TYP-6.3).
+impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
+    /// STD-21.13: does a value of `ty` contain an `Arena`, directly, in a
+    /// type argument, or in a field or variant of a user type (`seen` guards
+    /// recursive types)?
+    pub(super) fn holds_arena(&self, ty: &Type, seen: &mut Vec<NodeId>) -> bool {
+        match ty {
+            Type::Nominal { def, args, .. } => {
+                if *def == builtins::PRELUDE_ARENA_DEF {
+                    return true;
+                }
+                if args.iter().any(|a| self.holds_arena(a, seen)) {
+                    return true;
+                }
+                if seen.contains(def) {
+                    return false;
+                }
+                seen.push(*def);
+                if let Some(info) = self.facts.structs.get(def) {
+                    let fields: Vec<Type> = info.fields.iter().map(|f| f.ty.clone()).collect();
+                    return fields.iter().any(|t| self.holds_arena(t, seen));
+                }
+                if let Some(info) = self.facts.enums.get(def) {
+                    let payloads: Vec<Type> = info
+                        .variants
+                        .iter()
+                        .flat_map(|v| {
+                            v.tuple_types
+                                .iter()
+                                .chain(v.fields.iter().map(|f| &f.ty))
+                                .cloned()
+                        })
+                        .collect();
+                    return payloads.iter().any(|t| self.holds_arena(t, seen));
+                }
+                false
+            }
+            Type::Ref { inner, .. }
+            | Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Slice(inner)
+            | Type::Array { elem: inner, .. } => self.holds_arena(inner, seen),
+            Type::Result(a, b) => self.holds_arena(a, seen) || self.holds_arena(b, seen),
+            Type::Tuple(items) => items.iter().any(|t| self.holds_arena(t, seen)),
+            _ => false,
+        }
+    }
+}
+
 pub(crate) fn is_transferable(ty: &Type) -> bool {
     match ty {
         Type::Ref { .. } | Type::Slice(_) | Type::Str => false,

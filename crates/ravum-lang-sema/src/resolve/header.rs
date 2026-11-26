@@ -1090,8 +1090,10 @@ pub(crate) fn resolve_type_path(
 }
 
 pub(crate) fn is_builtin_type_name(name: &str) -> bool {
-    matches!(name, "Vec" | "Option" | "Result" | "Map")
-        || builtins::prelude_type(name).is_some()
+    matches!(
+        name,
+        "Vec" | "Option" | "Result" | "Map" | "Arena" | "Handle"
+    ) || builtins::prelude_type(name).is_some()
         || builtins::PRELUDE_GENERIC_OPAQUES
             .iter()
             .any(|(opaque, _)| *opaque == name)
@@ -1129,11 +1131,20 @@ pub(crate) fn prelude_nominal(
                 diags.error(
                     "E-TYP-MISMATCH",
                     span,
-                    format!("`Map` keys must be an integer, `bool`, `char` or `String`, found `{k}` (STD-20.1)"),
+                    format!("`Map` keys must be an integer, `bool`, `char`, `String` or `Handle<T>`, found `{k}` (STD-20.1, HDL-9)"),
                 );
                 return None;
             }
             Some(builtins::map_type(args[0].clone(), args[1].clone()))
+        }
+        // STD-21 (RFC-UI-LANG-2): `Arena<T>` and `Handle<T>`, one argument.
+        "Arena" => {
+            expect_arity(name, 1, args.len(), span, diags)?;
+            Some(builtins::arena_type(args[0].clone()))
+        }
+        "Handle" => {
+            expect_arity(name, 1, args.len(), span, diags)?;
+            Some(builtins::handle_type(args[0].clone()))
         }
         _ if builtins::PRELUDE_GENERIC_OPAQUES
             .iter()

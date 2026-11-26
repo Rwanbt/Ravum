@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-not-transferable",
+  "mode": "compile-fail",
+  "expect_codes": ["E-CONC-NOT-TRANSFERABLE"],
+  "notes": "STD-21.13 (MUST): an Arena inside a struct inside an enum, passed to thread::spawn, is refused."
+}

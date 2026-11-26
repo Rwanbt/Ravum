@@ -1,0 +1,4 @@
+fn before(h: Handle<i64>, k: Handle<i64>) -> bool {
+    h < k
+}
+fn main() -> () {}

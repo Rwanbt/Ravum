@@ -1,0 +1,6 @@
+{
+  "id": "types/arena-arity",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-ARITY"],
+  "notes": "STD-21.1 (MUST): Arena takes one type argument."
+}

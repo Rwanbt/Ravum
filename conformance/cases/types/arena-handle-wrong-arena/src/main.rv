@@ -1,0 +1,6 @@
+fn main() -> () effects(alloc) {
+    let mut a: Arena<i64> = Arena::new();
+    let b: Arena<bool> = Arena::new();
+    let h = a.insert(1i64);
+    let _r = b.contains(h);
+}

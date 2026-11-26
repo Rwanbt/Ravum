@@ -838,7 +838,7 @@ impl<'a> OwnChecker<'a> {
             ExprKind::MethodCall { receiver, .. } => {
                 let mutable = matches!(
                     self.facts.methods.get(&scrutinee.id),
-                    Some(MethodTarget::Builtin { path, .. }) if path == "Map::get_mut"
+                    Some(MethodTarget::Builtin { path, .. }) if crate::builtins::is_exclusive_view_method(path)
                 );
                 self.eval_value(scrutinee);
                 let base = match &receiver.kind {
