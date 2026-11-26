@@ -1,0 +1,14 @@
+[package]
+name = "ui-shell"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "U2 : ui-core dans une vraie fenêtre, sur la pile modulaire retenue (UI-D21). Banc, hors crates Ravum."
+
+[dependencies]
+ui-core = { path = "../ui-core" }
+winit = "=0.31.0-beta.4"
+wgpu = "=30.0.2"
+vello = "=0.12.0"
+parley = "=0.13.0"
+pollster = "0.4"

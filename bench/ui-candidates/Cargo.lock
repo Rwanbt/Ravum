@@ -5877,6 +5877,18 @@ name = "ui-core"
 version = "0.0.0"
 
 [[package]]
+name = "ui-shell"
+version = "0.0.0"
+dependencies = [
+ "parley 0.13.0",
+ "pollster 0.4.0",
+ "ui-core",
+ "vello",
+ "wgpu",
+ "winit 0.31.0-beta.4",
+]
+
+[[package]]
 name = "uluru"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
