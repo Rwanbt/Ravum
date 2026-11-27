@@ -5,4 +5,4 @@ lockfile_version = 1
 [[package]]
 name = "ledger"
 version = "0.1.0"
-digest = "sha256:158ab3a7ead848aae8c4bfeaa9b5c95f191f03f645e528900e66d96b90d4f04d"
+digest = "sha256:a7ff8d590a462eda456ae832f11add0ffada38336873b4260c211a01c5e06353"

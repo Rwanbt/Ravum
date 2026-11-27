@@ -93,8 +93,40 @@ code attendu.
    Aucun de ces points n'est un bug. Ce sont des candidats pour les RFC
    langage quand l'UI en aura besoin (U1).
 
+## Rechargement à chaud (U3 L2, `watch --reload`)
+`main.rv` déclare aussi le contrat de [`reload.md`](../../spec/language/reload.md) :
+`State { lines: Vec<String>, refused: u64 }`, `init`, `step`. Chaque ligne
+de l'entrée est une ligne de journal, ou `report`, ou `undo`. Une ligne
+n'est acceptée que si le journal complet qui la contient reste valide :
+l'état ne contient jamais un journal invalide. Il n'est fait que de texte,
+puisque `Map` et `Arena` ne sont pas admis dans un état rechargeable
+(HR-1.6). Arbre et tables sont reconstruits à chaque commande.
+
+```text
+ravum-lang watch apps/ledger --reload
+```
+
+Essai réel (Linux, entrée par un tube, modification des sources pendant
+l'exécution), mêmes événements avant et après chaque modification :
+
+| Modification à chaud | Résultat |
+|---|---|
+| texte du rapport (`solde` → `solde courant`) | `applied (state kept)` : les lignes déjà saisies restent, le nouveau texte s'affiche |
+| `refused: u64` → `i64` sans `migrate` | `refused: the state schema changed … no migrate` : l'ancien module continue |
+| même changement avec `migrate(old: Before)` | `applied (state migrated)` |
+| fichier qui ne compile pas | `refused: the program has errors` |
+| `step` qui panique sur `boom` | `step failed: panic boom` puis `reverted to the previous module` ; l'événement est rejoué sur l'ancien module, aucune ligne perdue |
+
+État final de l'essai :
+`{["budget courses 100";"2026-11-01 | courses | -60 | Marché";"2026-11-03 | courses | -1 | x";];1;}`.
+Cet essai n'est pas automatisé dans cette branche : le mécanisme lui-même
+est qualifié par `crates/ravum-lang-cli/tests/hot_reload.rs`.
+
+**Constat** : `step` doit déclarer `panic` dans ses effets dès qu'il appelle
+du code qui peut paniquer (ici `report::build`). Le diagnostic le dit
+clairement (`missing declared effect(s): panic`).
+
 ## Non couvert par cette application
 `async`/`.await`, `std::net`/`std::http`, FFI, profils `pure`/`rt`/`det`,
-`watch --reload` (contrat `State`/`init`/`step`/`migrate`), JIT, canaux,
-`mod` inline. Le rechargement à chaud (`watch --reload`) est la suite
-naturelle pour U3 L2.
+JIT, canaux, `mod` inline. L'affichage dans la fenêtre (`ui-shell`) est la
+suite.

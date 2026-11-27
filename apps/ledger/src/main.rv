@@ -14,6 +14,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::process;
+use std::string;
 
 fn run(path: &str) -> Result<bool, Error> {
     let text = fs::read_to_string(path)?;
@@ -21,6 +22,86 @@ fn run(path: &str) -> Result<bool, Error> {
     io::print(&report::render(&r)?);
     let over = report::overruns(&r)?;
     Ok(over.is_empty())
+}
+
+// --- Mode interactif rechargeable (`ravum-lang watch --reload`) ---
+//
+// Chaque ligne de l'entrée est une ligne de journal ou une commande :
+// `report` affiche le rapport, `undo` retire la dernière ligne acceptée.
+// Une ligne n'est acceptée que si le journal complet qui la contient reste
+// valide (fail-closed) : l'état ne contient jamais un journal invalide.
+// L'état est du texte : il traverse les rechargements sans conversion.
+
+struct State {
+    lines: Vec<String>,
+    refused: u64,
+}
+
+fn init() -> State effects(alloc) {
+    State {
+        lines: Vec::new(),
+        refused: 0,
+    }
+}
+
+fn journal_of(lines: &Vec<String>) -> String {
+    string::join(lines, "\n")
+}
+
+fn validate(lines: &Vec<String>) -> Result<report::Report, Error> {
+    let text = journal_of(lines);
+    report::build(journal::parse(text.as_str())?)
+}
+
+fn step(state: State, line: String) -> State effects(io, alloc, thread, panic) {
+    let mut lines: Vec<String> = state.lines;
+    let cmd = line.trim();
+    if cmd == "report" {
+        match validate(&lines) {
+            Ok(r) => match report::render(&r) {
+                Ok(text) => io::print(&text),
+                Err(e) => io::eprintln(&e.message),
+            },
+            Err(e) => io::eprintln(&e.message),
+        }
+        return State {
+            lines: lines,
+            refused: state.refused,
+        };
+    }
+    if cmd == "undo" {
+        match lines.pop() {
+            Some(old) => {
+                io::print("undone: ");
+                io::println(&old);
+            }
+            None => io::println("nothing to undo"),
+        }
+        return State {
+            lines: lines,
+            refused: state.refused,
+        };
+    }
+    lines.push(line);
+    match validate(&lines) {
+        Ok(_r) => {
+            io::println("ok");
+            State {
+                lines: lines,
+                refused: state.refused,
+            }
+        }
+        Err(e) => {
+            // Fail-closed : la ligne fautive ne reste pas dans l'état.
+            let _bad = lines.pop();
+            io::print("refused: ");
+            io::println(&e.message);
+            State {
+                lines: lines,
+                refused: state.refused + 1,
+            }
+        }
+    }
 }
 
 fn main() {
