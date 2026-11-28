@@ -4932,6 +4932,74 @@ impl<'a> FnLower<'a> {
                     ty: ft,
                 })
             }
+            // `o.ok_or(e)` (Option → Result) and `r.ok()` / `r.err()`
+            // (Result → Option): the payload of the taken branch moves into
+            // the new value; `e` is evaluated whatever the tag, as a call
+            // argument would be (O1, like `unwrap_or`).
+            ("ok_or", [err]) if good == 1 => {
+                let t = self.type_of(e)?;
+                let ev = self.expr(err)?;
+                let result = self.alloc(&t)?;
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: some,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                let (foff, ft) = self.layouts.variant_fields(&ot, 1)?[0].clone();
+                let v = self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft,
+                })?;
+                let ok = self.construct(&t, 0, vec![v])?;
+                self.join_value(result, ok, &t, true)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                let er = self.construct(&t, 1, vec![ev])?;
+                self.join_value(result, er, &t, true)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                Ok(result)
+            }
+            ("ok" | "err", []) if good == 0 => {
+                let t = self.type_of(e)?;
+                // The variant whose payload is kept: `Ok` (0) or `Err` (1).
+                let keep = if m == "ok" { 0 } else { 1 };
+                let result = self.alloc(&t)?;
+                let kept = self.tag_const(keep);
+                let is_kept = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: is_kept,
+                    op: BinOp::Eq,
+                    ty: Ty::U32,
+                    lhs: tag,
+                    rhs: kept,
+                });
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: is_kept,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                let (foff, ft) = self.layouts.variant_fields(&ot, keep)?[0].clone();
+                let v = self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft,
+                })?;
+                let some_v = self.construct(&t, 1, vec![v])?;
+                self.join_value(result, some_v, &t, true)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                let none_v = self.construct(&t, 0, Vec::new())?;
+                self.join_value(result, none_v, &t, true)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                Ok(result)
+            }
             _ => unsupported(format!("`Option::{m}`")),
         }
     }
