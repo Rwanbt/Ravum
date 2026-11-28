@@ -390,6 +390,16 @@ impl Heap {
                 let h = self.str(a)?;
                 (usize::try_from(b).is_ok_and(|i| h.is_char_boundary(i))) as u64
             }
+            StrPushChar => {
+                let c = scalar(b)?;
+                self.charge(c.len_utf8())?;
+                self.str_mut(a)?.push(c);
+                0
+            }
+            StrOfChar => {
+                let c = scalar(a)?;
+                self.text(c.encode_utf8(&mut [0; 4]))?
+            }
             StrJoin => {
                 let sep = self.str(b)?.to_string();
                 let mut out = String::new();
@@ -568,4 +578,13 @@ impl Heap {
     pub fn text(&mut self, text: &str) -> Result<u64, HeapStop> {
         self.alloc(Object::Str(text.to_string()))
     }
+}
+
+/// The `char` a word holds (IR v1.9). A word that is not a Unicode scalar
+/// value is a fault: the checker and the lowering only produce scalars.
+fn scalar(w: u64) -> Result<char, HeapStop> {
+    u32::try_from(w)
+        .ok()
+        .and_then(char::from_u32)
+        .ok_or(HeapStop::Fault("not a char"))
 }

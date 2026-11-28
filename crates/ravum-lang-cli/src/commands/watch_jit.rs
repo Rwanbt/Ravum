@@ -12,8 +12,12 @@
 //! construct the IR does not cover, or changes an incompatible entry is
 //! reported and **the previous version stays active**.
 //!
-//! Scope: a single-file program (`src/main.rv`, else `src/lib.rv`, or the
-//! file given). Entry: `process_sample` when the file declares a DSP block
+//! Scope: a package whose `src/` holds module files (all of them, loaded like
+//! the language server does: parse cache, stable file ids, incremental check
+//! of the whole package; a binary package needs its `main`, as for `build`),
+//! or a single-file program (`src/main.rv`, else `src/lib.rv`, or the file
+//! given), checked as a library since the session runs an entry. Only what
+//! the entry reaches must be covered by the IR (`lower_checked_for`). Entry: `process_sample` when the file declares a DSP block
 //! (the block is driven with a deterministic test signal: no audio device),
 //! otherwise `--entry NAME` (default `main`), a function without parameters;
 //! what it prints with `io::print*` is shown before its result.
@@ -25,7 +29,8 @@ use std::time::{Duration, Instant, SystemTime};
 use ravum_lang_ir::lower::LowerError;
 use ravum_lang_ir::CompileError;
 use ravum_lang_jit::hot::{HotEngine, RtRunner};
-use ravum_lang_sema::syntax::{parser, Severity, SourceMap, LANGUAGE_EDITION};
+use ravum_lang_sema::loader::{load_package_with_parse_cache, LoadOptions, ParseCache};
+use ravum_lang_sema::syntax::{parser, FileId, Severity, SourceMap, LANGUAGE_EDITION};
 use ravum_lang_sema::{check, CheckOptions, Profile};
 
 use crate::util;
@@ -162,6 +167,7 @@ impl Session {
 /// facts are complete, so the IR is the same as a full check's.
 fn compile_incremental(
     src: &str,
+    entry: Option<&str>,
     state: &mut Option<ravum_lang_incr::package::PackageState>,
 ) -> Result<ravum_lang_ir::Module, CompileError> {
     let mut sources = SourceMap::new();
@@ -200,44 +206,260 @@ fn compile_incremental(
         .map(|d| d.code.clone())
         .collect();
     match result.checked {
-        Some(checked) if errors.is_empty() => ravum_lang_ir::lower_checked(&checked),
+        Some(checked) if errors.is_empty() => lower_for_session(&checked, entry),
         _ => Err(CompileError::Rejected(errors)),
+    }
+}
+
+/// The entries the session needs: the one it runs (`--entry`, else
+/// `process_sample` when the root declares a DSP block, else `main`), plus
+/// the root's reload-contract functions the engine calls itself (`init`,
+/// `step`, `migrate`, HR-1). Only what they reach is lowered
+/// (`lower_checked_for`).
+fn entries_of(checked: &ravum_lang_sema::CheckedProgram, entry: Option<&str>) -> Vec<String> {
+    let root: Vec<&str> = checked
+        .program
+        .root
+        .items
+        .iter()
+        .filter_map(|i| match &i.kind {
+            ravum_lang_sema::syntax::ast::ItemKind::Fn(f) => Some(f.name.name.as_str()),
+            _ => None,
+        })
+        .collect();
+    let main = match entry {
+        Some(e) => e,
+        None if root.contains(&DSP_ENTRY) => DSP_ENTRY,
+        None => "main",
+    };
+    let mut out = vec![main.to_string()];
+    for extra in ["init", "step", "migrate"] {
+        if extra != main && root.contains(&extra) {
+            out.push(extra.to_string());
+        }
+    }
+    out
+}
+
+fn lower_for_session(
+    checked: &ravum_lang_sema::CheckedProgram,
+    entry: Option<&str>,
+) -> Result<ravum_lang_ir::Module, CompileError> {
+    let entries = entries_of(checked, entry);
+    let refs: Vec<&str> = entries.iter().map(String::as_str).collect();
+    ravum_lang_ir::lower_checked_for(checked, &refs)
+}
+
+/// A watched package: everything kept across edits so that an edit costs
+/// what it changed (parses of untouched files, their `FileId`s, the checked
+/// bodies).
+struct PackageWatch {
+    root: PathBuf,
+    cache: ParseCache,
+    file_ids: std::collections::BTreeMap<PathBuf, FileId>,
+}
+
+/// T13 on a package: load it (parse cache, stable file ids), check it
+/// incrementally, lower it. A rejection carries the rendered diagnostics.
+fn compile_package(
+    w: &mut PackageWatch,
+    entry: Option<&str>,
+    state: &mut Option<ravum_lang_incr::package::PackageState>,
+) -> Result<ravum_lang_ir::Module, (CompileError, Vec<String>)> {
+    let options = LoadOptions {
+        locked: false,
+        overrides: Default::default(),
+        file_ids: Some(w.file_ids.clone()),
+    };
+    let package = load_package_with_parse_cache(&w.root, &options, &mut w.cache);
+    for (path, id) in &package.file_ids {
+        w.file_ids.insert(path.clone(), *id);
+    }
+    let render =
+        |sources: &SourceMap,
+         ds: &mut dyn Iterator<Item = &ravum_lang_sema::syntax::Diagnostic>| {
+            ds.filter(|d| d.severity == Severity::Error)
+                .map(|d| format!("{}: {}: {}", sources.location(d.span), d.code, d.message))
+                .collect::<Vec<String>>()
+        };
+    let rejected = |lines: Vec<String>| {
+        let codes = lines.clone();
+        (CompileError::Rejected(codes), lines)
+    };
+    let program = match &package.program {
+        Some(p) if !package.diags.has_errors() => p,
+        _ => {
+            *state = None;
+            return Err(rejected(render(
+                &package.sources,
+                &mut package.diags.iter(),
+            )));
+        }
+    };
+    let options = CheckOptions {
+        profile: Profile::Core,
+        edition: LANGUAGE_EDITION.to_string(),
+    };
+    let (result, next, stats) = ravum_lang_incr::package::check_package(
+        state.as_ref(),
+        program,
+        &package.sources,
+        &options,
+    );
+    *state = Some(next);
+    say(&format!(
+        "[ravum] check: {} bodies reused, {} checked{}",
+        stats.reused_bodies,
+        stats.checked_bodies,
+        stats
+            .full
+            .map(|r| format!(" (full: {r})"))
+            .unwrap_or_default()
+    ));
+    let errors = render(&package.sources, &mut result.diags.iter());
+    match result.checked {
+        Some(checked) if errors.is_empty() => {
+            lower_for_session(&checked, entry).map_err(|e| (e, Vec::new()))
+        }
+        _ => Err(rejected(errors)),
+    }
+}
+
+/// Whether `src/` of a package holds module files besides its root
+/// (`main.rv`/`lib.rv`). A one-file package keeps the single-file mode, whose
+/// root is checked as a library (the session runs an entry, not `main`).
+fn has_modules(root: &Path) -> bool {
+    let mut dirs = vec![root.join("src")];
+    while let Some(d) = dirs.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                dirs.push(p);
+            } else if p.extension().is_some_and(|x| x == "rv")
+                && !(d == root.join("src")
+                    && matches!(
+                        p.file_name().and_then(|n| n.to_str()),
+                        Some("main.rv" | "lib.rv")
+                    ))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// What is watched: one file, or a whole package.
+enum Target {
+    File(PathBuf),
+    Package(PackageWatch),
+}
+
+impl Target {
+    fn describe(&self) -> String {
+        match self {
+            Target::File(f) => f.display().to_string(),
+            Target::Package(w) => format!("package {}", w.root.display()),
+        }
+    }
+
+    /// The source files whose changes trigger a rebuild.
+    fn files(&self) -> Vec<PathBuf> {
+        match self {
+            Target::File(f) => vec![f.clone()],
+            Target::Package(w) => {
+                let mut files = vec![w.root.join("ravum.toml")];
+                let mut dirs = vec![w.root.join("src")];
+                while let Some(d) = dirs.pop() {
+                    let Ok(rd) = std::fs::read_dir(&d) else {
+                        continue;
+                    };
+                    for e in rd.flatten() {
+                        let p = e.path();
+                        if p.is_dir() {
+                            dirs.push(p);
+                        } else if p.extension().is_some_and(|x| x == "rv") {
+                            files.push(p);
+                        }
+                    }
+                }
+                files.sort();
+                files
+            }
+        }
+    }
+
+    /// Cheap per-poll view: each file and its (modification time, length).
+    fn stamps(&self) -> Vec<(PathBuf, Option<(SystemTime, u64)>)> {
+        self.files()
+            .into_iter()
+            .map(|p| {
+                let st = stamp(&p);
+                (p, st)
+            })
+            .collect()
+    }
+
+    /// The bytes of every watched file, read only once a stamp moved.
+    fn contents(&self) -> Vec<(PathBuf, Option<Vec<u8>>)> {
+        self.files()
+            .into_iter()
+            .map(|p| {
+                let b = std::fs::read(&p).ok();
+                (p, b)
+            })
+            .collect()
     }
 }
 
 /// One attempt: compile the current text; start or update the session.
 /// Returns `true` when a new version became active.
 fn attempt(
-    file: &Path,
+    target: &mut Target,
     entry_opt: Option<&str>,
     session: &mut Option<Session>,
     incr: &mut Option<ravum_lang_incr::package::PackageState>,
 ) -> bool {
     let started = Instant::now();
-    let Ok(src) = std::fs::read_to_string(file) else {
-        say(&format!(
-            "[ravum] cannot read {}; previous version kept",
-            file.display()
-        ));
-        return false;
+    let compiled = match target {
+        Target::Package(w) => compile_package(w, entry_opt, incr),
+        Target::File(file) => {
+            let Ok(src) = std::fs::read_to_string(&*file) else {
+                say(&format!(
+                    "[ravum] cannot read {}; previous version kept",
+                    file.display()
+                ));
+                return false;
+            };
+            compile_incremental(&src, entry_opt, incr).map_err(|e| {
+                let lines = match e {
+                    CompileError::Rejected(_) => diagnostics(file, &src),
+                    _ => Vec::new(),
+                };
+                (e, lines)
+            })
+        }
     };
-    let ir = match compile_incremental(&src, incr) {
+    let ir = match compiled {
         Ok(ir) => ir,
-        Err(CompileError::Rejected(_)) => {
+        Err((CompileError::Rejected(_), lines)) => {
             say("[ravum] rejected by the checker; previous version kept");
-            for d in diagnostics(file, &src) {
+            for d in lines {
                 say(&format!("  {d}"));
             }
             return false;
         }
-        Err(CompileError::Lower(LowerError::Unsupported(what))) => {
+        Err((CompileError::Lower(LowerError::Unsupported(what)), _)) => {
             say(&format!(
                 "[ravum] not supported by the jit backend: {what}; previous version kept \
                  (use the default backend for this program)"
             ));
             return false;
         }
-        Err(CompileError::Lower(e)) => {
+        Err((CompileError::Lower(e), _)) => {
             say(&format!(
                 "[ravum] internal lowering error: {e}; previous version kept"
             ));
@@ -315,44 +537,52 @@ fn attempt(
 }
 
 pub fn run(path: &Path, entry: Option<&str>, max_rebuilds: Option<u64>) -> i32 {
-    let file = match source_file(path) {
-        Ok(f) => f,
-        Err(m) => {
-            util::err(m);
-            return util::EXIT_FAIL;
+    let mut target = if path.is_dir() && path.join("ravum.toml").is_file() && has_modules(path) {
+        Target::Package(PackageWatch {
+            root: path.to_path_buf(),
+            cache: ParseCache::default(),
+            file_ids: Default::default(),
+        })
+    } else {
+        match source_file(path) {
+            Ok(f) => Target::File(f),
+            Err(m) => {
+                util::err(m);
+                return util::EXIT_FAIL;
+            }
         }
     };
     say(&format!(
         "[ravum] watching {} (backend: jit)",
-        file.display()
+        target.describe()
     ));
     let mut session: Option<Session> = None;
     // T13: the incremental check state, kept across edits.
     let mut incr: Option<ravum_lang_incr::package::PackageState> = None;
-    let mut last = stamp(&file);
     // The bytes last checked: a new stamp with the same contents (a
     // duplicate file-system notification, a touch) is not a change and does
     // not count against `--max-rebuilds`.
-    let mut seen = std::fs::read(&file).ok();
-    attempt(&file, entry, &mut session, &mut incr);
+    let mut last = target.stamps();
+    let mut seen = target.contents();
+    attempt(&mut target, entry, &mut session, &mut incr);
     if max_rebuilds == Some(0) {
         return util::EXIT_OK;
     }
     let mut changes: u64 = 0;
     loop {
         std::thread::sleep(POLL);
-        let now = stamp(&file);
+        let now = target.stamps();
         if now == last {
             continue;
         }
         last = now;
-        let bytes = std::fs::read(&file).ok();
-        if bytes.is_some() && bytes == seen {
+        let bytes = target.contents();
+        if bytes == seen {
             continue;
         }
         seen = bytes;
         say("[ravum] change detected");
-        attempt(&file, entry, &mut session, &mut incr);
+        attempt(&mut target, entry, &mut session, &mut incr);
         changes += 1;
         if max_rebuilds.is_some_and(|m| changes >= m) {
             return util::EXIT_OK;

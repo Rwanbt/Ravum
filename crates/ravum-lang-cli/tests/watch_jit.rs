@@ -311,3 +311,79 @@ fn watch_jit_ignores_a_rewrite_with_the_same_contents() {
     );
     assert!(child.wait().unwrap().success());
 }
+
+/// A package with module files: every file of `src/` is watched, an edit in
+/// a module recompiles only the function that changed, an ill-typed edit in a
+/// module is reported at its own file, and `main`'s host I/O does not block
+/// an entry that never reaches it (only what the entry reaches is lowered).
+#[test]
+fn watch_jit_watches_a_multi_file_package() {
+    let dir = package(
+        "modules",
+        "use std::env;\nmod calc;\n\nfn main() {\n    let n = env::args().len();\n}\n\nfn check() -> i64 {\n    calc::square(6) + calc::offset()\n}\n",
+    );
+    let module = dir.join("src/calc.rv");
+    std::fs::write(
+        &module,
+        "pub fn square(x: i64) -> i64 {\n    x * x\n}\n\npub fn offset() -> i64 {\n    1\n}\n",
+    )
+    .unwrap();
+    let (mut child, rx) = spawn(&[
+        "watch",
+        "--backend",
+        "jit",
+        "--entry",
+        "check",
+        "--max-rebuilds",
+        "4",
+        dir.to_str().unwrap(),
+    ]);
+    let first = until(&rx, "check() -> value i64 37");
+    assert!(
+        first.iter().any(|l| l.contains("watching package")),
+        "{first:?}"
+    );
+
+    edit(&module, "    1\n", "    5\n");
+    let lines = until(&rx, "check() -> ");
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("1 recompiled (calc::offset)")),
+        "{lines:?}"
+    );
+    assert!(lines.last().unwrap().ends_with("value i64 41"), "{lines:?}");
+
+    // Negative: an ill-typed edit in the module is reported at its file;
+    // the previous version stays active.
+    edit(&module, "    5\n", "    true\n");
+    let lines = until(&rx, "previous version kept");
+    let diags = until(&rx, "E-TYP");
+    assert!(
+        diags
+            .iter()
+            .any(|l| l.contains("src/calc.rv:5:24: E-TYP-MISMATCH")),
+        "{lines:?} {diags:?}"
+    );
+
+    edit(&module, "    true\n", "    5\n");
+    until(&rx, "check() -> value i64 41");
+
+    // Adversarial: the entry now reaches host I/O: refused, naming the
+    // construct and the function; the previous version stays active.
+    let root = dir.join("src/main.rv");
+    edit(
+        &root,
+        "calc::square(6) + calc::offset()",
+        "calc::square(6) + env::args().len() as i64",
+    );
+    let lines = until(&rx, "previous version kept");
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("std::env::args") && l.contains("(in `check`)")),
+        "{lines:?}"
+    );
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&dir);
+}

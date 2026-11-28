@@ -178,9 +178,10 @@ fn a_malformed_bounds_trap_is_refused_by_every_backend() {
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
         // Generic enums, `Vec`s of enums and `&mut v[i]` are lowered since
-        // 2026-11-23 (tests in ravum-lang-jit/tests/vec_aggregates.rs);
-        // `char` is not.
-        "fn check() -> i32 effects() {\n    let c: char = 'a';\n    return 0;\n}\n",
+        // 2026-11-23 (tests in ravum-lang-jit/tests/vec_aggregates.rs), and
+        // `char` since IR v1.9 (ravum-lang-jit/tests/chars.rs); a string
+        // literal pattern is not.
+        "fn check() -> i32 effects(alloc) {\n    let s = String::from(\"a\");\n    match s.as_str() {\n        \"a\" => 1,\n        _ => 0,\n    }\n}\n",
         // IR v1.2 covers `wrapping_*`/`abs`; `round` (ties away from zero)
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",
