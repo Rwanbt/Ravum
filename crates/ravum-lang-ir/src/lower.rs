@@ -149,6 +149,10 @@ pub fn map_ty(t: &Type) -> R<Ty> {
         Type::F32 => Ty::F32,
         Type::F64 => Ty::F64,
         Type::Bool => Ty::Bool,
+        // IR v1.9: a `char` is its code point. The checker forbids any
+        // arithmetic on it; only comparisons, `as` and the text operations
+        // (`StrPushChar`, `StrOfChar`, `StrChars`) see it.
+        Type::Char => Ty::U32,
         Type::Unit | Type::Never => Ty::Unit,
         // IR v1.3: heap objects, and borrows of them, are handles.
         Type::String | Type::Vec(_) => Ty::Obj,
@@ -316,9 +320,13 @@ impl<'a> Layouts<'a> {
             {
                 vec![Type::String]
             }
-            Type::Nominal { def, args, .. } => {
+            Type::Nominal { def, name, args } => {
                 let Some(info) = self.checked.facts.structs.get(def) else {
-                    return Err(LowerError::MissingFact("struct info".into()));
+                    // Not a user struct: an opaque runtime type of the
+                    // prelude (`TcpStream`, `JoinHandle`, a channel, a
+                    // future). The IR does no host I/O by design: a refusal,
+                    // not a missing fact.
+                    return unsupported(format!("opaque runtime type `{name}`"));
                 };
                 if args.len() != info.generics.len() {
                     return Err(LowerError::MissingFact("generic struct arity".into()));
@@ -1911,6 +1919,21 @@ impl<'a> FnLower<'a> {
                         });
                         Ok(slot)
                     }
+                    // `&v[i]` of a scalar element, shared: like `&x` above,
+                    // the address of a copy reads the same value, and the
+                    // checker forbids writing through it.
+                    p @ Place::VecElem { .. } if *op == ast::UnOp::Ref => {
+                        let t = self.type_of(expr)?;
+                        let v = self.read(p)?;
+                        let slot = self.alloc(&t)?;
+                        self.emit(Inst::Store {
+                            ty: self.locals[v as usize],
+                            addr: slot,
+                            offset: 0,
+                            src: v,
+                        });
+                        Ok(slot)
+                    }
                     Place::Reg(_) | Place::VecElem { .. } => {
                         unsupported("reference to a scalar local")
                     }
@@ -2200,7 +2223,7 @@ impl<'a> FnLower<'a> {
                 });
                 Ok(dst)
             }
-            ExprKind::Char(_) => unsupported("char"),
+            ExprKind::Char(c) => self.int_const(Ty::U32, *c as u32 as i128),
             ExprKind::Range { .. } => unsupported("range outside `for`"),
             ExprKind::Try(inner) => self.try_expr(inner),
             ExprKind::Unsafe(_) => unsupported("unsafe"),
@@ -2485,7 +2508,8 @@ impl<'a> FnLower<'a> {
                         });
                         l
                     }
-                    _ => return unsupported("char or string pattern"),
+                    ast::LitPat::Char(c) => self.int_const(Ty::U32, *c as u32 as i128)?,
+                    _ => return unsupported("string pattern"),
                 };
                 let v = self.read_place(p)?;
                 let ok = self.new_local(Ty::Bool);
@@ -4503,6 +4527,8 @@ impl<'a> FnLower<'a> {
                     | "String::is_empty"
                     | "str::is_empty"
                     | "Vec::push"
+                    | "String::push"
+                    | "char::to_string"
                     | "Vec::len"
                     | "Vec::is_empty"
                     | "Vec::clone"
@@ -4520,6 +4546,13 @@ impl<'a> FnLower<'a> {
             self.emit(Inst::HeapOfValue { dst, ty, src: h });
             return Ok(Some(dst));
         }
+        if path == "char::to_string" {
+            // Through references, like the scalar `to_string` above.
+            let (_, c) = self.scalar_through_refs(recv)?;
+            let dst = self.new_local(Ty::Obj);
+            self.heap(Some(dst), HeapOp::StrOfChar, Some(c), None);
+            return Ok(Some(dst));
+        }
         let h = self.expr(recv)?;
         let len = |me: &mut Self, op: HeapOp| {
             let n = me.new_local(Ty::Usize);
@@ -4533,6 +4566,12 @@ impl<'a> FnLower<'a> {
                 self.unit()
             }
             ("String::len" | "str::len", []) => len(self, HeapOp::StrLen),
+            ("String::push", [a]) => {
+                let c = self.expr(a)?;
+                self.heap(None, HeapOp::StrPushChar, Some(h), Some(c));
+                self.unit()
+            }
+
             ("Vec::len", []) => len(self, HeapOp::VecLen),
             ("String::is_empty" | "str::is_empty" | "Vec::is_empty", []) => {
                 let op = if path == "Vec::is_empty" {

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.8";
+pub const IR_VERSION: &str = "ravum-ir-1.9";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -243,11 +243,17 @@ pub enum HeapOp {
     /// `a.insert(b)`, `b` the element's raw word: the packed handle (panic
     /// `arena is full`).
     ArenaInsert,
+    /// IR v1.9: `a.push(b)`, `b` a `char` (its code point as a word; a
+    /// value that is not a Unicode scalar is a fault: the checker only
+    /// produces scalars).
+    StrPushChar,
+    /// IR v1.9: a new string holding the one `char` `a` (`char::to_string`).
+    StrOfChar,
 }
 
 impl HeapOp {
     /// Every operation, in declaration order (`op as u32` is its index).
-    pub const ALL: [HeapOp; 28] = [
+    pub const ALL: [HeapOp; 30] = [
         HeapOp::StrNew,
         HeapOp::StrClone,
         HeapOp::StrPush,
@@ -276,6 +282,8 @@ impl HeapOp {
         HeapOp::StrJoin,
         HeapOp::ArenaNew,
         HeapOp::ArenaInsert,
+        HeapOp::StrPushChar,
+        HeapOp::StrOfChar,
     ];
 }
 
@@ -795,7 +803,7 @@ mod heap_op_tests {
         for (i, op) in HeapOp::ALL.iter().enumerate() {
             assert_eq!(*op as usize, i, "{op:?}");
         }
-        assert_eq!(HeapOp::ArenaInsert as usize + 1, HeapOp::ALL.len());
+        assert_eq!(HeapOp::StrOfChar as usize + 1, HeapOp::ALL.len());
         assert!(HeapOp::ALL.len() < 64);
     }
 }
