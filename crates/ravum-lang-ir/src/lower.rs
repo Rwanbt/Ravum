@@ -451,10 +451,54 @@ impl<'a> Layouts<'a> {
 
 /// Lower every function of `checked` into an IR module.
 pub fn lower(checked: &CheckedProgram) -> R<Module> {
+    lower_with(checked, None)
+}
+
+/// Lower `checked` for the given entry points only: every function the
+/// entries can reach must lower; a function they cannot reach and that the IR
+/// does not cover (host I/O in `main`, say, when the entry is `step`) becomes
+/// a stub that traps with the reason. Reachability is exact (calls name their
+/// callee, there are no function values), so a stub never runs. A reached
+/// uncovered function is refused, naming it and the construct.
+pub fn lower_for(checked: &CheckedProgram, entries: &[&str]) -> R<Module> {
+    lower_with(checked, Some(entries))
+}
+
+/// The function name the lowering gives an item (its path, or its bare name
+/// at the root), for a stub.
+fn ir_name(checked: &CheckedProgram, item: &ast::Item, f: &FnItem) -> String {
+    match checked.facts.fn_sigs.get(&item.id) {
+        Some(sig) => {
+            let path = sig
+                .rust_path
+                .strip_prefix("crate::")
+                .unwrap_or(&sig.rust_path);
+            if path.contains("::") {
+                path.to_string()
+            } else {
+                f.name.name.clone()
+            }
+        }
+        None => f.name.name.clone(),
+    }
+}
+
+fn lower_with(checked: &CheckedProgram, entries: Option<&[&str]>) -> R<Module> {
     let mut fns: Vec<(&ast::Item, &FnItem)> = Vec::new();
     let mut invariants: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
     let mut method_owner: BTreeMap<NodeId, NodeId> = BTreeMap::new();
-    for item in &checked.program.root.items {
+    // Modules (inline, or files the loader expanded into inline modules) are
+    // flattened: the checker resolved every name to a node, so a function of
+    // `crate::a::b` is lowered like one of the root, under its full path.
+    let mut items: Vec<&ast::Item> = checked.program.root.items.iter().collect();
+    let mut i = 0;
+    while i < items.len() {
+        if let ItemKind::Mod(m) = &items[i].kind {
+            items.extend(m.items.iter());
+        }
+        i += 1;
+    }
+    for item in items {
         match &item.kind {
             ItemKind::Fn(f) => fns.push((item, f)),
             ItemKind::Use(_) => {}
@@ -500,7 +544,10 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                     }
                 }
             }
-            ItemKind::Mod(_) | ItemKind::ModDecl(_) => return unsupported("module"),
+            ItemKind::Mod(_) => {}
+            // A file module the loader did not expand: refused upstream by
+            // the checker (`E-RES-MODDECL`); never lowered as empty.
+            ItemKind::ModDecl(_) => return unsupported("unexpanded module declaration"),
             ItemKind::Extern(_) => return unsupported("extern"),
         }
     }
@@ -529,8 +576,20 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
     });
     let layouts = Layouts::new(checked);
     let mut functions = Vec::new();
-    for (item, f) in &plain {
-        functions.push(FnLower::new(checked, &layouts, &table, item, f, Subst::new())?.run(f)?);
+    // Functions the IR does not cover, in `lower_for` mode: id -> (name,
+    // reason). Their slot holds a trapping stub until reachability decides.
+    let mut uncovered: BTreeMap<FuncId, (String, LowerError)> = BTreeMap::new();
+    for (i, (item, f)) in plain.iter().enumerate() {
+        match FnLower::new(checked, &layouts, &table, item, f, Subst::new()).and_then(|l| l.run(f))
+        {
+            Ok(func) => functions.push(func),
+            Err(e @ LowerError::Unsupported(_)) if entries.is_some() => {
+                let name = ir_name(checked, item, f);
+                functions.push(stub(&name, &e));
+                uncovered.insert(i as FuncId, (name, e));
+            }
+            Err(e) => return Err(e),
+        }
     }
     let mut done = 0;
     loop {
@@ -547,7 +606,14 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
     // `Err(e)` prints `error: <message>` on stderr. Its body takes a hidden
     // result address, so the entry `main` becomes a parameterless wrapper
     // that calls it (renamed `main$body`) and reports an `Err`.
-    if let Some((item, _)) = plain.iter().find(|(_, f)| f.name.name == "main") {
+    // The entry is the root's `main` (F-MOD-011): a `main` inside a module is an
+    // ordinary function.
+    let root_ids: std::collections::BTreeSet<NodeId> =
+        checked.program.root.items.iter().map(|i| i.id).collect();
+    if let Some((item, _)) = plain
+        .iter()
+        .find(|(item, f)| f.name.name == "main" && root_ids.contains(&item.id))
+    {
         let ret = checked
             .facts
             .fn_sigs
@@ -560,14 +626,85 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
             functions.push(main_wrapper(&layouts, &ret, id)?);
         }
     }
-    let m = Module {
+    let mut m = Module {
         version: IR_VERSION.to_string(),
         functions,
         state: None,
         migrate_from: None,
     };
+    if let Some(entries) = entries {
+        let reached = refuse_reachable_stubs(&m, entries, &uncovered)?;
+        // Nothing an entry can reach calls a function outside `reached`;
+        // those are replaced by stubs, so no call of the module points at
+        // a stub (signatures stay consistent).
+        for (id, f) in m.functions.iter_mut().enumerate() {
+            if !reached.contains(&(id as FuncId)) {
+                let why = uncovered
+                    .get(&(id as FuncId))
+                    .map(|(_, e)| e.clone())
+                    .unwrap_or_else(|| {
+                        LowerError::Unsupported("not reachable from the entry".into())
+                    });
+                *f = stub(&f.name.clone(), &why);
+            }
+        }
+    }
     m.validate().map_err(LowerError::MissingFact)?;
     Ok(m)
+}
+
+/// A function the IR does not cover, kept only so that ids stay dense: it
+/// takes nothing and traps with the reason. `refuse_reachable_stubs` proves
+/// that no entry calls it.
+fn stub(name: &str, why: &LowerError) -> Function {
+    Function {
+        name: name.to_string(),
+        params: 0,
+        ret: Ty::Unit,
+        locals: Vec::new(),
+        blocks: vec![Block {
+            insts: Vec::new(),
+            term: Term::Trap(format!("`{name}` is not available on this backend: {why}")),
+        }],
+        stack: Vec::new(),
+    }
+}
+
+/// Every function reachable from `entries` (by direct calls) must have been
+/// lowered: the first reached stub is the refusal.
+fn refuse_reachable_stubs(
+    m: &Module,
+    entries: &[&str],
+    uncovered: &BTreeMap<FuncId, (String, LowerError)>,
+) -> R<std::collections::BTreeSet<FuncId>> {
+    let mut todo: Vec<FuncId> = Vec::new();
+    for e in entries {
+        match m.func_id(e) {
+            Some(id) => todo.push(id),
+            None => return Err(LowerError::MissingFact(format!("entry `{e}`"))),
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    while let Some(id) = todo.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some((name, why)) = uncovered.get(&id) {
+            let detail = match why {
+                LowerError::Unsupported(w) => w.clone(),
+                other => other.to_string(),
+            };
+            return Err(LowerError::Unsupported(format!("{detail} (in `{name}`)")));
+        }
+        for b in &m.functions[id as usize].blocks {
+            for inst in &b.insts {
+                if let Inst::Call { func, .. } = inst {
+                    todo.push(*func);
+                }
+            }
+        }
+    }
+    Ok(seen)
 }
 
 /// Largest number of generic instances one program may need.

@@ -116,6 +116,15 @@ pub fn migrate_info(
 /// Parse, check (profile `core`, as a library: no `main` required) and lower
 /// a single-file program.
 pub fn compile_source(src: &str) -> Result<Module, CompileError> {
+    compile_source_with(src, None)
+}
+
+/// [`compile_source`] for the given entry points only ([`lower_checked_for`]).
+pub fn compile_source_for(src: &str, entries: &[&str]) -> Result<Module, CompileError> {
+    compile_source_with(src, Some(entries))
+}
+
+fn compile_source_with(src: &str, entries: Option<&[&str]>) -> Result<Module, CompileError> {
     let mut sources = SourceMap::new();
     let file = sources.add("src/lib.rv", src);
     let parsed = parser::parse_file(file, src);
@@ -136,7 +145,10 @@ pub fn compile_source(src: &str) -> Result<Module, CompileError> {
         .map(|d| d.code.clone())
         .collect();
     match result.checked {
-        Some(checked) if errors.is_empty() => lower_checked(&checked),
+        Some(checked) if errors.is_empty() => match entries {
+            Some(e) => lower_checked_for(&checked, e),
+            None => lower_checked(&checked),
+        },
         _ => Err(CompileError::Rejected(errors)),
     }
 }
@@ -145,7 +157,23 @@ pub fn compile_source(src: &str) -> Result<Module, CompileError> {
 /// builds it): for a driver that checks incrementally (T13, `watch --backend
 /// jit`) and holds complete facts.
 pub fn lower_checked(checked: &ravum_lang_sema::CheckedProgram) -> Result<Module, CompileError> {
-    let mut m = lower::lower(checked).map_err(CompileError::Lower)?;
+    finish(checked, lower::lower(checked))
+}
+
+/// [`lower_checked`] for the given entry points only ([`lower::lower_for`]):
+/// what they cannot reach may use constructs the IR does not cover.
+pub fn lower_checked_for(
+    checked: &ravum_lang_sema::CheckedProgram,
+    entries: &[&str],
+) -> Result<Module, CompileError> {
+    finish(checked, lower::lower_for(checked, entries))
+}
+
+fn finish(
+    checked: &ravum_lang_sema::CheckedProgram,
+    lowered: Result<Module, lower::LowerError>,
+) -> Result<Module, CompileError> {
+    let mut m = lowered.map_err(CompileError::Lower)?;
     m.state = state_info(checked).map_err(CompileError::Lower)?;
     m.migrate_from = migrate_info(checked).map_err(CompileError::Lower)?;
     Ok(m)
