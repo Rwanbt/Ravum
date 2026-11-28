@@ -18,6 +18,23 @@ fn program() -> String {
         ("u32", &["4294967295"]),
         ("i64", &["-9223372036854775808", "9223372036854775807"]),
         ("u64", &["18446744073709551615"]),
+        (
+            "i128",
+            &[
+                "-170141183460469231731687303715884105728",
+                "170141183460469231731687303715884105727",
+                "-18446744073709551617",
+                "18446744073709551617",
+            ],
+        ),
+        (
+            "u128",
+            &[
+                "340282366920938463463374607431768211455",
+                "170141183460469231731687303715884105728",
+                "18446744073709551616",
+            ],
+        ),
         ("usize", &["18446744073709551615"]),
         ("bool", &["true", "false"]),
         (
@@ -84,6 +101,18 @@ fn jit_output_is_byte_identical_to_the_rustc_build() {
         jit.stdout, reference,
         "jit vs rustc output\n--- jit\n{}\n--- rustc\n{reference}",
         jit.stdout
+    );
+    let (interpreted, interpreter_output) =
+        ravum_lang_ir::interp::run_with_output(&ir, "main", ravum_lang_ir::interp::DEFAULT_STEPS);
+    assert_eq!(
+        interpreted.render(),
+        r.render(),
+        "interpreter vs JIT outcome"
+    );
+    assert_eq!(interpreter_output, jit, "interpreter vs JIT output");
+    assert_eq!(
+        interpreter_output.stdout, reference,
+        "interpreter vs rustc output"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

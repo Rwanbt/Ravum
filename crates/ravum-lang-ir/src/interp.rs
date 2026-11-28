@@ -1,9 +1,9 @@
 //! Reference interpreter of IR v1 (first consumer of the IR, gate T14).
 //!
-//! Integer arithmetic is computed exactly in `i128` and then range-checked
-//! against the operand type, so overflow detection does not depend on host
-//! wrapping behavior. A step budget and a call-depth limit make every run
-//! terminate; running out of either is reported, never turned into a value.
+//! Integer arithmetic is computed exactly in the operand's signed or unsigned
+//! width, so overflow detection does not depend on host wrapping behavior. A
+//! step budget and a call-depth limit make every run terminate; running out of
+//! either is reported, never turned into a value.
 
 use crate::ir::*;
 
@@ -11,6 +11,9 @@ use crate::ir::*;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Val {
     Int(Ty, i128),
+    /// A full unsigned 128-bit value. Keeping it unsigned avoids treating the
+    /// high half of the `u128` range as a negative `i128` during arithmetic.
+    U128(u128),
     F32(f32),
     F64(f64),
     Bool(bool),
@@ -21,6 +24,7 @@ impl Val {
     pub fn ty(&self) -> Ty {
         match self {
             Val::Int(t, _) => *t,
+            Val::U128(_) => Ty::U128,
             Val::F32(_) => Ty::F32,
             Val::F64(_) => Ty::F64,
             Val::Bool(_) => Ty::Bool,
@@ -32,6 +36,7 @@ impl Val {
     pub fn text(&self) -> String {
         match self {
             Val::Int(_, v) => v.to_string(),
+            Val::U128(v) => v.to_string(),
             Val::F32(v) => v.to_string(),
             Val::F64(v) => v.to_string(),
             Val::Bool(b) => b.to_string(),
@@ -73,8 +78,14 @@ enum Stop {
     Fault(String),
 }
 
+/// Inclusive range of an integer whose bounds fit in `i128`. `u128` deliberately
+/// has no `i128` range: its upper half is represented by [`Val::U128`].
 pub fn range(ty: Ty) -> (i128, i128) {
     let bits = ty.int_bits().expect("integer type");
+    assert!(ty != Ty::U128, "u128 has no i128-representable range");
+    if ty == Ty::I128 {
+        return (i128::MIN, i128::MAX);
+    }
     if ty.is_signed() {
         (-(1i128 << (bits - 1)), (1i128 << (bits - 1)) - 1)
     } else {
@@ -82,20 +93,24 @@ pub fn range(ty: Ty) -> (i128, i128) {
     }
 }
 
-/// Wrap an exact integer to the bit pattern of `ty` (used by `as` casts).
+/// Wrap an exact integer to the raw bit pattern of `ty` (used by `as` casts).
+/// For both 128-bit types every `i128` bit pattern is already exact.
 pub fn wrap(ty: Ty, v: i128) -> i128 {
     let bits = ty.int_bits().expect("integer type");
-    let mask: u128 = if bits == 128 {
-        u128::MAX
-    } else {
-        (1u128 << bits) - 1
-    };
+    if bits == 128 {
+        return v;
+    }
+    let mask = (1u128 << bits) - 1;
     let u = (v as u128) & mask;
     if ty.is_signed() && (u >> (bits - 1)) & 1 == 1 {
         (u as i128) - (1i128 << bits)
     } else {
         u as i128
     }
+}
+
+fn fits(ty: Ty, v: i128) -> bool {
+    ty.is_wide() || range(ty).0 <= v && range(ty).1 >= v
 }
 
 /// Run `entry` with no argument.
@@ -187,6 +202,11 @@ fn run_dsp_here(
     module
         .validate()
         .map_err(|e| RunOutcome::Fault(format!("invalid IR: {e}")))?;
+    if module.state.as_ref().is_some_and(|s| s.align > 8) {
+        return Err(RunOutcome::Fault(
+            "state alignment exceeds the host buffer's 8-byte alignment".into(),
+        ));
+    }
     let size = module.state.as_ref().map(|s| s.size as usize).unwrap_or(0);
     let mut m = Machine::new(module, steps, size);
     let state = Val::Int(Ty::Ptr, STATE_BASE as i128);
@@ -225,27 +245,40 @@ struct Machine<'m> {
     heap: crate::heap::Heap,
 }
 
-/// Raw 64-bit word of a scalar (the encoding heap vectors store).
-pub fn to_word(v: Val) -> u64 {
+/// Raw 64-bit word of a scalar (the encoding heap vectors store). Wide
+/// integers are refused, never truncated, even if validation is bypassed.
+pub fn to_word(v: Val) -> Result<u64, crate::heap::HeapStop> {
     match v {
-        Val::Int(_, x) => x as u64,
-        Val::F32(x) => x.to_bits() as u64,
-        Val::F64(x) => x.to_bits(),
-        Val::Bool(b) => b as u64,
-        Val::Unit => 0,
+        Val::Int(t, _x) if t.is_wide() => Err(crate::heap::HeapStop::Fault(
+            "128-bit integer in a 64-bit heap word",
+        )),
+        Val::Int(_, x) => Ok(x as u64),
+        Val::U128(_) => Err(crate::heap::HeapStop::Fault(
+            "u128 cannot be encoded as a 64-bit heap word",
+        )),
+        Val::F32(x) => Ok(x.to_bits() as u64),
+        Val::F64(x) => Ok(x.to_bits()),
+        Val::Bool(b) => Ok(b as u64),
+        Val::Unit => Ok(0),
     }
 }
 
-/// The scalar of type `ty` a raw word holds.
-pub fn from_word(ty: Ty, w: u64) -> Val {
-    match ty {
+/// The scalar of type `ty` a raw word holds. A wide integer has no faithful
+/// one-word decoding and is refused (defense in depth beyond validation).
+pub fn from_word(ty: Ty, w: u64) -> Result<Val, crate::heap::HeapStop> {
+    if ty.is_wide() {
+        return Err(crate::heap::HeapStop::Fault(
+            "64-bit heap word cannot decode a 128-bit integer",
+        ));
+    }
+    Ok(match ty {
         Ty::F32 => Val::F32(f32::from_bits(w as u32)),
         Ty::F64 => Val::F64(f64::from_bits(w)),
         Ty::Bool => Val::Bool(w & 1 == 1),
         Ty::Unit => Val::Unit,
         Ty::Ptr | Ty::Obj => Val::Int(ty, w as i128),
         t => Val::Int(t, wrap(t, w as i128)),
-    }
+    })
 }
 
 fn heap_stop(e: crate::heap::HeapStop) -> Stop {
@@ -281,7 +314,9 @@ impl<'m> Machine<'m> {
     }
 
     fn check(&self, addr: i128, size: u32) -> Result<usize, Stop> {
-        let end = addr + size as i128;
+        let end = addr
+            .checked_add(size as i128)
+            .ok_or_else(|| Stop::Fault(format!("memory access out of range at {addr}")))?;
         if addr < STATE_BASE as i128 || end > self.mem.len() as i128 {
             return Err(Stop::Fault(format!("memory access out of range at {addr}")));
         }
@@ -291,6 +326,16 @@ impl<'m> Machine<'m> {
     fn load(&self, ty: Ty, addr: i128) -> Result<Val, Stop> {
         let a = self.check(addr, ty.size())?;
         let b = &self.mem[a..a + ty.size() as usize];
+        if ty.is_wide() {
+            let mut raw = [0u8; 16];
+            raw.copy_from_slice(b);
+            let bits = u128::from_le_bytes(raw);
+            return Ok(if ty == Ty::U128 {
+                Val::U128(bits)
+            } else {
+                Val::Int(Ty::I128, bits as i128)
+            });
+        }
         let mut raw = [0u8; 8];
         raw[..b.len()].copy_from_slice(b);
         let u = u64::from_le_bytes(raw);
@@ -307,11 +352,21 @@ impl<'m> Machine<'m> {
 
     fn store(&mut self, ty: Ty, addr: i128, v: Val) -> Result<(), Stop> {
         let a = self.check(addr, ty.size())?;
+        if ty.is_wide() {
+            let bits = match (ty, v) {
+                (Ty::I128, Val::Int(_, x)) => x as u128,
+                (Ty::U128, Val::U128(x)) => x,
+                _ => return Err(Stop::Fault("wide store with a mistyped value".into())),
+            };
+            self.mem[a..a + 16].copy_from_slice(&bits.to_le_bytes());
+            return Ok(());
+        }
         let u: u64 = match v {
             Val::F32(x) => x.to_bits() as u64,
             Val::F64(x) => x.to_bits(),
             Val::Bool(b) => b as u64,
             Val::Int(_, x) => x as u64,
+            Val::U128(_) => return Err(Stop::Fault("u128 stored in a narrow scalar".into())),
             Val::Unit => 0,
         };
         let n = ty.size() as usize;
@@ -338,7 +393,7 @@ impl<'m> Machine<'m> {
             PrintArg::Text(t) => t.clone(),
             PrintArg::Obj(h) => self
                 .heap
-                .str(to_word(slots[*h as usize]))
+                .str(to_word(slots[*h as usize]).map_err(heap_stop)?)
                 .map_err(heap_stop)?
                 .to_string(),
             PrintArg::Value { src, .. } => slots[*src as usize].text(),
@@ -361,11 +416,14 @@ impl<'m> Machine<'m> {
     fn heap_inst(&mut self, i: &Inst, locals: &[Ty], slots: &mut [Val]) -> Result<(), Stop> {
         match i {
             Inst::Heap { dst, op, a, b } => {
-                let w = |x: &Option<Local>| x.map(|l| to_word(slots[l as usize])).unwrap_or(0);
-                let r = self.heap.op(*op, w(a), w(b)).map_err(heap_stop)?;
+                let w = |x: &Option<Local>| {
+                    x.map(|l| to_word(slots[l as usize]).map_err(heap_stop))
+                        .unwrap_or(Ok(0))
+                };
+                let r = self.heap.op(*op, w(a)?, w(b)?).map_err(heap_stop)?;
                 if let Some(d) = dst {
                     let t = locals[*d as usize];
-                    slots[*d as usize] = from_word(t, r);
+                    slots[*d as usize] = from_word(t, r).map_err(heap_stop)?;
                 }
             }
             Inst::HeapText { dst, text } => {
@@ -380,20 +438,20 @@ impl<'m> Machine<'m> {
             Inst::VecSet { h, i, x } => {
                 self.heap
                     .vec_set(
-                        to_word(slots[*h as usize]),
-                        to_word(slots[*i as usize]),
-                        to_word(slots[*x as usize]),
+                        to_word(slots[*h as usize]).map_err(heap_stop)?,
+                        to_word(slots[*i as usize]).map_err(heap_stop)?,
+                        to_word(slots[*x as usize]).map_err(heap_stop)?,
                     )
                     .map_err(heap_stop)?;
             }
             Inst::VecPop { present, value, h } => {
                 let (p, w) = self
                     .heap
-                    .vec_pop(to_word(slots[*h as usize]))
+                    .vec_pop(to_word(slots[*h as usize]).map_err(heap_stop)?)
                     .map_err(heap_stop)?;
                 slots[*present as usize] = Val::Bool(p);
                 let t = locals[*value as usize];
-                slots[*value as usize] = from_word(t, w);
+                slots[*value as usize] = from_word(t, w).map_err(heap_stop)?;
             }
             Inst::MapGet {
                 h,
@@ -401,10 +459,11 @@ impl<'m> Machine<'m> {
                 present,
                 value,
             } => {
-                let w = |l: &Local| to_word(slots[*l as usize]);
-                let (p, x) = self.heap.map_get(w(h), w(key)).map_err(heap_stop)?;
+                let w = |l: &Local| to_word(slots[*l as usize]).map_err(heap_stop);
+                let (p, x) = self.heap.map_get(w(h)?, w(key)?).map_err(heap_stop)?;
                 slots[*present as usize] = Val::Bool(p);
-                slots[*value as usize] = from_word(locals[*value as usize], x);
+                slots[*value as usize] =
+                    from_word(locals[*value as usize], x).map_err(heap_stop)?;
             }
             Inst::MapInsert {
                 h,
@@ -413,13 +472,13 @@ impl<'m> Machine<'m> {
                 present,
                 old,
             } => {
-                let w = |l: &Local| to_word(slots[*l as usize]);
+                let w = |l: &Local| to_word(slots[*l as usize]).map_err(heap_stop);
                 let (p, x) = self
                     .heap
-                    .map_insert(w(h), w(key), w(val))
+                    .map_insert(w(h)?, w(key)?, w(val)?)
                     .map_err(heap_stop)?;
                 slots[*present as usize] = Val::Bool(p);
-                slots[*old as usize] = from_word(locals[*old as usize], x);
+                slots[*old as usize] = from_word(locals[*old as usize], x).map_err(heap_stop)?;
             }
             Inst::MapRemove {
                 h,
@@ -427,10 +486,10 @@ impl<'m> Machine<'m> {
                 present,
                 old,
             } => {
-                let w = |l: &Local| to_word(slots[*l as usize]);
-                let (p, x) = self.heap.map_remove(w(h), w(key)).map_err(heap_stop)?;
+                let w = |l: &Local| to_word(slots[*l as usize]).map_err(heap_stop);
+                let (p, x) = self.heap.map_remove(w(h)?, w(key)?).map_err(heap_stop)?;
                 slots[*present as usize] = Val::Bool(p);
-                slots[*old as usize] = from_word(locals[*old as usize], x);
+                slots[*old as usize] = from_word(locals[*old as usize], x).map_err(heap_stop)?;
             }
             _ => {}
         }
@@ -563,10 +622,10 @@ impl<'m> Machine<'m> {
                 Term::Return(None) => return Ok(Val::Unit),
                 Term::Trap(m) => return Err(self.trap(m)),
                 Term::TrapBounds { len, index } => {
-                    let w = |l: &Local| to_word(slots[*l as usize]);
+                    let w = |l: &Local| to_word(slots[*l as usize]).map_err(heap_stop);
                     return Err(heap_stop(crate::heap::HeapStop::IndexOutOfBounds {
-                        len: w(len),
-                        index: w(index),
+                        len: w(len)?,
+                        index: w(index)?,
                     }));
                 }
                 Term::Unreachable => return Err(Stop::Fault("reached unreachable block".into())),
@@ -588,13 +647,27 @@ fn zero(t: Ty) -> Val {
         Ty::F64 => Val::F64(0.0),
         Ty::Bool => Val::Bool(false),
         Ty::Unit => Val::Unit,
+        Ty::U128 => Val::U128(0),
         t => Val::Int(t, 0),
     }
 }
 
 fn konst(c: Const) -> Val {
     match c {
-        Const::Int { ty, value } => Val::Int(ty, value),
+        Const::Int { ty, value } => {
+            if ty == Ty::U128 {
+                Val::U128(value as u128)
+            } else {
+                Val::Int(ty, value)
+            }
+        }
+        Const::Wide { ty, bits } => {
+            if ty == Ty::U128 {
+                Val::U128(bits)
+            } else {
+                Val::Int(ty, bits as i128)
+            }
+        }
         Const::F32Bits(b) => Val::F32(f32::from_bits(b)),
         Const::F64Bits(b) => Val::F64(f64::from_bits(b)),
         Const::Bool(b) => Val::Bool(b),
@@ -607,6 +680,9 @@ fn trap<T>(m: &str) -> Result<T, Stop> {
 }
 
 fn checked(ty: Ty, v: i128, msg: &str) -> Result<Val, Stop> {
+    if ty == Ty::U128 {
+        return Ok(Val::U128(v as u128));
+    }
     let (lo, hi) = range(ty);
     if v < lo || v > hi {
         trap(msg)
@@ -618,18 +694,89 @@ fn checked(ty: Ty, v: i128, msg: &str) -> Result<Val, Stop> {
 fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
     use BinOp::*;
     match (a, b) {
+        (Val::U128(x), Val::Int(_, y)) if matches!(op, Shl | Shr) => {
+            if !(0..128).contains(&y) {
+                return trap("shift out of range");
+            }
+            let n = y as u32;
+            Ok(Val::U128(if op == Shl { x << n } else { x >> n }))
+        }
+        (Val::U128(x), Val::U128(y)) => match op {
+            Add => x
+                .checked_add(y)
+                .map(Val::U128)
+                .ok_or_else(|| Stop::Panic("attempt to add with overflow".into())),
+            Sub => x
+                .checked_sub(y)
+                .map(Val::U128)
+                .ok_or_else(|| Stop::Panic("attempt to subtract with overflow".into())),
+            Mul => x
+                .checked_mul(y)
+                .map(Val::U128)
+                .ok_or_else(|| Stop::Panic("attempt to multiply with overflow".into())),
+            Div => x
+                .checked_div(y)
+                .map(Val::U128)
+                .ok_or_else(|| Stop::Panic("division by zero".into())),
+            Rem => x
+                .checked_rem(y)
+                .map(Val::U128)
+                .ok_or_else(|| Stop::Panic("remainder by zero".into())),
+            BitAnd => Ok(Val::U128(x & y)),
+            BitOr => Ok(Val::U128(x | y)),
+            BitXor => Ok(Val::U128(x ^ y)),
+            Shl | Shr => Err(Stop::Fault("shift amount is not u64".into())),
+            Eq => Ok(Val::Bool(x == y)),
+            Ne => Ok(Val::Bool(x != y)),
+            Lt => Ok(Val::Bool(x < y)),
+            Le => Ok(Val::Bool(x <= y)),
+            Gt => Ok(Val::Bool(x > y)),
+            Ge => Ok(Val::Bool(x >= y)),
+            WrappingAdd => Ok(Val::U128(x.wrapping_add(y))),
+            WrappingSub => Ok(Val::U128(x.wrapping_sub(y))),
+            WrappingMul => Ok(Val::U128(x.wrapping_mul(y))),
+            MathMin | MathMax => Err(Stop::Fault("math::min/max on an integer".into())),
+            OverflowsAdd | OverflowsSub | OverflowsMul => {
+                let overflows = match op {
+                    OverflowsAdd => x.checked_add(y).is_none(),
+                    OverflowsSub => x.checked_sub(y).is_none(),
+                    _ => x.checked_mul(y).is_none(),
+                };
+                Ok(Val::Bool(overflows))
+            }
+            SaturatingAdd | SaturatingSub | SaturatingMul => {
+                let exact = match op {
+                    SaturatingAdd => x.checked_add(y),
+                    SaturatingSub => x.checked_sub(y),
+                    _ => x.checked_mul(y),
+                };
+                Ok(Val::U128(exact.unwrap_or(if op == SaturatingSub {
+                    0
+                } else {
+                    u128::MAX
+                })))
+            }
+        },
         (Val::Int(_, x), Val::Int(_, y)) => match op {
-            Add => checked(ty, x + y, "attempt to add with overflow"),
-            Sub => checked(ty, x - y, "attempt to subtract with overflow"),
-            Mul => match x.checked_mul(y) {
-                Some(p) => checked(ty, p, "attempt to multiply with overflow"),
-                None => trap("attempt to multiply with overflow"),
-            },
+            Add => x
+                .checked_add(y)
+                .ok_or_else(|| Stop::Panic("attempt to add with overflow".into()))
+                .and_then(|v| checked(ty, v, "attempt to add with overflow")),
+            Sub => x
+                .checked_sub(y)
+                .ok_or_else(|| Stop::Panic("attempt to subtract with overflow".into()))
+                .and_then(|v| checked(ty, v, "attempt to subtract with overflow")),
+            Mul => x
+                .checked_mul(y)
+                .ok_or_else(|| Stop::Panic("attempt to multiply with overflow".into()))
+                .and_then(|v| checked(ty, v, "attempt to multiply with overflow")),
             Div => {
                 if y == 0 {
                     trap("division by zero")
                 } else {
-                    checked(ty, x / y, "attempt to divide with overflow")
+                    x.checked_div(y)
+                        .ok_or_else(|| Stop::Panic("attempt to divide with overflow".into()))
+                        .and_then(|v| checked(ty, v, "attempt to divide with overflow"))
                 }
             }
             Rem => {
@@ -638,7 +785,13 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
                 } else if ty.is_signed() && x == range(ty).0 && y == -1 {
                     trap("attempt to calculate the remainder with overflow")
                 } else {
-                    Ok(Val::Int(ty, x % y))
+                    x.checked_rem(y)
+                        .ok_or_else(|| {
+                            Stop::Panic("attempt to calculate the remainder with overflow".into())
+                        })
+                        .and_then(|v| {
+                            checked(ty, v, "attempt to calculate the remainder with overflow")
+                        })
                 }
             }
             BitAnd => Ok(Val::Int(ty, wrap(ty, x & y))),
@@ -649,12 +802,13 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
                 if y < 0 || y >= bits {
                     return trap("shift out of range");
                 }
+                let n = y as u32;
                 if op == Shl {
-                    Ok(Val::Int(ty, wrap(ty, x << y)))
+                    Ok(Val::Int(ty, wrap(ty, x << n)))
                 } else {
-                    // `x` is exact: `>>` on i128 is arithmetic, and an
-                    // unsigned `x` is non-negative, so it is logical.
-                    Ok(Val::Int(ty, x >> y))
+                    // Signed `i128` shifts arithmetically; every other value
+                    // in this branch is a non-negative unsigned integer.
+                    Ok(Val::Int(ty, x >> n))
                 }
             }
             Eq => Ok(Val::Bool(x == y)),
@@ -663,32 +817,47 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
             Le => Ok(Val::Bool(x <= y)),
             Gt => Ok(Val::Bool(x > y)),
             Ge => Ok(Val::Bool(x >= y)),
-            // `x`, `y` are exact; the i128 product can only overflow for
-            // 64-bit operands, where wrapping in 2^128 keeps the low bits.
             WrappingAdd => Ok(Val::Int(ty, wrap(ty, x.wrapping_add(y)))),
             WrappingSub => Ok(Val::Int(ty, wrap(ty, x.wrapping_sub(y)))),
             WrappingMul => Ok(Val::Int(ty, wrap(ty, x.wrapping_mul(y)))),
             MathMin | MathMax => Err(Stop::Fault("math::min/max on an integer".into())),
             OverflowsAdd | OverflowsSub | OverflowsMul => {
-                let (lo, hi) = range(ty);
                 let exact = match op {
-                    OverflowsAdd => Some(x + y),
-                    OverflowsSub => Some(x - y),
+                    OverflowsAdd => x.checked_add(y),
+                    OverflowsSub => x.checked_sub(y),
                     _ => x.checked_mul(y),
                 };
-                Ok(Val::Bool(!exact.is_some_and(|v| (lo..=hi).contains(&v))))
+                Ok(Val::Bool(!exact.is_some_and(|v| fits(ty, v))))
             }
             SaturatingAdd | SaturatingSub | SaturatingMul => {
                 let (lo, hi) = range(ty);
                 let exact = match op {
-                    SaturatingAdd => Some(x + y),
-                    SaturatingSub => Some(x - y),
+                    SaturatingAdd => x.checked_add(y),
+                    SaturatingSub => x.checked_sub(y),
                     _ => x.checked_mul(y),
                 };
-                // An i128 product overflow means a magnitude beyond any
-                // 64-bit range: its sign is the sign of `x * y`.
-                let v = exact.unwrap_or(if (x < 0) != (y < 0) { lo } else { hi });
-                Ok(Val::Int(ty, v.clamp(lo, hi)))
+                let v = match exact {
+                    Some(v) => v.clamp(lo, hi),
+                    None => match op {
+                        SaturatingMul => {
+                            if (x < 0) != (y < 0) {
+                                lo
+                            } else {
+                                hi
+                            }
+                        }
+                        // Addition and subtraction overflow in the direction
+                        // of the left operand.
+                        _ => {
+                            if x < 0 {
+                                lo
+                            } else {
+                                hi
+                            }
+                        }
+                    },
+                };
+                Ok(Val::Int(ty, v))
             }
         },
         (Val::F64(x), Val::F64(y)) if op == MathMin || op == MathMax => {
@@ -757,16 +926,30 @@ where
 
 fn un(op: UnOp, ty: Ty, a: Val) -> Result<Val, Stop> {
     match (op, a) {
-        (UnOp::Neg, Val::Int(_, x)) => checked(ty, -x, "attempt to negate with overflow"),
+        (UnOp::Neg, Val::Int(_, x)) => x
+            .checked_neg()
+            .ok_or_else(|| Stop::Panic("attempt to negate with overflow".into()))
+            .and_then(|v| checked(ty, v, "attempt to negate with overflow")),
+        (UnOp::Neg, Val::U128(x)) => {
+            if x == 0 {
+                Ok(Val::U128(0))
+            } else {
+                trap("attempt to negate with overflow")
+            }
+        }
         (UnOp::Neg, Val::F64(x)) => Ok(Val::F64(-x)),
         (UnOp::Neg, Val::F32(x)) => Ok(Val::F32(-x)),
         (UnOp::Not, Val::Bool(b)) => Ok(Val::Bool(!b)),
         (UnOp::Not, Val::Int(_, x)) => Ok(Val::Int(ty, wrap(ty, !x))),
-        (UnOp::Abs, Val::Int(_, x)) => checked(ty, x.abs(), "attempt to negate with overflow"),
-        (UnOp::WrappingNeg, Val::Int(_, x)) => Ok(Val::Int(ty, wrap(ty, -x))),
+        (UnOp::Not, Val::U128(x)) => Ok(Val::U128(!x)),
+        (UnOp::Abs, Val::Int(_, x)) => x
+            .checked_abs()
+            .ok_or_else(|| Stop::Panic("attempt to negate with overflow".into()))
+            .and_then(|v| checked(ty, v, "attempt to negate with overflow")),
+        (UnOp::WrappingNeg, Val::Int(_, x)) => Ok(Val::Int(ty, wrap(ty, x.wrapping_neg()))),
         (UnOp::SaturatingNeg, Val::Int(_, x)) => {
             let (lo, hi) = range(ty);
-            Ok(Val::Int(ty, (-x).clamp(lo, hi)))
+            Ok(Val::Int(ty, x.checked_neg().unwrap_or(hi).clamp(lo, hi)))
         }
         (UnOp::Abs, Val::F64(x)) => Ok(Val::F64(x.abs())),
         (UnOp::Sqrt, Val::F64(x)) => Ok(Val::F64(x.sqrt())),
@@ -779,15 +962,28 @@ fn un(op: UnOp, ty: Ty, a: Val) -> Result<Val, Stop> {
 
 /// `as` with Rust semantics.
 pub fn cast(from: Ty, to: Ty, v: Val) -> Val {
-    let _ = from;
+    if from == to {
+        return v;
+    }
     match (v, to) {
-        (Val::Int(_, x), t) if t.is_int() => Val::Int(t, wrap(t, x)),
-        (Val::Int(_, x), Ty::F64) => Val::F64(x as f64),
-        (Val::Int(_, x), Ty::F32) => Val::F32(x as f32),
-        (Val::Bool(b), t) if t.is_int() => Val::Int(t, b as i128),
+        (Val::U128(x), t) if t.is_int() => int_from_bits(t, x),
+        (Val::Int(_, x), t) if t.is_int() => int_from_bits(t, x as u128),
+        (Val::Bool(b), t) if t.is_int() => int_from_bits(t, b as u128),
+        (Val::U128(x), Ty::F64) => Val::F64(x as f64),
+        (Val::U128(x), Ty::F32) => Val::F32(x as f32),
+        (Val::Int(_, x), Ty::F64) => Val::F64(if from.is_signed() {
+            x as f64
+        } else {
+            x as u128 as f64
+        }),
+        (Val::Int(_, x), Ty::F32) => Val::F32(if from.is_signed() {
+            x as f32
+        } else {
+            x as u128 as f32
+        }),
         (Val::Bool(b), Ty::Bool) => Val::Bool(b),
-        (Val::F64(x), t) if t.is_int() => Val::Int(t, sat(t, x)),
-        (Val::F32(x), t) if t.is_int() => Val::Int(t, sat(t, x as f64)),
+        (Val::F64(x), t) if t.is_int() => float_to_int(t, x),
+        (Val::F32(x), t) if t.is_int() => float_to_int(t, x as f64),
         (Val::F64(x), Ty::F32) => Val::F32(x as f32),
         (Val::F64(x), Ty::F64) => Val::F64(x),
         (Val::F32(x), Ty::F64) => Val::F64(x as f64),
@@ -796,16 +992,46 @@ pub fn cast(from: Ty, to: Ty, v: Val) -> Val {
     }
 }
 
-/// Saturating float → int (`as`): NaN → 0, out of range → bound, truncation.
-fn sat(t: Ty, x: f64) -> i128 {
-    let (lo, hi) = range(t);
-    if x.is_nan() {
-        0
-    } else if x <= lo as f64 {
-        lo
-    } else if x >= hi as f64 {
-        hi
+fn int_from_bits(to: Ty, bits: u128) -> Val {
+    if to == Ty::U128 {
+        Val::U128(bits)
     } else {
-        x.trunc() as i128
+        Val::Int(to, wrap(to, bits as i128))
+    }
+}
+
+/// Saturating float → int (`as`): NaN → 0, out of range → bound, truncation.
+fn float_to_int(t: Ty, x: f64) -> Val {
+    if x.is_nan() {
+        return zero(t);
+    }
+    if t == Ty::U128 {
+        if x <= 0.0 {
+            Val::U128(0)
+        } else if x >= u128::MAX as f64 {
+            Val::U128(u128::MAX)
+        } else {
+            Val::U128(x.trunc() as u128)
+        }
+    } else if t == Ty::I128 {
+        if x <= i128::MIN as f64 {
+            Val::Int(t, i128::MIN)
+        } else if x >= i128::MAX as f64 {
+            Val::Int(t, i128::MAX)
+        } else {
+            Val::Int(t, x.trunc() as i128)
+        }
+    } else {
+        let (lo, hi) = range(t);
+        Val::Int(
+            t,
+            if x <= lo as f64 {
+                lo
+            } else if x >= hi as f64 {
+                hi
+            } else {
+                x.trunc() as i128
+            },
+        )
     }
 }

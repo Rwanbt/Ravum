@@ -45,7 +45,7 @@ pub enum LowerError {
 impl std::fmt::Display for LowerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LowerError::Unsupported(s) => write!(f, "unsupported in IR v1.1: {s}"),
+            LowerError::Unsupported(s) => write!(f, "unsupported in {IR_VERSION}: {s}"),
             LowerError::MissingFact(s) => write!(f, "missing checker fact: {s}"),
         }
     }
@@ -98,6 +98,18 @@ fn is_map(t: &Type) -> bool {
     matches!(t, Type::Nominal { def, .. } if *def == PRELUDE_MAP_DEF || *def == PRELUDE_ARENA_DEF)
 }
 
+fn is_wide_scalar(t: &Type) -> bool {
+    matches!(t, Type::I128 | Type::U128)
+}
+
+fn is_wide_vec(t: &Type) -> bool {
+    match t {
+        Type::Vec(elem) => is_wide_scalar(elem),
+        Type::Ref { inner, .. } => is_wide_vec(inner),
+        _ => false,
+    }
+}
+
 /// `Arena<T>` (or a reference to one).
 fn is_arena(t: &Type) -> bool {
     match t {
@@ -123,6 +135,20 @@ fn map_kv(t: &Type) -> Option<(Type, Type)> {
 }
 
 pub fn map_ty(t: &Type) -> R<Ty> {
+    // IR v1.10 heap containers still carry one 64-bit word per scalar.
+    // Refuse wide elements/keys/values explicitly, before a handle could
+    // hide their type; fixed arrays/structs use the 16-byte memory layout.
+    let wide_container = if is_wide_vec(t) {
+        Some("`Vec<i128/u128>` needs a 128-bit heap word".to_string())
+    } else {
+        map_kv(t).and_then(|(k, v)| {
+            (is_wide_scalar(&k) || is_wide_scalar(&v))
+                .then(|| format!("heap container with wide key/value `{k}`/`{v}`"))
+        })
+    };
+    if let Some(what) = wide_container {
+        return unsupported(format!("{what} needs a 128-bit heap word"));
+    }
     // STD-21.9: a handle is one packed word.
     if ravum_lang_sema::builtins::is_handle_type(t) {
         return Ok(Ty::U64);
@@ -140,11 +166,13 @@ pub fn map_ty(t: &Type) -> R<Ty> {
         Type::I16 => Ty::I16,
         Type::I32 => Ty::I32,
         Type::I64 => Ty::I64,
+        Type::I128 => Ty::I128,
         Type::Isize => Ty::Isize,
         Type::U8 => Ty::U8,
         Type::U16 => Ty::U16,
         Type::U32 => Ty::U32,
         Type::U64 => Ty::U64,
+        Type::U128 => Ty::U128,
         Type::Usize => Ty::Usize,
         Type::F32 => Ty::F32,
         Type::F64 => Ty::F64,
@@ -1547,6 +1575,7 @@ impl<'a> FnLower<'a> {
         Ok(match map_ty(t)? {
             Ty::Unit => Vec::new(),
             Ty::Ptr => return unsupported("`Vec` of aggregates holding a reference"),
+            l if l.is_wide() => return unsupported("`Vec` element needs a 128-bit heap word"),
             l => vec![(0, l)],
         })
     }
@@ -1992,7 +2021,7 @@ impl<'a> FnLower<'a> {
             ExprKind::Unit => Ok(self.unit()),
             ExprKind::Int { value, .. } => {
                 let ty = self.ty_of(e)?;
-                self.int_const(ty, *value as i128)
+                self.int_const_bits(ty, *value)
             }
             ExprKind::Float { text, .. } => {
                 let ty = self.ty_of(e)?;
@@ -2085,7 +2114,7 @@ impl<'a> FnLower<'a> {
                     if *op == ast::UnOp::Neg {
                         match &expr.kind {
                             ExprKind::Int { value, .. } => {
-                                return self.int_const(ty, -(*value as i128))
+                                return self.int_const_bits(ty, value.wrapping_neg());
                             }
                             ExprKind::Float { text, .. } => {
                                 return self.float_const(ty, text, true)
@@ -2394,7 +2423,12 @@ impl<'a> FnLower<'a> {
 
     fn const_value(&mut self, ty: Ty, v: &ConstValue) -> R<Local> {
         match v {
-            ConstValue::Int(n) => self.int_const(ty, *n),
+            ConstValue::Int(n) => {
+                if ty == Ty::U128 && *n < 0 {
+                    return unsupported("u128 const above i128::MAX (semantic fact is lossy)");
+                }
+                self.int_const(ty, *n)
+            }
             ConstValue::Bool(b) => {
                 let l = self.new_local(Ty::Bool);
                 self.emit(Inst::Const {
@@ -2633,8 +2667,8 @@ impl<'a> FnLower<'a> {
                 let ty = map_ty(t)?;
                 let k = match lit {
                     ast::LitPat::Int { value, neg, .. } => {
-                        let v = *value as i128;
-                        self.int_const(ty, if *neg { -v } else { v })?
+                        let bits = if *neg { value.wrapping_neg() } else { *value };
+                        self.int_const_bits(ty, bits)?
                     }
                     ast::LitPat::Float { text, .. } => self.float_const(ty, text, false)?,
                     ast::LitPat::Bool(b) => {
@@ -2884,24 +2918,40 @@ impl<'a> FnLower<'a> {
     }
 
     fn int_const(&mut self, ty: Ty, value: i128) -> R<Local> {
-        let Some(bits) = ty.int_bits() else {
+        self.int_const_bits(ty, value as u128)
+    }
+
+    /// An integer constant without an intermediate `i128` conversion: every
+    /// `u128` bit pattern is meaningful, and `I128` uses two's complement.
+    fn int_const_bits(&mut self, ty: Ty, bits: u128) -> R<Local> {
+        let Some(width) = ty.int_bits() else {
             return unsupported(format!("integer literal of type {}", ty.name()));
         };
-        let (min, max) = if ty.is_signed() {
-            (-(1i128 << (bits - 1)), (1i128 << (bits - 1)) - 1)
-        } else {
-            (0, (1i128 << bits) - 1)
-        };
-        if value < min || value > max {
-            return Err(LowerError::MissingFact(format!(
-                "literal {value} out of range for {}",
-                ty.name()
-            )));
+        if width < 128 {
+            let value = bits as i128;
+            let (min, max) = if ty.is_signed() {
+                (-(1i128 << (width - 1)), (1i128 << (width - 1)) - 1)
+            } else {
+                (0, (1i128 << width) - 1)
+            };
+            if value < min || value > max {
+                return Err(LowerError::MissingFact(format!(
+                    "literal {bits} out of range for {}",
+                    ty.name()
+                )));
+            }
         }
         let l = self.new_local(ty);
         self.emit(Inst::Const {
             dst: l,
-            value: Const::Int { ty, value },
+            value: if ty.is_wide() {
+                Const::Wide { ty, bits }
+            } else {
+                Const::Int {
+                    ty,
+                    value: bits as i128,
+                }
+            },
         });
         Ok(l)
     }
@@ -3288,6 +3338,9 @@ impl<'a> FnLower<'a> {
     /// P3: the raw word that stores a `V` held at `addr` in a map: the
     /// scalar itself, or a fresh word vector of an aggregate's leaves.
     fn value_word(&mut self, addr: Local, t: &Type) -> R<Local> {
+        if is_wide_scalar(t) {
+            return unsupported("map/arena value needs a 128-bit heap word");
+        }
         if Layouts::is_agg(t) {
             return self.agg_words(addr, t);
         }
@@ -3557,6 +3610,7 @@ impl<'a> FnLower<'a> {
     fn map_kind(k: &Type) -> R<u64> {
         Ok(match k {
             Type::String => ravum_lang_ir_heap_kind(2),
+            t if is_wide_scalar(t) => return unsupported("`Map` key needs a 128-bit heap word"),
             t if t.is_signed_int() => ravum_lang_ir_heap_kind(0),
             t if t.is_int() || matches!(t, Type::Bool | Type::Char) => ravum_lang_ir_heap_kind(1),
             // STD-21.11: a packed handle orders as (arena, slot, generation).
@@ -3568,6 +3622,9 @@ impl<'a> FnLower<'a> {
     /// P3: the raw key word of an argument `&K` (a string handle, or the
     /// scalar read through the reference).
     fn map_key_of_ref(&mut self, arg: &Expr, k: &Type) -> R<Local> {
+        if is_wide_scalar(k) {
+            return unsupported("`Map` key needs a 128-bit heap word");
+        }
         let v = self.expr(arg)?;
         if matches!(k, Type::String) {
             return Ok(v);
@@ -3585,6 +3642,9 @@ impl<'a> FnLower<'a> {
 
     /// P3: the raw word of a value `V` passed by value.
     fn map_val_of(&mut self, arg: &Expr, v: &Type) -> R<Local> {
+        if is_wide_scalar(v) {
+            return unsupported("`Map`/`Arena` value needs a 128-bit heap word");
+        }
         let x = self.expr(arg)?;
         if Layouts::is_agg(v) {
             return self.agg_words(x, v);

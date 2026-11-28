@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- IR v1.10 and the development JIT support exact `i128`/`u128` scalars,
+  parameters, returns, references, fixed aggregates, checked/wrapping/
+  saturating arithmetic, shifts, casts and printing. Wide heap-container
+  words remain explicitly refused rather than truncated; differential and
+  rustc-path oracles cover the new boundary cases.
 - `packages/sqlite` builds on Windows with MSVC (`tools/build_sqlite_native.py`,
   `vswhere` + `vcvars64.bat`, `/Brepro`); the SQLite and HTTP + SQLite
   end-to-end tests run on Windows CI.
