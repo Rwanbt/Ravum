@@ -66,7 +66,7 @@ fn ir_interpreter_agrees_with_the_reference_machine() {
                 }
             }
             Err(CompileError::Lower(LowerError::Unsupported(what))) => {
-                if !matches!(name.as_str(), "o3-u128-max" | "x-libm-refused") {
+                if !matches!(name.as_str(), "x-libm-refused") {
                     failures.push(format!("{name}: unexpected lowering refusal: {what}"));
                 }
                 unsupported.push(format!("{name} ({what})"))
@@ -186,9 +186,9 @@ fn unsupported_constructs_are_refused_not_approximated() {
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",
         "fn check() -> f64 effects() {\n    let a: f64 = -5.0;\n    return a.min(1.0);\n}\n",
-        // `&mut i32` parameters are lowered since 2026-11-23 (positive test
-        // `references_to_scalars_agree_with_the_interpreter`); `i128` is not.
-        "fn check() -> i32 effects() {\n    let x: i128 = 1;\n    return 0;\n}\n",
+        // Wide scalars and fixed aggregates are supported since IR v1.10;
+        // heap containers still store 64-bit words and must refuse them.
+        "fn check() -> i32 effects(alloc) {\n    let mut v: Vec<i128> = Vec::new();\n    v.push(1i128);\n    return 0;\n}\n",
     ] {
         match compile_source(src) {
             Err(CompileError::Lower(LowerError::Unsupported(_))) => {}
@@ -199,14 +199,13 @@ fn unsupported_constructs_are_refused_not_approximated() {
 
 #[test]
 fn corpus_limits_are_explicit_lowering_refusals() {
-    for (fixture, reason) in [("o3-u128-max", "u128"), ("x-libm-refused", "sin")] {
-        let corpus = machine_corpus();
-        let (_, source) = corpus.iter().find(|(name, _)| name == fixture).unwrap();
-        match compile_source(source) {
-            Err(CompileError::Lower(LowerError::Unsupported(detail))) => {
-                assert!(detail.contains(reason), "{fixture}: {detail}");
-            }
-            other => panic!("{fixture}: expected an explicit refusal, got {other:?}"),
+    let (fixture, reason) = ("x-libm-refused", "sin");
+    let corpus = machine_corpus();
+    let (_, source) = corpus.iter().find(|(name, _)| name == fixture).unwrap();
+    match compile_source(source) {
+        Err(CompileError::Lower(LowerError::Unsupported(detail))) => {
+            assert!(detail.contains(reason), "{fixture}: {detail}");
         }
+        other => panic!("{fixture}: expected an explicit refusal, got {other:?}"),
     }
 }

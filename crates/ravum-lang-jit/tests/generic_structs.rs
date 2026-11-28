@@ -64,20 +64,16 @@ fn main() -> () effects(io, alloc) {
 }
 
 #[test]
-fn an_instance_the_ir_cannot_lay_out_is_still_refused() {
-    // `u128` is outside the IR subset: the instance `Holder<u128>` is
-    // refused explicitly, not approximated (the same struct at `i64` lowers).
-    let source = r#"
+fn a_generic_struct_holding_a_wide_scalar_agrees() {
+    // IR v1.10 lays out the full 16-byte field; the former refusal is now a
+    // positive test, while wide heap words remain refused in `i128.rs`.
+    let source = r#"use std::io;
 struct Holder<T> { item: T }
 
-fn main() -> () effects() {
+fn main() -> () effects(io, alloc) {
     let h = Holder { item: 5u128 };
+    io::println(&h.item.to_string());
 }
 "#;
-    match compile_source(source) {
-        Err(ravum_lang_ir::CompileError::Lower(ravum_lang_ir::lower::LowerError::Unsupported(
-            detail,
-        ))) => assert_eq!(detail, "type `u128`"),
-        other => panic!("expected an explicit refusal, got {other:?}"),
-    }
+    assert_eq!(agree(source), "5\n");
 }

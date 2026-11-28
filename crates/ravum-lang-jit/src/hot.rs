@@ -436,6 +436,14 @@ impl HotEngine {
     fn build(&mut self, ir: &Module) -> Result<(Box<Version>, UpdateReport), Refusal> {
         let started = Instant::now();
         ir.validate().map_err(Refusal::Invalid)?;
+        if self.kind == EntryKind::DspF32
+            && (ir.state.as_ref().is_some_and(|s| s.align > 8)
+                || ir.migrate_from.as_ref().is_some_and(|s| s.align > 8))
+        {
+            return Err(Refusal::Invalid(
+                "state alignment exceeds the host buffer's 8-byte alignment".into(),
+            ));
+        }
         // INV-05: no I/O and no allocation on the real-time thread.
         // Conservative: any `Print` or heap instruction anywhere in the
         // module refuses a real-time entry.

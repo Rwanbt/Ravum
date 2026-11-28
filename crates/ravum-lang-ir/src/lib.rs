@@ -8,7 +8,7 @@
 //!
 //! The second consumer is the native JIT backend (`ravum-lang-jit`, gate T15).
 //!
-//! IR v1 covers the scalar subset: integers up to 64 bits, `f32`/`f64`,
+//! IR v1 covers the scalar subset: 8/16/32/64/128-bit integers, `f32`/`f64`,
 //! `bool`, `()`, functions of the root module, `let`, assignment, `if`,
 //! `while`, `loop`, `for i in a..b`, `break`, `continue`, `return`, checked
 //! arithmetic with the language's trap messages, `as` casts and

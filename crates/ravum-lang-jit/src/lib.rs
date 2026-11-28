@@ -119,6 +119,7 @@ fn cl_ty(t: Ty) -> Type {
         Ty::I16 | Ty::U16 => types::I16,
         Ty::I32 | Ty::U32 => types::I32,
         Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::Ptr | Ty::Obj => types::I64,
+        Ty::I128 | Ty::U128 => types::I128,
         Ty::F32 => types::F32,
         Ty::F64 => types::F64,
     }
@@ -148,6 +149,10 @@ pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
         ("opt_level", "none"),
         ("regalloc_algorithm", "single_pass"),
         ("enable_verifier", verifier),
+        // IR v1.10 carries i128/u128 in signatures. Cranelift refuses
+        // otherwise (panic, not JitError); this is the LLVM-compatible pair
+        // of 64-bit registers/stack slots on SysV and Windows x64.
+        ("enable_llvm_abi_extensions", "true"),
         // A frame larger than a guard page (4 KiB on x86-64, 16 KiB on
         // Apple arm64) must touch each page in order, or it can jump past
         // the OS guard page: an access violation on Windows, SIGBUS on
@@ -169,7 +174,13 @@ pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
     jb.symbol("rv_fmod", rv_fmod as *const u8);
     jb.symbol("rv_fmodf", rv_fmodf as *const u8);
     jb.symbol("rv_print", exec::rv_print as *const u8);
+    jb.symbol("rv_print128", exec::rv_print128 as *const u8);
     jb.symbol("rv_heap", exec::rv_heap as *const u8);
+    jb.symbol("rv_i128_divrem", exec::rv_i128_divrem as *const u8);
+    jb.symbol("rv_i128_mul", exec::rv_i128_mul as *const u8);
+    jb.symbol("rv_i128_from_float", exec::rv_i128_from_float as *const u8);
+    jb.symbol("rv_i128_to_f32", exec::rv_i128_to_f32 as *const u8);
+    jb.symbol("rv_i128_to_f64", exec::rv_i128_to_f64 as *const u8);
     Ok(JITModule::new(jb))
 }
 
@@ -267,6 +278,50 @@ pub(crate) fn compile_funcs(
     let heap = module
         .declare_function("rv_heap", Linkage::Import, &heap_sig)
         .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut print128_sig = module.make_signature();
+    for t in [ptr_ty, types::I32, types::I32, types::I128] {
+        print128_sig.params.push(AbiParam::new(t));
+    }
+    let print128 = module
+        .declare_function("rv_print128", Linkage::Import, &print128_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut divrem_sig = module.make_signature();
+    for t in [types::I32, types::I128, types::I128] {
+        divrem_sig.params.push(AbiParam::new(t));
+    }
+    divrem_sig.returns.push(AbiParam::new(types::I128));
+    let divrem = module
+        .declare_function("rv_i128_divrem", Linkage::Import, &divrem_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut wide_mul_sig = module.make_signature();
+    for t in [ptr_ty, types::I32, types::I128, types::I128] {
+        wide_mul_sig.params.push(AbiParam::new(t));
+    }
+    wide_mul_sig.returns.push(AbiParam::new(types::I128));
+    let wide_mul = module
+        .declare_function("rv_i128_mul", Linkage::Import, &wide_mul_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut from_float_sig = module.make_signature();
+    from_float_sig.params.push(AbiParam::new(types::I32));
+    from_float_sig.params.push(AbiParam::new(types::F64));
+    from_float_sig.returns.push(AbiParam::new(types::I128));
+    let from_float = module
+        .declare_function("rv_i128_from_float", Linkage::Import, &from_float_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut to_f32_sig = module.make_signature();
+    to_f32_sig.params.push(AbiParam::new(types::I128));
+    to_f32_sig.params.push(AbiParam::new(types::I32));
+    to_f32_sig.returns.push(AbiParam::new(types::F32));
+    let to_f32 = module
+        .declare_function("rv_i128_to_f32", Linkage::Import, &to_f32_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut to_f64_sig = module.make_signature();
+    to_f64_sig.params.push(AbiParam::new(types::I128));
+    to_f64_sig.params.push(AbiParam::new(types::I32));
+    to_f64_sig.returns.push(AbiParam::new(types::F64));
+    let to_f64 = module
+        .declare_function("rv_i128_to_f64", Linkage::Import, &to_f64_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
 
     let mut fctx = FunctionBuilderContext::new();
     let mut ctx: Context = module.make_context();
@@ -297,7 +352,13 @@ pub(crate) fn compile_funcs(
             let fmod_ref = module.declare_func_in_func(fmod, b.func);
             let fmodf_ref = module.declare_func_in_func(fmodf, b.func);
             let print_ref = module.declare_func_in_func(print, b.func);
+            let print128_ref = module.declare_func_in_func(print128, b.func);
             let heap_ref = module.declare_func_in_func(heap, b.func);
+            let divrem_ref = module.declare_func_in_func(divrem, b.func);
+            let wide_mul_ref = module.declare_func_in_func(wide_mul, b.func);
+            let from_float_ref = module.declare_func_in_func(from_float, b.func);
+            let to_f32_ref = module.declare_func_in_func(to_f32, b.func);
+            let to_f64_ref = module.declare_func_in_func(to_f64, b.func);
             let blocks: Vec<_> = f.blocks.iter().map(|_| b.create_block()).collect();
             let vars: Vec<Variable> = f
                 .locals
@@ -344,6 +405,8 @@ pub(crate) fn compile_funcs(
                 stop: None,
                 stack_slots,
                 local_tys: f.locals.clone(),
+                wide_mul: wide_mul_ref,
+                divrem: divrem_ref,
             };
             // Depth check on entry.
             let depth = g.b.ins().load(types::I32, MemFlags::trusted(), ctxp, 4);
@@ -369,7 +432,18 @@ pub(crate) fn compile_funcs(
                     g.inst(
                         inst,
                         &callee_refs,
-                        [fmod_ref, fmodf_ref, print_ref, heap_ref],
+                        [
+                            fmod_ref,
+                            fmodf_ref,
+                            print_ref,
+                            print128_ref,
+                            heap_ref,
+                            divrem_ref,
+                            from_float_ref,
+                            to_f32_ref,
+                            to_f64_ref,
+                            wide_mul_ref,
+                        ],
                         &ir.functions,
                     );
                 }
@@ -437,10 +511,19 @@ pub(crate) fn compile_funcs(
     Ok(funcs)
 }
 
+/// `iconst` only accepts immediates up to 64 bits. Build every wide constant
+/// from its low/high words, including zero and the dummy return after a trap.
+fn iconst128(b: &mut FunctionBuilder, bits: u128) -> Value {
+    let lo = b.ins().iconst(types::I64, bits as u64 as i64);
+    let hi = b.ins().iconst(types::I64, (bits >> 64) as u64 as i64);
+    b.ins().iconcat(lo, hi)
+}
+
 fn zero(b: &mut FunctionBuilder, t: Ty) -> Value {
     match t {
         Ty::F32 => b.ins().f32const(0.0),
         Ty::F64 => b.ins().f64const(0.0),
+        t if t.is_wide() => iconst128(b, 0),
         t => b.ins().iconst(cl_ty(t), 0),
     }
 }
@@ -458,6 +541,8 @@ struct Gen<'a, 'f> {
     stack_slots: Vec<cranelift_codegen::ir::StackSlot>,
     /// IR type of each local (heap words are converted by type).
     local_tys: Vec<Ty>,
+    wide_mul: cranelift_codegen::ir::FuncRef,
+    divrem: cranelift_codegen::ir::FuncRef,
 }
 
 impl Gen<'_, '_> {
@@ -465,8 +550,26 @@ impl Gen<'_, '_> {
         self.local_tys[l as usize]
     }
 
+    fn int_limit(&mut self, ty: Ty, upper: bool) -> Value {
+        if ty.is_wide() {
+            let bits = match (ty.is_signed(), upper) {
+                (true, true) => i128::MAX as u128,
+                (true, false) => 1u128 << 127,
+                (false, true) => u128::MAX,
+                (false, false) => 0,
+            };
+            iconst128(&mut self.b, bits)
+        } else {
+            let (lo, hi) = range(ty);
+            self.b
+                .ins()
+                .iconst(cl_ty(ty), if upper { hi } else { lo } as i64)
+        }
+    }
+
     /// `(kind, 64-bit bits)` of a scalar, as `rv_print`/`rv_heap` decode it.
     fn print_bits(&mut self, ty: Ty, x: Value) -> (i64, Value) {
+        assert!(!ty.is_wide(), "wide scalars use print128/two heap words");
         match ty {
             Ty::F64 => (3, self.b.ins().bitcast(types::I64, MemFlags::new(), x)),
             Ty::F32 => {
@@ -487,6 +590,10 @@ impl Gen<'_, '_> {
 
     /// The scalar of type `ty` a raw word holds (`interp::from_word`).
     fn emit_unword(&mut self, ty: Ty, w: Value) -> Value {
+        assert!(
+            !ty.is_wide(),
+            "a 64-bit heap word cannot hold a wide scalar"
+        );
         match ty {
             Ty::F64 => self.b.ins().bitcast(types::F64, MemFlags::new(), w),
             Ty::F32 => {
@@ -631,10 +738,11 @@ impl Gen<'_, '_> {
         &mut self,
         inst: &Inst,
         callees: &BTreeMap<u32, (cranelift_codegen::ir::SigRef, u32)>,
-        hosts: [cranelift_codegen::ir::FuncRef; 4],
+        hosts: [cranelift_codegen::ir::FuncRef; 10],
         fns: &[ravum_lang_ir::ir::Function],
     ) {
-        let [fmod, fmodf, print, heap] = hosts;
+        let [fmod, fmodf, print, print128, heap, _divrem, from_float, to_f32, to_f64, _wide_mul] =
+            hosts;
         match inst {
             Inst::Heap { dst, op, a, b } => {
                 let w = |me: &mut Self, x: &Option<u32>| match x {
@@ -663,9 +771,15 @@ impl Gen<'_, '_> {
             }
             Inst::HeapOfValue { dst, ty, src } => {
                 let x = self.get(*src);
-                let (kind, bits) = self.print_bits(*ty, x);
+                let (kind, bits, high) = if ty.is_wide() {
+                    let (lo, hi) = self.b.ins().isplit(x);
+                    (if ty.is_signed() { 7 } else { 8 }, lo, Some(hi))
+                } else {
+                    let (kind, bits) = self.print_bits(*ty, x);
+                    (kind, bits, None)
+                };
                 let k = self.b.ins().iconst(types::I64, kind);
-                let r = self.host_heap(heap, exec::OP_OF_VALUE as i64, k, bits, None);
+                let r = self.host_heap(heap, exec::OP_OF_VALUE as i64, k, bits, high);
                 self.set(*dst, r);
             }
             Inst::VecSet { h, i, x } => {
@@ -732,6 +846,25 @@ impl Gen<'_, '_> {
                 self.map_results(*present, *old, w);
             }
             Inst::Print { stream, arg } => {
+                let st = self.b.ins().iconst(
+                    types::I32,
+                    match stream {
+                        Stream::Stdout => 0,
+                        Stream::Stderr => 1,
+                        Stream::Note => 2,
+                    },
+                );
+                if let PrintArg::Value { ty, src } = arg {
+                    if ty.is_wide() {
+                        let k = self
+                            .b
+                            .ins()
+                            .iconst(types::I32, if ty.is_signed() { 7 } else { 8 });
+                        let x = self.get(*src);
+                        self.b.ins().call(print128, &[self.ctxp, k, st, x]);
+                        return;
+                    }
+                }
                 let (kind, bits) = match arg {
                     PrintArg::Text(t) => {
                         let id = self.msg(t) - CODE_TRAP0;
@@ -744,20 +877,12 @@ impl Gen<'_, '_> {
                     PrintArg::Obj(h) => (6, self.get(*h)),
                 };
                 let k = self.b.ins().iconst(types::I32, kind);
-                let st = self.b.ins().iconst(
-                    types::I32,
-                    match stream {
-                        Stream::Stdout => 0,
-                        Stream::Stderr => 1,
-                        Stream::Note => 2,
-                    },
-                );
-                let ctxp = self.ctxp;
-                self.b.ins().call(print, &[ctxp, k, st, bits]);
+                self.b.ins().call(print, &[self.ctxp, k, st, bits]);
             }
             Inst::Const { dst, value } => {
                 let v = match *value {
                     Const::Int { ty, value } => self.b.ins().iconst(cl_ty(ty), value as i64),
+                    Const::Wide { bits, .. } => iconst128(&mut self.b, bits),
                     Const::F32Bits(bits) => self.b.ins().f32const(f32::from_bits(bits)),
                     Const::F64Bits(bits) => self.b.ins().f64const(f64::from_bits(bits)),
                     Const::Bool(x) => self.b.ins().iconst(types::I8, x as i64),
@@ -775,9 +900,11 @@ impl Gen<'_, '_> {
                     (UnOp::Neg, t) if t.is_float() => self.b.ins().fneg(x),
                     (UnOp::Neg, t) => {
                         let bad = if t.is_signed() {
-                            self.b.ins().icmp_imm(IntCC::Equal, x, range(t).0 as i64)
+                            let min = self.int_limit(t, false);
+                            self.b.ins().icmp(IntCC::Equal, x, min)
                         } else {
-                            self.b.ins().icmp_imm(IntCC::NotEqual, x, 0)
+                            let zero_value = zero(&mut self.b, t);
+                            self.b.ins().icmp(IntCC::NotEqual, x, zero_value)
                         };
                         self.trap_msg_if(bad, "attempt to negate with overflow");
                         self.b.ins().ineg(x)
@@ -786,17 +913,18 @@ impl Gen<'_, '_> {
                     (UnOp::Not, _) => self.b.ins().bnot(x),
                     (UnOp::Abs, Ty::F64) => self.b.ins().fabs(x),
                     (UnOp::Abs, t) => {
-                        let bad = self.b.ins().icmp_imm(IntCC::Equal, x, range(t).0 as i64);
+                        let min = self.int_limit(t, false);
+                        let bad = self.b.ins().icmp(IntCC::Equal, x, min);
                         self.trap_msg_if(bad, "attempt to negate with overflow");
                         self.b.ins().iabs(x)
                     }
                     (UnOp::WrappingNeg, _) => self.b.ins().ineg(x),
                     (UnOp::SaturatingNeg, t) => {
-                        let (lo, hi) = range(t);
-                        let min = self.b.ins().icmp_imm(IntCC::Equal, x, lo as i64);
-                        let max = self.b.ins().iconst(cl_ty(t), hi as i64);
+                        let lo = self.int_limit(t, false);
+                        let hi = self.int_limit(t, true);
+                        let min = self.b.ins().icmp(IntCC::Equal, x, lo);
                         let n = self.b.ins().ineg(x);
-                        self.b.ins().select(min, max, n)
+                        self.b.ins().select(min, hi, n)
                     }
                     (UnOp::Sqrt, _) => self.b.ins().sqrt(x),
                     (UnOp::Floor, _) => self.b.ins().floor(x),
@@ -831,7 +959,7 @@ impl Gen<'_, '_> {
             }
             Inst::Cast { dst, from, to, src } => {
                 let x = self.get(*src);
-                let v = self.cast(*from, *to, x);
+                let v = self.cast(*from, *to, x, from_float, to_f32, to_f64);
                 self.set(*dst, v);
             }
             Inst::StackAddr { dst, slot } => {
@@ -907,10 +1035,48 @@ impl Gen<'_, '_> {
         }
     }
 
+    fn mul_overflow_128(&mut self, signed: bool, x: Value, y: Value) -> (Value, Value) {
+        // Cranelift 0.116 has no native I128 multiply-overflow lowering.
+        // Use an exact, allocation-free host intrinsic; `ctx.scratch` carries
+        // the boolean out while the I128 return uses the normal pair ABI.
+        let unsigned = self.b.ins().iconst(types::I32, i64::from(!signed));
+        let call = self
+            .b
+            .ins()
+            .call(self.wide_mul, &[self.ctxp, unsigned, x, y]);
+        let r = self.b.inst_results(call)[0];
+        let scratch = self
+            .b
+            .ins()
+            .load(types::I64, MemFlags::trusted(), self.ctxp, 32);
+        (r, self.b.ins().ireduce(types::I8, scratch))
+    }
+
     /// Wrapped result and overflow flag of a checked `+`, `-`, `*`.
     fn overflowing(&mut self, op: BinOp, ty: Ty, x: Value, y: Value) -> (Value, Value) {
         let signed = ty.is_signed();
         let bits = ty.int_bits().unwrap_or(8);
+        if bits == 128 {
+            return match op {
+                BinOp::Add => {
+                    let (r, bad) = if signed {
+                        self.b.ins().sadd_overflow(x, y)
+                    } else {
+                        self.b.ins().uadd_overflow(x, y)
+                    };
+                    (r, bad)
+                }
+                BinOp::Sub => {
+                    let (r, bad) = if signed {
+                        self.b.ins().ssub_overflow(x, y)
+                    } else {
+                        self.b.ins().usub_overflow(x, y)
+                    };
+                    (r, bad)
+                }
+                _ => self.mul_overflow_128(signed, x, y),
+            };
+        }
         match op {
             BinOp::Add => {
                 let r = self.b.ins().iadd(x, y);
@@ -1071,10 +1237,8 @@ impl Gen<'_, '_> {
                     _ => Mul,
                 };
                 let (r, bad) = self.overflowing(base, ty, x, y);
-                let t = cl_ty(ty);
-                let (lo, hi) = range(ty);
-                let lo = self.b.ins().iconst(t, lo as i64);
-                let hi = self.b.ins().iconst(t, hi as i64);
+                let lo = self.int_limit(ty, false);
+                let hi = self.int_limit(ty, true);
                 // Direction of the overflow: signed add/sub follow the sign
                 // of `x` (for sub, `y` has the opposite sign); signed mul the
                 // sign of `x * y`; unsigned sub goes low, add/mul high.
@@ -1082,9 +1246,13 @@ impl Gen<'_, '_> {
                     let neg = match base {
                         Mul => {
                             let s = self.b.ins().bxor(x, y);
-                            self.b.ins().icmp_imm(IntCC::SignedLessThan, s, 0)
+                            let zero = zero(&mut self.b, ty);
+                            self.b.ins().icmp(IntCC::SignedLessThan, s, zero)
                         }
-                        _ => self.b.ins().icmp_imm(IntCC::SignedLessThan, x, 0),
+                        _ => {
+                            let zero = zero(&mut self.b, ty);
+                            self.b.ins().icmp(IntCC::SignedLessThan, x, zero)
+                        }
                     };
                     self.b.ins().select(neg, lo, hi)
                 } else if base == Sub {
@@ -1095,7 +1263,8 @@ impl Gen<'_, '_> {
                 self.b.ins().select(bad, sat, r)
             }
             Div | Rem => {
-                let zero = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
+                let zero_value = zero(&mut self.b, ty);
+                let zero = self.b.ins().icmp(IntCC::Equal, y, zero_value);
                 self.trap_msg_if(
                     zero,
                     if op == Div {
@@ -1105,8 +1274,14 @@ impl Gen<'_, '_> {
                     },
                 );
                 if signed {
-                    let a = self.b.ins().icmp_imm(IntCC::Equal, x, range(ty).0 as i64);
-                    let c = self.b.ins().icmp_imm(IntCC::Equal, y, -1);
+                    let min = self.int_limit(ty, false);
+                    let a = self.b.ins().icmp(IntCC::Equal, x, min);
+                    let minus_one = if ty.is_wide() {
+                        iconst128(&mut self.b, u128::MAX)
+                    } else {
+                        self.b.ins().iconst(cl_ty(ty), -1)
+                    };
+                    let c = self.b.ins().icmp(IntCC::Equal, y, minus_one);
                     let both = self.b.ins().band(a, c);
                     self.trap_msg_if(
                         both,
@@ -1116,6 +1291,17 @@ impl Gen<'_, '_> {
                             "attempt to calculate the remainder with overflow"
                         },
                     );
+                }
+                if bits == 128 {
+                    let code = match (op, signed) {
+                        (Div, true) => 0,
+                        (Div, false) => 1,
+                        (_, true) => 2,
+                        (_, false) => 3,
+                    };
+                    let code = self.b.ins().iconst(types::I32, code);
+                    let call = self.b.ins().call(self.divrem, &[code, x, y]);
+                    return self.b.inst_results(call)[0];
                 }
                 match (op, signed) {
                     (Div, true) => self.b.ins().sdiv(x, y),
@@ -1158,7 +1344,15 @@ impl Gen<'_, '_> {
         }
     }
 
-    fn cast(&mut self, from: Ty, to: Ty, x: Value) -> Value {
+    fn cast(
+        &mut self,
+        from: Ty,
+        to: Ty,
+        x: Value,
+        from_float: cranelift_codegen::ir::FuncRef,
+        to_f32: cranelift_codegen::ir::FuncRef,
+        to_f64: cranelift_codegen::ir::FuncRef,
+    ) -> Value {
         let (ft, tt) = (cl_ty(from), cl_ty(to));
         if from.is_float() && to.is_float() {
             return match (from, to) {
@@ -1166,6 +1360,16 @@ impl Gen<'_, '_> {
                 (Ty::F32, Ty::F64) => self.b.ins().fpromote(types::F64, x),
                 _ => x,
             };
+        }
+        if from.is_float() && to.is_wide() {
+            let x = if from == Ty::F32 {
+                self.b.ins().fpromote(types::F64, x)
+            } else {
+                x
+            };
+            let signed = self.b.ins().iconst(types::I32, i64::from(to.is_signed()));
+            let call = self.b.ins().call(from_float, &[signed, x]);
+            return self.b.inst_results(call)[0];
         }
         if from.is_float() {
             // Saturating (NaN → 0) through 64 bits, then clamp to `to`.
@@ -1183,6 +1387,18 @@ impl Gen<'_, '_> {
             let c1 = self.b.ins().smax(wide, lo_v);
             let c2 = self.b.ins().smin(c1, hi_v);
             return self.b.ins().ireduce(tt, c2);
+        }
+        if to.is_float() && from.is_wide() {
+            let unsigned = self
+                .b
+                .ins()
+                .iconst(types::I32, i64::from(!from.is_signed()));
+            let call = if to == Ty::F32 {
+                self.b.ins().call(to_f32, &[x, unsigned])
+            } else {
+                self.b.ins().call(to_f64, &[x, unsigned])
+            };
+            return self.b.inst_results(call)[0];
         }
         if to.is_float() {
             let signed = from.is_signed();
@@ -1301,13 +1517,87 @@ pub(crate) mod exec {
     pub const OP_MAP_INSERT: u32 = 69;
     pub const OP_MAP_REMOVE: u32 = 70;
 
-    fn scalar_text(kind: u64, bits: u64) -> String {
+    fn scalar_text(kind: u64, bits: u64, high: u64) -> String {
         match kind {
             1 => (bits as i64).to_string(),
             2 => bits.to_string(),
             3 => f64::from_bits(bits).to_string(),
             4 => f32::from_bits(bits as u32).to_string(),
+            7 => ((((high as u128) << 64) | bits as u128) as i128).to_string(),
+            8 => (((high as u128) << 64) | bits as u128).to_string(),
             _ => (bits != 0).to_string(),
+        }
+    }
+
+    /// IR v1.10 wide print. Same ownership/safety contract as `rv_print`;
+    /// printing is an I/O effect and is refused in real-time entries.
+    pub extern "C" fn rv_print128(ctx: *mut Ctx, kind: u32, stream: u32, bits: i128) {
+        let ctx = unsafe { &mut *ctx };
+        if ctx.out == 0 {
+            return;
+        }
+        let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
+        let text = match kind {
+            7 => bits.to_string(),
+            8 => (bits as u128).to_string(),
+            _ => return,
+        };
+        match stream {
+            0 => sink.out.stdout.push_str(&text),
+            1 => sink.out.stderr.push_str(&text),
+            _ => sink.out.note.push_str(&text),
+        }
+    }
+
+    /// Division/remainder helpers for the targets whose Cranelift lowering
+    /// has no native scalar I128 path. The generated caller has already
+    /// checked zero and signed MIN/-1 with the exact IR trap messages.
+    pub extern "C" fn rv_i128_divrem(op: u32, a: i128, b: i128) -> i128 {
+        match op {
+            0 => a / b,
+            1 => ((a as u128) / (b as u128)) as i128,
+            2 => a % b,
+            3 => ((a as u128) % (b as u128)) as i128,
+            _ => unreachable!("invalid wide division operation"),
+        }
+    }
+
+    /// Exact wide multiply and overflow flag. SAFETY: `ctx` is the exclusive
+    /// running call context, as for `rv_heap`; only `scratch` is written.
+    pub extern "C" fn rv_i128_mul(ctx: *mut Ctx, unsigned: u32, a: i128, b: i128) -> i128 {
+        let (r, overflow) = if unsigned != 0 {
+            let x = a as u128;
+            let y = b as u128;
+            (x.wrapping_mul(y) as i128, x.checked_mul(y).is_none())
+        } else {
+            (a.wrapping_mul(b), a.checked_mul(b).is_none())
+        };
+        let ctx = unsafe { &mut *ctx };
+        ctx.scratch = u64::from(overflow);
+        r
+    }
+
+    pub extern "C" fn rv_i128_from_float(signed: u32, x: f64) -> i128 {
+        if signed != 0 {
+            x as i128
+        } else {
+            x as u128 as i128
+        }
+    }
+
+    pub extern "C" fn rv_i128_to_f32(bits: i128, unsigned: u32) -> f32 {
+        if unsigned != 0 {
+            bits as u128 as f32
+        } else {
+            bits as f32
+        }
+    }
+
+    pub extern "C" fn rv_i128_to_f64(bits: i128, unsigned: u32) -> f64 {
+        if unsigned != 0 {
+            bits as u128 as f64
+        } else {
+            bits as f64
         }
     }
 
@@ -1329,7 +1619,7 @@ pub(crate) mod exec {
                 Some(t) => sink.heap.text(&t),
                 None => Err(HeapStop::Fault("invalid object handle")),
             },
-            OP_OF_VALUE => sink.heap.text(&scalar_text(a, b)),
+            OP_OF_VALUE => sink.heap.text(&scalar_text(a, b, c)),
             OP_VEC_SET => sink.heap.vec_set(a, b, c).map(|_| 0),
             OP_VEC_POP => sink.heap.vec_pop(a).map(|(p, w)| {
                 ctx.scratch = p as u64;
@@ -1402,7 +1692,7 @@ pub(crate) mod exec {
                 Ok(s) => s.to_string(),
                 Err(_) => return,
             },
-            k => scalar_text(k as u64, bits),
+            k => scalar_text(k as u64, bits, 0),
         };
         match stream {
             0 => sink.out.stdout.push_str(&text),
@@ -1484,6 +1774,8 @@ pub(crate) fn call_nullary(
         Ty::U32 => Val::Int(Ty::U32, exec::call::<u32>(code, ctx) as i128),
         t @ (Ty::I64 | Ty::Isize) => Val::Int(t, exec::call::<i64>(code, ctx) as i128),
         t @ (Ty::U64 | Ty::Usize) => Val::Int(t, exec::call::<u64>(code, ctx) as i128),
+        Ty::I128 => Val::Int(Ty::I128, exec::call::<i128>(code, ctx)),
+        Ty::U128 => Val::U128(exec::call::<u128>(code, ctx)),
         Ty::F32 => Val::F32(exec::call::<f32>(code, ctx)),
         Ty::F64 => Val::F64(exec::call::<f64>(code, ctx)),
         Ty::Bool => Val::Bool(exec::call::<u8>(code, ctx) != 0),

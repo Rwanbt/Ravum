@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.9";
+pub const IR_VERSION: &str = "ravum-ir-1.10";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -16,11 +16,13 @@ pub enum Ty {
     I16,
     I32,
     I64,
+    I128,
     Isize,
     U8,
     U16,
     U32,
     U64,
+    U128,
     Usize,
     F32,
     F64,
@@ -42,6 +44,7 @@ impl Ty {
             Ty::I16 | Ty::U16 => 2,
             Ty::I32 | Ty::U32 | Ty::F32 => 4,
             Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::F64 | Ty::Ptr | Ty::Obj => 8,
+            Ty::I128 | Ty::U128 => 16,
             Ty::Unit => 0,
         }
     }
@@ -52,8 +55,14 @@ impl Ty {
     pub fn is_float(self) -> bool {
         matches!(self, Ty::F32 | Ty::F64)
     }
+    pub fn is_wide(self) -> bool {
+        matches!(self, Ty::I128 | Ty::U128)
+    }
     pub fn is_signed(self) -> bool {
-        matches!(self, Ty::I8 | Ty::I16 | Ty::I32 | Ty::I64 | Ty::Isize)
+        matches!(
+            self,
+            Ty::I8 | Ty::I16 | Ty::I32 | Ty::I64 | Ty::I128 | Ty::Isize
+        )
     }
     pub fn int_bits(self) -> Option<u32> {
         Some(match self {
@@ -61,6 +70,7 @@ impl Ty {
             Ty::I16 | Ty::U16 => 16,
             Ty::I32 | Ty::U32 => 32,
             Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize => 64,
+            Ty::I128 | Ty::U128 => 128,
             _ => return None,
         })
     }
@@ -71,11 +81,13 @@ impl Ty {
             Ty::I16 => "i16",
             Ty::I32 => "i32",
             Ty::I64 => "i64",
+            Ty::I128 => "i128",
             Ty::Isize => "isize",
             Ty::U8 => "u8",
             Ty::U16 => "u16",
             Ty::U32 => "u32",
             Ty::U64 => "u64",
+            Ty::U128 => "u128",
             Ty::Usize => "usize",
             Ty::F32 => "f32",
             Ty::F64 => "f64",
@@ -98,7 +110,16 @@ pub type FuncId = u32;
 /// their type (sign-extended into `i128` for signed types); floats as bits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Const {
-    Int { ty: Ty, value: i128 },
+    Int {
+        ty: Ty,
+        value: i128,
+    },
+    /// IR v1.10: a full 128-bit pattern. `U128` keeps every literal exactly;
+    /// `I128` uses the same two's-complement representation as a native value.
+    Wide {
+        ty: Ty,
+        bits: u128,
+    },
     F32Bits(u32),
     F64Bits(u64),
     Bool(bool),
@@ -591,29 +612,99 @@ impl Module {
             for blk in &f.blocks {
                 for i in &blk.insts {
                     match i {
-                        Inst::Const { dst, .. } => l(*dst)?,
+                        Inst::Const { dst, value } => {
+                            l(*dst)?;
+                            let actual = f.locals[*dst as usize];
+                            match value {
+                                Const::Int { ty, value } => {
+                                    if *ty != actual || !ty.is_int() || ty.is_wide() {
+                                        return Err(format!(
+                                            "{}: mistyped integer constant",
+                                            f.name
+                                        ));
+                                    }
+                                    {
+                                        let bits = ty.int_bits().unwrap();
+                                        let (lo, hi) = if ty.is_signed() {
+                                            (-(1i128 << (bits - 1)), (1i128 << (bits - 1)) - 1)
+                                        } else {
+                                            (0, (1i128 << bits) - 1)
+                                        };
+                                        if *value < lo || *value > hi {
+                                            return Err(format!(
+                                                "{}: integer constant out of range",
+                                                f.name
+                                            ));
+                                        }
+                                    }
+                                }
+                                Const::Wide { ty, .. } if ty.is_wide() && *ty == actual => {}
+                                Const::F32Bits(_) if actual == Ty::F32 => {}
+                                Const::F64Bits(_) if actual == Ty::F64 => {}
+                                Const::Bool(_) if actual == Ty::Bool => {}
+                                Const::Unit if actual == Ty::Unit => {}
+                                _ => return Err(format!("{}: mistyped constant", f.name)),
+                            }
+                        }
                         Inst::Heap { dst, a, b, .. } => {
                             for x in [dst, a, b].into_iter().flatten() {
                                 l(*x)?;
+                                // Heap operands and element words are 64-bit in
+                                // IR v1.10. A wide integer must never be
+                                // silently truncated (fail-closed).
+                                if f.locals[*x as usize].is_wide() {
+                                    return Err(format!(
+                                        "{}: wide integer in a heap operation",
+                                        f.name
+                                    ));
+                                }
                             }
                         }
-                        Inst::HeapText { dst, .. } => l(*dst)?,
+                        Inst::HeapText { dst, .. } => {
+                            l(*dst)?;
+                            if f.locals[*dst as usize] != Ty::Obj {
+                                return Err(format!(
+                                    "{}: heap text destination is not obj",
+                                    f.name
+                                ));
+                            }
+                        }
                         Inst::HeapOfValue { dst, src, ty } => {
                             l(*dst)?;
                             l(*src)?;
-                            if !(ty.is_int() || ty.is_float() || *ty == Ty::Bool) {
-                                return Err(format!("{}: to_string of {ty:?}", f.name));
+                            if f.locals[*dst as usize] != Ty::Obj {
+                                return Err(format!(
+                                    "{}: to_string destination is not obj",
+                                    f.name
+                                ));
+                            }
+                            if f.locals[*src as usize] != *ty
+                                || !(ty.is_int() || ty.is_float() || *ty == Ty::Bool)
+                            {
+                                return Err(format!("{}: mistyped to_string operand", f.name));
                             }
                         }
                         Inst::VecSet { h, i, x } => {
                             l(*h)?;
                             l(*i)?;
-                            l(*x)?
+                            l(*x)?;
+                            if f.locals[*h as usize] != Ty::Obj
+                                || f.locals[*i as usize] != Ty::U64
+                                || f.locals[*x as usize].is_wide()
+                            {
+                                return Err(format!("{}: mistyped vector store", f.name));
+                            }
                         }
                         Inst::VecPop { present, value, h } => {
                             l(*present)?;
                             l(*value)?;
-                            l(*h)?
+                            l(*h)?;
+                            if f.locals[*present as usize] != Ty::Bool
+                                || f.locals[*h as usize] != Ty::Obj
+                                || f.locals[*value as usize].is_wide()
+                            {
+                                return Err(format!("{}: mistyped vector pop", f.name));
+                            }
                         }
                         Inst::MapGet {
                             h,
@@ -629,6 +720,11 @@ impl Module {
                         } => {
                             for x in [*h, *key, *present, *out] {
                                 l(x)?;
+                            }
+                            if f.locals[*key as usize].is_wide()
+                                || f.locals[*out as usize].is_wide()
+                            {
+                                return Err(format!("{}: wide integer in a map word", f.name));
                             }
                             if f.locals[*h as usize] != Ty::Obj
                                 || f.locals[*present as usize] != Ty::Bool
@@ -649,6 +745,12 @@ impl Module {
                             for x in [*h, *key, *val, *present, *old] {
                                 l(x)?;
                             }
+                            if f.locals[*key as usize].is_wide()
+                                || f.locals[*val as usize].is_wide()
+                                || f.locals[*old as usize].is_wide()
+                            {
+                                return Err(format!("{}: wide integer in a map word", f.name));
+                            }
                             if f.locals[*h as usize] != Ty::Obj
                                 || f.locals[*present as usize] != Ty::Bool
                             {
@@ -661,23 +763,44 @@ impl Module {
                         Inst::Print { arg, .. } => {
                             if let PrintArg::Obj(src) = arg {
                                 l(*src)?;
+                                if f.locals[*src as usize] != Ty::Obj {
+                                    return Err(format!("{}: printed object is not obj", f.name));
+                                }
                             }
                             if let PrintArg::Value { ty, src } = arg {
                                 l(*src)?;
-                                if !(ty.is_int() || ty.is_float() || *ty == Ty::Bool) {
-                                    return Err(format!("{}: print of {ty:?}", f.name));
+                                if f.locals[*src as usize] != *ty
+                                    || !(ty.is_int() || ty.is_float() || *ty == Ty::Bool)
+                                {
+                                    return Err(format!("{}: mistyped print operand", f.name));
                                 }
                             }
                         }
-                        Inst::Copy { dst, src } | Inst::Cast { dst, src, .. } => {
+                        Inst::Copy { dst, src } => {
                             l(*dst)?;
-                            l(*src)?
+                            l(*src)?;
+                            if f.locals[*dst as usize] != f.locals[*src as usize] {
+                                return Err(format!("{}: mistyped copy", f.name));
+                            }
+                        }
+                        Inst::Cast { dst, src, from, to } => {
+                            l(*dst)?;
+                            l(*src)?;
+                            if f.locals[*src as usize] != *from
+                                || f.locals[*dst as usize] != *to
+                                || !cast_accepts(*from, *to)
+                            {
+                                return Err(format!("{}: mistyped cast", f.name));
+                            }
                         }
                         Inst::Un { dst, src, op, ty } => {
                             l(*dst)?;
                             l(*src)?;
-                            if !un_op_accepts(*op, *ty) {
-                                return Err(format!("{}: {op:?} on {ty:?}", f.name));
+                            if f.locals[*src as usize] != *ty
+                                || f.locals[*dst as usize] != *ty
+                                || !un_op_accepts(*op, *ty)
+                            {
+                                return Err(format!("{}: mistyped {op:?}", f.name));
                             }
                         }
                         Inst::Bin {
@@ -687,33 +810,75 @@ impl Module {
                             op,
                             ty,
                         } => {
-                            if !bin_op_accepts(*op, *ty) {
-                                return Err(format!("{}: {op:?} on {ty:?}", f.name));
-                            }
                             l(*dst)?;
                             l(*lhs)?;
-                            l(*rhs)?
+                            l(*rhs)?;
+                            let comparison = matches!(
+                                op,
+                                BinOp::Eq
+                                    | BinOp::Ne
+                                    | BinOp::Lt
+                                    | BinOp::Le
+                                    | BinOp::Gt
+                                    | BinOp::Ge
+                                    | BinOp::OverflowsAdd
+                                    | BinOp::OverflowsSub
+                                    | BinOp::OverflowsMul
+                            );
+                            let rhs_ty = if matches!(op, BinOp::Shl | BinOp::Shr) {
+                                Ty::U64
+                            } else {
+                                *ty
+                            };
+                            if f.locals[*lhs as usize] != *ty
+                                || f.locals[*rhs as usize] != rhs_ty
+                                || f.locals[*dst as usize]
+                                    != if comparison { Ty::Bool } else { *ty }
+                                || !bin_op_accepts(*op, *ty)
+                            {
+                                return Err(format!("{}: mistyped {op:?}", f.name));
+                            }
                         }
                         Inst::StackAddr { dst, slot } => {
                             l(*dst)?;
+                            if f.locals[*dst as usize] != Ty::Ptr {
+                                return Err(format!(
+                                    "{}: stack address destination is not ptr",
+                                    f.name
+                                ));
+                            }
                             if *slot as usize >= f.stack.len() {
                                 return Err(format!("{}: stack slot {slot} out of range", f.name));
                             }
                         }
-                        Inst::Load { dst, addr, .. } => {
+                        Inst::Load { dst, addr, ty, .. } => {
                             l(*dst)?;
-                            l(*addr)?
-                        }
-                        Inst::Store { addr, src, .. } => {
                             l(*addr)?;
-                            l(*src)?
+                            if f.locals[*dst as usize] != *ty || f.locals[*addr as usize] != Ty::Ptr
+                            {
+                                return Err(format!("{}: mistyped load", f.name));
+                            }
+                        }
+                        Inst::Store { addr, src, ty, .. } => {
+                            l(*addr)?;
+                            l(*src)?;
+                            if f.locals[*src as usize] != *ty || f.locals[*addr as usize] != Ty::Ptr
+                            {
+                                return Err(format!("{}: mistyped store", f.name));
+                            }
                         }
                         Inst::PtrAdd {
                             dst, base, index, ..
                         } => {
                             l(*dst)?;
                             l(*base)?;
-                            l(*index)?
+                            l(*index)?;
+                            if f.locals[*dst as usize] != Ty::Ptr
+                                || f.locals[*base as usize] != Ty::Ptr
+                                || f.locals[*index as usize] != Ty::U64
+                            {
+                                return Err(format!("{}: mistyped pointer addition", f.name));
+                            }
                         }
                         Inst::Call { dst, func, args } => {
                             if let Some(d) = dst {
@@ -732,6 +897,21 @@ impl Module {
                                     f.name, callee.name
                                 ));
                             }
+                            for (a, expected) in
+                                args.iter().zip(&callee.locals[..callee.params as usize])
+                            {
+                                if f.locals[*a as usize] != *expected {
+                                    return Err(format!(
+                                        "{}: mistyped argument calling {}",
+                                        f.name, callee.name
+                                    ));
+                                }
+                            }
+                            if let Some(d) = dst {
+                                if f.locals[*d as usize] != callee.ret {
+                                    return Err(format!("{}: mistyped call result", f.name));
+                                }
+                            }
                         }
                     }
                 }
@@ -743,10 +923,18 @@ impl Module {
                         else_to,
                     } => {
                         l(*cond)?;
+                        if f.locals[*cond as usize] != Ty::Bool {
+                            return Err(format!("{}: non-bool branch condition", f.name));
+                        }
                         b(*then_to)?;
                         b(*else_to)?
                     }
-                    Term::Return(Some(x)) => l(*x)?,
+                    Term::Return(Some(x)) => {
+                        l(*x)?;
+                        if f.locals[*x as usize] != f.ret {
+                            return Err(format!("{}: mistyped return", f.name));
+                        }
+                    }
                     Term::TrapBounds { len, index } => {
                         for x in [*len, *index] {
                             l(x)?;
@@ -760,11 +948,35 @@ impl Module {
                     }
                     // Exhaustive on purpose: a new terminator must state
                     // what it validates (fail-closed).
-                    Term::Return(None) | Term::Trap(_) | Term::Unreachable => {}
+                    Term::Return(None) => {
+                        if f.ret != Ty::Unit {
+                            return Err(format!(
+                                "{}: unit return from a non-unit function",
+                                f.name
+                            ));
+                        }
+                    }
+                    Term::Trap(_) | Term::Unreachable => {}
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// Conversion matrix of the source-level `as` operator. Addresses, heap
+/// handles and unit never silently become integers (or vice versa).
+pub fn cast_accepts(from: Ty, to: Ty) -> bool {
+    if from == to {
+        return from.is_int() || from.is_float() || from == Ty::Bool;
+    }
+    match (from, to) {
+        (Ty::Bool, t) if t.is_int() => true,
+        (t, u) if t.is_int() && u.is_int() => true,
+        (t, u) if t.is_int() && u.is_float() => true,
+        (t, u) if t.is_float() && u.is_float() => true,
+        (t, u) if t.is_float() && u.is_int() => true,
+        _ => false,
     }
 }
 

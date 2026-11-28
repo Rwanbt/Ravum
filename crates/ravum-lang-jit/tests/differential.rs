@@ -36,10 +36,7 @@ fn native_code_agrees_with_interpreter_and_reference_machine() {
             Err(_)
                 if matches!(
                     name.as_str(),
-                    "o3-u128-max"
-                        | "x-libm-refused"
-                        | "x-or-pattern-refused"
-                        | "x-range-pattern-refused"
+                    "x-libm-refused" | "x-or-pattern-refused" | "x-range-pattern-refused"
                 ) =>
             {
                 continue
